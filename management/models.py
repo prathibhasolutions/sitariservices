@@ -1,15 +1,28 @@
 from django.db import models
+from django.utils import timezone
+
+class Department(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    
+    def __str__(self):
+        return self.name
+
 
 class Employee(models.Model):
-    employee_id = models.AutoField(primary_key=True)  # This becomes the PK
+    employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
     mobile_number = models.CharField(max_length=15, unique=True)
-    password = models.CharField(max_length=128)  # Use Django hashing on save!
+    password = models.CharField(max_length=128)
     salary = models.DecimalField(max_digits=10, decimal_places=2)
+    pf = models.DecimalField("Provident Fund (PF)", max_digits=10, decimal_places=2, null=True, blank=True)
+    esi = models.DecimalField("Employee State Insurance (ESI)", max_digits=10, decimal_places=2, null=True, blank=True)
     joining_date = models.DateField()
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name='employees')
 
     def __str__(self):
         return f"{self.employee_id} - {self.name}"
+
+
 
 class Attendance(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendances')
@@ -48,6 +61,27 @@ class Order(models.Model):
 class Notification(models.Model):
     description = models.TextField()
     date_created = models.DateTimeField(auto_now_add=True)
-
+    # Add other fields if you wish (e.g., title, importance)
     def __str__(self):
         return f"{self.date_created.strftime('%Y-%m-%d %H:%M')} - {self.description[:30]}"
+
+class EmployeeNotificationRead(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    notification = models.ForeignKey(Notification, on_delete=models.CASCADE)
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('employee', 'notification')
+
+    
+
+class Invoice(models.Model):
+    invoice_id = models.AutoField(primary_key=True)
+    date = models.DateField(default=timezone.now)
+    customer_name = models.CharField(max_length=255)
+
+class Particular(models.Model):
+    invoice = models.ForeignKey(Invoice, related_name='particulars', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)

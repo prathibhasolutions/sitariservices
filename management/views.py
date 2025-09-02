@@ -2,8 +2,12 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth import authenticate, login as django_login
 from datetime import datetime
+from django.utils import timezone
 from calendar import month_name
-from .models import Employee,Notification,Attendance,Order
+from django.shortcuts import render, get_object_or_404
+from .models import Invoice
+from .forms import InvoiceForm, ParticularFormSet
+from .models import Employee,Notification,Attendance,Order,EmployeeNotificationRead
 
 def login_view(request):
     if request.method == 'POST':
@@ -34,27 +38,6 @@ def login_view(request):
 
     return render(request, 'login.html')
 
-def register(request):
-    # Placeholder, should point to register.html or similar
-    return render(request, 'register.html')
-
-def password_reset(request):
-    # Placeholder, should point to password_reset.html or similar
-    return render(request, 'password_reset.html')
-
-def employee_dashboard(request):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-
-    try:
-        employee = Employee.objects.get(employee_id=employee_id)
-    except Employee.DoesNotExist:
-        request.session.flush()
-        return redirect('login')
-
-    context = {'employee': employee}
-    return render(request, 'employee_dashboard.html', context)
 
 
 def attendance_view(request):
@@ -180,3 +163,108 @@ def change_password_view(request):
             return redirect('change_password')
 
     return render(request, 'change_password.html')
+
+
+def create_invoice(request):
+    if request.method == 'POST':
+        form = InvoiceForm(request.POST)
+        formset = ParticularFormSet(request.POST, prefix='form')
+        if form.is_valid() and formset.is_valid():
+            invoice = form.save()
+            particulars = formset.save(commit=False)
+            for p in particulars:
+                p.invoice = invoice
+                p.save()
+            formset.save_m2m()  # Not strictly needed for FK, but safe
+            return redirect('invoice_detail', pk=invoice.pk)
+    else:
+        form = InvoiceForm()
+        formset = ParticularFormSet(prefix='form')
+    return render(request, 'create_invoice.html', {'form': form, 'formset': formset})
+
+
+
+
+def invoice_detail(request, pk):
+    invoice = get_object_or_404(Invoice, pk=pk)
+    particulars = invoice.particulars.all()
+    total = sum([p.amount for p in particulars])
+    return render(request, 'invoice_detail.html', {
+        'invoice': invoice,
+        'particulars': particulars,
+        'total': total,
+    })
+
+def employee_dashboard(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+    except Employee.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
+
+    # Query unread notifications for employee
+    unread_notifications = EmployeeNotificationRead.objects.filter(
+        employee=employee, is_read=False
+    ).select_related('notification')
+    unread_count = unread_notifications.count()
+
+    # Flash if there are unread notifications
+    if unread_count > 0:
+        messages.info(request, f"You have {unread_count} unread notification(s)!")
+
+    context = {
+        'employee': employee,
+        'unread_count': unread_count,
+        'notifications': unread_notifications,
+        # ...
+    }
+    return render(request, 'employee_dashboard.html', context)
+
+def mark_all_notifications_read(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+    employee = Employee.objects.get(employee_id=employee_id)
+    EmployeeNotificationRead.objects.filter(employee=employee, is_read=False).update(is_read=True, read_at=timezone.now())
+    return redirect('employee_dashboard')
+
+
+def show_notifications(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+    employee = Employee.objects.get(employee_id=employee_id)
+    notifications = EmployeeNotificationRead.objects.filter(employee=employee).select_related('notification').order_by('-notification__date_created')
+    return render(request, 'notifications.html', {'notifications': notifications})
+
+
+def mark_notification_as_read(request, unread_id):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+    try:
+        unread = EmployeeNotificationRead.objects.get(pk=unread_id, employee__employee_id=employee_id)
+        if request.method == 'POST':
+            unread.is_read = True
+            unread.read_at = timezone.now()
+            unread.save()
+            messages.success(request, "Notification marked as read.")
+    except EmployeeNotificationRead.DoesNotExist:
+        messages.error(request, "That notification does not exist or does not belong to you.")
+    return redirect('notifications')
+
+
+
+def create_notification(description):
+    notification = Notification.objects.create(description=description)
+    for employee in Employee.objects.all():
+        EmployeeNotificationRead.objects.create(
+            employee=employee,
+            notification=notification,
+            is_read=False
+        )
+    return notification

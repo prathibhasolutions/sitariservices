@@ -1,0 +1,35 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+<main class="container py-4">
+    <div class="card">
+        <div class="card-body">
+            <h3>Invoice #{{ invoice.invoice_id }}</h3>
+            <p><strong>Date:</strong> {{ invoice.date }}</p>
+            <p><strong>Customer Name:</strong> {{ invoice.customer_name }}</p>
+            <hr>
+            <h5>Particulars</h5>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in particulars %}
+                    <tr>
+                        <td>{{ item.description }}</td>
+                        <td>₹{{ item.amount }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <th class="text-right">Total</th>
+                        <th>₹{{ total }}</th>
+                    </tr>
+                </tbody>
+            </table>
+            <button onclick="window.print();" class="btn btn-secondary">Print Invoice</button>
+        </div>
+    </div>
+</main>
+{% endblock %}
