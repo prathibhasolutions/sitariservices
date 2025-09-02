@@ -3,7 +3,6 @@ from .models import (
     Employee,
     Attendance,
     Order,
-    Notification,
     Department,
     Invoice,
     Particular
@@ -13,7 +12,7 @@ from .models import (
 admin.site.register(Employee)
 admin.site.register(Attendance)
 admin.site.register(Order)
-admin.site.register(Notification)
+
 admin.site.register(Department)
 admin.site.register(Invoice)
 admin.site.register(Particular)

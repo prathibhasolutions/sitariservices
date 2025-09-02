@@ -56,24 +56,6 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order#{self.order_id} for {self.customer_mobile_number} ({self.get_stage_display()})"
-
-
-class Notification(models.Model):
-    description = models.TextField()
-    date_created = models.DateTimeField(auto_now_add=True)
-    # Add other fields if you wish (e.g., title, importance)
-    def __str__(self):
-        return f"{self.date_created.strftime('%Y-%m-%d %H:%M')} - {self.description[:30]}"
-
-class EmployeeNotificationRead(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    notification = models.ForeignKey(Notification, on_delete=models.CASCADE)
-    is_read = models.BooleanField(default=False)
-    read_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        unique_together = ('employee', 'notification')
-
     
 
 class Invoice(models.Model):

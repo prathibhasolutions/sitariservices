@@ -4,10 +4,17 @@ from django.contrib.auth import authenticate, login as django_login
 from datetime import datetime
 from django.utils import timezone
 from calendar import month_name
+from django.contrib.auth.hashers import check_password
 from django.shortcuts import render, get_object_or_404
 from .models import Invoice
 from .forms import InvoiceForm, ParticularFormSet
-from .models import Employee,Notification,Attendance,Order,EmployeeNotificationRead
+from .utils import generate_otp, send_otp_whatsapp
+from .models import Employee,Attendance,Order
+
+
+def home(request):
+    return render(request, "home.html")
+
 
 def login_view(request):
     if request.method == 'POST':
@@ -38,6 +45,33 @@ def login_view(request):
 
     return render(request, 'login.html')
 
+
+def employee_dashboard(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+    except Employee.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
+
+    show_sensitive = False
+
+    if request.method == 'POST' and 'unlock_sensitive' in request.POST:
+        password = request.POST.get('password')
+        if password == employee.password:
+            show_sensitive = True
+        else:
+            messages.error(request, "Invalid password.")
+
+    context = {
+        'employee': employee,
+        'show_sensitive': show_sensitive,
+        'messages': messages.get_messages(request)
+    }
+    return render(request, 'employee_dashboard.html', context)
 
 
 def attendance_view(request):
@@ -85,17 +119,6 @@ def logout_view(request):
     # Destroys the session and logs out the user
     request.session.flush()
     return redirect('login_view')  
-
-
-def notifications_view(request):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-    
-    # Get all notifications, newest first
-    notifications = Notification.objects.all().order_by('-date_created')
-    context = {'notifications': notifications}
-    return render(request, 'notifications.html', context)
 
 
 def employee_orders_view(request):
@@ -183,8 +206,6 @@ def create_invoice(request):
     return render(request, 'create_invoice.html', {'form': form, 'formset': formset})
 
 
-
-
 def invoice_detail(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     particulars = invoice.particulars.all()
@@ -195,76 +216,66 @@ def invoice_detail(request, pk):
         'total': total,
     })
 
-def employee_dashboard(request):
+def links_view(request):
+    employee_id = request.session.get('employee_id')
+    if employee_id:
+        return render(request, 'links.html')
+    else:
+        return render(request, 'login.html')
+    
+
+def forgot_password(request):
+    # Get the employee from session or user relation
     employee_id = request.session.get('employee_id')
     if not employee_id:
+        # Not logged in or session expired
         return redirect('login')
-
     try:
         employee = Employee.objects.get(employee_id=employee_id)
     except Employee.DoesNotExist:
-        request.session.flush()
+        messages.error(request, "Invalid session.")
         return redirect('login')
+    mobile = employee.mobile_number
 
-    # Query unread notifications for employee
-    unread_notifications = EmployeeNotificationRead.objects.filter(
-        employee=employee, is_read=False
-    ).select_related('notification')
-    unread_count = unread_notifications.count()
-
-    # Flash if there are unread notifications
-    if unread_count > 0:
-        messages.info(request, f"You have {unread_count} unread notification(s)!")
-
-    context = {
-        'employee': employee,
-        'unread_count': unread_count,
-        'notifications': unread_notifications,
-        # ...
-    }
-    return render(request, 'employee_dashboard.html', context)
-
-def mark_all_notifications_read(request):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-    employee = Employee.objects.get(employee_id=employee_id)
-    EmployeeNotificationRead.objects.filter(employee=employee, is_read=False).update(is_read=True, read_at=timezone.now())
-    return redirect('employee_dashboard')
+    if request.method == "POST":
+        otp = generate_otp()
+        request.session['otp'] = otp
+        request.session['mobile_number'] = mobile
+        send_otp_whatsapp(mobile, otp)
+        messages.success(request, "OTP sent to your WhatsApp number.")
+        return redirect('verify_otp')
+    # Pass the mobile to the template
+    return render(request, "forgot_password.html", {"mobile": mobile})
 
 
-def show_notifications(request):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-    employee = Employee.objects.get(employee_id=employee_id)
-    notifications = EmployeeNotificationRead.objects.filter(employee=employee).select_related('notification').order_by('-notification__date_created')
-    return render(request, 'notifications.html', {'notifications': notifications})
+def verify_otp(request):
+    step = request.POST.get("step", "otp") if request.method == "POST" else "otp"
+    if request.method == "POST":
+        mobile = request.session.get('mobile_number')
+        if not mobile:
+            messages.error(request, "Session expired. Please start again.")
+            return redirect('forgot_password')
 
-
-def mark_notification_as_read(request, unread_id):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-    try:
-        unread = EmployeeNotificationRead.objects.get(pk=unread_id, employee__employee_id=employee_id)
-        if request.method == 'POST':
-            unread.is_read = True
-            unread.read_at = timezone.now()
-            unread.save()
-            messages.success(request, "Notification marked as read.")
-    except EmployeeNotificationRead.DoesNotExist:
-        messages.error(request, "That notification does not exist or does not belong to you.")
-    return redirect('notifications')
-
-
-
-def create_notification(description):
-    notification = Notification.objects.create(description=description)
-    for employee in Employee.objects.all():
-        EmployeeNotificationRead.objects.create(
-            employee=employee,
-            notification=notification,
-            is_read=False
-        )
-    return notification
+        if step == "otp":
+            entered_otp = request.POST.get("otp")
+            otp = request.session.get("otp")
+            if entered_otp == otp:
+                request.session["otp_verified"] = True
+            else:
+                messages.error(request, "Invalid OTP.")
+                return render(request, "verify_otp.html", {"step": "otp"})
+        elif step == "password" or request.session.get("otp_verified", False):
+            new_password = request.POST.get("new_password")
+            confirm = request.POST.get("confirm_password")
+            if new_password != confirm:
+                messages.error(request, "Passwords do not match.")
+                return render(request, "verify_otp.html", {"step": "password"})
+            employee = Employee.objects.get(mobile_number=mobile)
+            employee.password = new_password
+            employee.save()
+            # Clean up session
+            request.session.flush()
+            messages.success(request, "Password changed successfully.")
+            return redirect('login_view')
+    step = "password" if request.session.get("otp_verified", False) else "otp"
+    return render(request, "verify_otp.html", {"step": step})
