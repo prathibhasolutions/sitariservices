@@ -14,4 +14,5 @@ urlpatterns = [
     path('links', views.links_view, name='links'),
     path('forgot-password/', views.forgot_password, name='forgot_password'),
     path('verify-otp/', views.verify_otp, name='verify_otp'),
+    path('calender/', views.calender, name='calender'),
 ]

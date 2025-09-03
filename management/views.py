@@ -15,6 +15,9 @@ from .models import Employee,Attendance,Order
 def home(request):
     return render(request, "home.html")
 
+def calender(request):
+    return render(request, "calender.html")
+
 
 def login_view(request):
     if request.method == 'POST':
