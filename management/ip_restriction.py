@@ -3,7 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_IPS = ['157.48.158.31', '49.37.149.105','49.37.156.241', '127.0.0.1']  # specific IPs
+ALLOWED_IPS = ['157.48.158.31', '49.37.149.105','49.37.156.241', '127.0.0.1', '152.57.166.217']  # specific IPs
 ALLOWED_SUBNETS = ['192.168.29.']  # subnet prefixes
 
 class RestrictIPMiddleware:
