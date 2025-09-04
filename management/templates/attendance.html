@@ -1,69 +1,96 @@
-
 {% extends "masteremployee.html" %}
-  
 
 {% block content %}
-
-
 <main class="col-md-9 ml-sm-auto col-lg-10 px-4 py-4">
-    <!-- Attendance Section -->
-    <div class="card mt-4">
-        <div class="card-body">
-            <div class="d-flex mb-3 align-items-center">
-                <h5 class="card-title mb-0 mr-3">Attendance</h5>
-                
-            </div>
-        <form method="get" class="form-inline ml-auto mb-3">
-    <label class="mr-2" for="month">Month:</label>
-    <select class="form-control mr-2" id="month" name="month" onchange="this.form.submit()">
-        {% for m in months %}
-          <option value="{{ m.value }}" {% if m.value == selected_month %}selected{% endif %}>{{ m.display }}</option>
-        {% endfor %}
-    </select>
-    <label class="mr-2" for="year">Year:</label>
-    <select class="form-control mr-2" id="year" name="year" onchange="this.form.submit()">
-        {% for y in years %}
-          <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
-        {% endfor %}
-    </select>
-</form>
 
+  <div class="card mt-4">
+    <div class="card-body">
+      <h5 class="card-title mb-3">Attendance for {{ employee.name }}</h5>
+      <form method="get" class="form-inline mb-3">
+        <label class="mr-2" for="month">Month:</label>
+        <select class="form-control mr-3" id="month" name="month" onchange="this.form.submit()">
+          {% for m in months %}
+            <option value="{{ m.value }}" {% if m.value == selected_month %}selected{% endif %}>{{ m.display }}</option>
+          {% endfor %}
+        </select>
+        
+        <label class="mr-2" for="year">Year:</label>
+        <select class="form-control" id="year" name="year" onchange="this.form.submit()">
+          {% for y in years %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
 
+      <h6>Login Sessions Today ({{ today|date:"d-m-Y" }})</h6>
+      {% if todays_sessions %}
+      <table class="table table-sm table-bordered mb-4">
+        <thead class="thead-light">
+          <tr>
+            <th>Login Time</th>
+            <th>Logout Time</th>
+            <th>Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for session in todays_sessions %}
+          <tr>
+            <td>{{ session.login_time|time:"H:i" }}</td>
+            <td>
+              {% if session.logout_time %}
+                {{ session.logout_time|time:"H:i" }}
+              {% else %}
+                <span class="text-warning">Active</span>
+              {% endif %}
+            </td>
+            <td>{{ session.duration_str }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No login sessions found for today.</p>
+      {% endif %}
 
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered table-striped">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th>Date</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for record in attendance_records %}
-                        <tr>
-                            <td>{{ record.date }}</td>
-                            <td>
-                                {% if record.present %}
-                                  <span class="badge badge-success">Present</span>
-                                {% else %}
-                                  <span class="badge badge-danger">Absent</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="2" class="text-center">No attendance records found for this month.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+      <h6>Monthly Login Records for {{ selected_month_name }} {{ selected_year }}</h6>
+      {% if sessions_by_date %}
+      <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+        <table class="table table-sm table-bordered table-striped">
+          <thead class="thead-dark">
+            <tr>
+              <th>Date</th>
+              <th>Login Sessions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for date, sessions in sessions_by_date.items %}
+            <tr>
+              <td>{{ date }}</td>
+              <td>
+                <ul class="mb-0">
+                  {% for session in sessions %}
+                  <li>
+                    Login: {{ session.login_time|time:"H:i" }} - 
+                    Logout: 
+                      {% if session.logout_time %}
+                        {{ session.logout_time|time:"H:i" }}
+                      {% else %}
+                        <span class="text-warning">Active</span>
+                      {% endif %}
+                     | Duration: {{ session.duration_str }}
+                  </li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p>No attendance records found for this period.</p>
+      {% endif %}
     </div>
+  </div>
 </main>
-
 {% endblock %}
-
-
-
-

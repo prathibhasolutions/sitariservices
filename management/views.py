@@ -1,15 +1,15 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth import authenticate, login as django_login
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime,timedelta
 from django.utils import timezone
 from calendar import month_name
-from django.contrib.auth.hashers import check_password
 from django.shortcuts import render, get_object_or_404
 from .models import Invoice
 from .forms import InvoiceForm, ParticularFormSet
 from .utils import generate_otp, send_otp_whatsapp
-from .models import Employee,Attendance,Order
+from .models import Employee,AttendanceSession,Order
+from .forms import WorksheetParticularFormSet
 
 
 def home(request):
@@ -18,35 +18,84 @@ def home(request):
 def calender(request):
     return render(request, "calender.html")
 
+def contact(request):
+    return render(request, "contact.html")
 
-def login_view(request):
+
+def login_with_otp(request):
     if request.method == 'POST':
-        user_type = request.POST.get('user_type')
-        username = request.POST.get('username')
-        password = request.POST.get('password')
+        mobile = request.POST.get('mobile')
+        otp_entered = request.POST.get('otp')
+        resend = request.POST.get('resend')
 
-        if user_type == 'employee':
-            try:
-                employee = Employee.objects.get(mobile_number=username)
-                if employee.password == password:  # For production, use hashing!
+        if resend and mobile:
+            otp = generate_otp()
+            request.session['otp'] = otp
+            request.session['mobile'] = mobile
+            send_otp_whatsapp(mobile, otp)
+            messages.success(request, f"OTP resent to {mobile}")
+            return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
+
+        if otp_entered and mobile:
+            expected_otp = request.session.get('otp')
+            expected_mobile = request.session.get('mobile')
+
+            if mobile != expected_mobile:
+                messages.error(request, "Mobile number mismatch. Please request OTP again.")
+                return redirect('login_with_otp')
+
+            if otp_entered == expected_otp:
+                try:
+                    employee = Employee.objects.get(mobile_number=mobile)
                     request.session['employee_id'] = employee.employee_id
+
+                    AttendanceSession.objects.create(
+                        employee=employee,
+                        login_time=timezone.now(),
+                        logout_time=None
+                    )
+
+                    request.session.pop('otp', None)
+                    request.session.pop('mobile', None)
+                    
                     return redirect('employee_dashboard')
-                else:
-                    messages.error(request, 'Invalid password.')
-            except Employee.DoesNotExist:
-                messages.error(request, 'Employee not found.')
-
-        elif user_type == 'admin':
-            user = authenticate(request, username=username, password=password)
-            if user is not None and user.is_superuser:
-                django_login(request, user)
-                return redirect('/admin/')  # Django admin panel
+                except Employee.DoesNotExist:
+                    messages.error(request, "Employee with this mobile number not found.")
+                    return redirect('login_with_otp')
             else:
-                messages.error(request, 'Invalid admin credentials.')
-        else:
-            messages.error(request, 'Only employee or admin login is implemented here.')
+                messages.error(request, "Invalid OTP. Please try again.")
+                return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
 
-    return render(request, 'login.html')
+        if mobile and not otp_entered:
+            try:
+                Employee.objects.get(mobile_number=mobile)
+            except Employee.DoesNotExist:
+                messages.error(request, "Employee with this mobile number not found.")
+                return render(request, 'login.html', {'otp_sent': False})
+
+            otp = generate_otp()
+            request.session['otp'] = otp
+            request.session['mobile'] = mobile
+            send_otp_whatsapp(mobile, otp)
+            messages.success(request, f"OTP sent to {mobile}")
+            return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
+
+    return render(request, 'login.html', {'otp_sent': False})
+
+def logout_view(request):
+    employee_id = request.session.get('employee_id')
+    if employee_id:
+        try:
+            employee = Employee.objects.get(employee_id=employee_id)
+            active_session = AttendanceSession.objects.filter(employee=employee, logout_time__isnull=True).last()
+            if active_session:
+                active_session.logout_time = timezone.now()
+                active_session.save()
+        except Employee.DoesNotExist:
+            pass
+
+    request.session.flush()
+    return redirect('login')
 
 
 def employee_dashboard(request):
@@ -61,17 +110,38 @@ def employee_dashboard(request):
         return redirect('login')
 
     show_sensitive = False
+    otp_sent = False
+    otp_verified = False
 
-    if request.method == 'POST' and 'unlock_sensitive' in request.POST:
-        password = request.POST.get('password')
-        if password == employee.password:
+    if request.method == 'POST':
+        if 'send_otp' in request.POST:
+            # Send OTP to employee mobile
+            otp = generate_otp()
+            request.session['emp_otp'] = otp
+            send_otp_whatsapp(employee.mobile_number, otp)
+            otp_sent = True
+            messages.success(request, f"OTP sent to {employee.mobile_number}")
+        elif 'verify_otp' in request.POST:
+            entered_otp = request.POST.get('otp')
+            expected_otp = request.session.get('emp_otp')
+            if entered_otp == expected_otp:
+                show_sensitive = True
+                otp_verified = True
+                request.session['otp_verified'] = True
+                messages.success(request, "OTP verified. Sensitive data unlocked.")
+            else:
+                messages.error(request, "Invalid OTP. Please try again.")
+        elif request.session.get('otp_verified'):
             show_sensitive = True
-        else:
-            messages.error(request, "Invalid password.")
+
+    elif request.session.get('otp_verified'):
+        show_sensitive = True
 
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
+        'otp_sent': otp_sent,
+        'otp_verified': otp_verified,
         'messages': messages.get_messages(request)
     }
     return render(request, 'employee_dashboard.html', context)
@@ -82,10 +152,16 @@ def attendance_view(request):
     if not employee_id:
         return redirect('login')
 
-    # Get current month/year, or filter if selected
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+    except Employee.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
+
+    today = timezone.localtime(timezone.now())
     month = request.GET.get('month')
     year = request.GET.get('year')
-    today = datetime.today()
+
     if not month:
         month = today.month
     else:
@@ -95,33 +171,70 @@ def attendance_view(request):
     else:
         year = int(year)
 
-    # Fetch employee's attendance records for this month
-    attendance_records = Attendance.objects.filter(
-        employee__employee_id=employee_id,
-        date__year=year,
-        date__month=month
-    ).order_by('date')
+    filtered_sessions = AttendanceSession.objects.filter(
+        employee=employee,
+        login_time__year=year,
+        login_time__month=month
+    ).order_by('login_time')
 
-    # Build months list for filter dropdown (Jan-Dec)
+    sessions_by_date = defaultdict(list)
+    for session in filtered_sessions:
+        login_local = timezone.localtime(session.login_time)
+        logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
+
+        duration = session.duration()
+        total_seconds = duration.total_seconds() if duration else 0
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        duration_str = f"{hours}h {minutes}m"
+
+        sessions_by_date[login_local.date()].append({
+            'login_time': login_local,
+            'logout_time': logout_local,
+            'duration_str': duration_str,
+        })
+
+    todays_sessions_qs = AttendanceSession.objects.filter(
+        employee=employee,
+        login_time__date=today.date()
+    ).order_by('login_time')
+
+    todays_sessions = []
+    for session in todays_sessions_qs:
+        login_local = timezone.localtime(session.login_time)
+        logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
+
+        duration = session.duration()
+        total_seconds = duration.total_seconds() if duration else 0
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        duration_str = f"{hours}h {minutes}m"
+
+        todays_sessions.append({
+            'login_time': login_local,
+            'logout_time': logout_local,
+            'duration_str': duration_str,
+        })
+
     months = [{'value': i, 'display': month_name[i]} for i in range(1, 13)]
-
-    # Build years list for dropdown (e.g., last 5 years)
     current_year = today.year
-    years = [current_year - i for i in range(5)][::-1]  # [2021, 2022, 2023, 2024, 2025]
+    years = [current_year - i for i in range(5)][::-1]
+
+    selected_month_name = month_name[month]
 
     context = {
-        'attendance_records': attendance_records,
+        'employee': employee,
+        'sessions_by_date': dict(sessions_by_date),
+        'todays_sessions': todays_sessions,
         'months': months,
         'years': years,
         'selected_month': month,
         'selected_year': year,
+        'selected_month_name': selected_month_name,
+        'today': today,
     }
     return render(request, 'attendance.html', context)
-
-def logout_view(request):
-    # Destroys the session and logs out the user
-    request.session.flush()
-    return redirect('login_view')  
+  
 
 
 def employee_orders_view(request):
@@ -160,36 +273,6 @@ def employee_orders_view(request):
     return render(request, 'orders.html', context)
 
 
-def change_password_view(request):
-    employee_id = request.session.get('employee_id')
-    if not employee_id:
-        return redirect('login')
-
-    if request.method == 'POST':
-        old_password = request.POST.get('old_password')
-        new_password = request.POST.get('new_password')
-        confirm_password = request.POST.get('confirm_password')
-
-        try:
-            employee = Employee.objects.get(employee_id=employee_id)
-        except Employee.DoesNotExist:
-            messages.error(request, "Employee not found.")
-            return redirect('login')
-
-        if employee.password != old_password:
-            messages.error(request, "Old password is incorrect.")
-        elif not new_password:
-            messages.error(request, "New password cannot be empty.")
-        elif new_password != confirm_password:
-            messages.error(request, "New passwords do not match.")
-        else:
-            employee.password = new_password  # In production, hash the password!
-            employee.save()
-            messages.success(request, "Password changed successfully.")
-            return redirect('change_password')
-
-    return render(request, 'change_password.html')
-
 
 def create_invoice(request):
     if request.method == 'POST':
@@ -227,58 +310,32 @@ def links_view(request):
         return render(request, 'login.html')
     
 
-def forgot_password(request):
-    # Get the employee from session or user relation
+
+
+def create_worksheet(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
-        # Not logged in or session expired
         return redirect('login')
-    try:
-        employee = Employee.objects.get(employee_id=employee_id)
-    except Employee.DoesNotExist:
-        messages.error(request, "Invalid session.")
-        return redirect('login')
-    mobile = employee.mobile_number
+
+    employee = Employee.objects.get(employee_id=employee_id)
 
     if request.method == "POST":
-        otp = generate_otp()
-        request.session['otp'] = otp
-        request.session['mobile_number'] = mobile
-        send_otp_whatsapp(mobile, otp)
-        messages.success(request, "OTP sent to your WhatsApp number.")
-        return redirect('verify_otp')
-    # Pass the mobile to the template
-    return render(request, "forgot_password.html", {"mobile": mobile})
+        formset = WorksheetParticularFormSet(request.POST)
+        if formset.is_valid():
+            particulars = formset.cleaned_data
+            total_amount = sum(item['amount'] for item in particulars if item and 'amount' in item)
+            context = {
+                'employee': employee,
+                'date': timezone.now(),
+                'particulars': particulars,
+                'total_amount': total_amount,
+            }
+            return render(request, 'worksheet_print.html', context)
+    else:
+        formset = WorksheetParticularFormSet()
 
-
-def verify_otp(request):
-    step = request.POST.get("step", "otp") if request.method == "POST" else "otp"
-    if request.method == "POST":
-        mobile = request.session.get('mobile_number')
-        if not mobile:
-            messages.error(request, "Session expired. Please start again.")
-            return redirect('forgot_password')
-
-        if step == "otp":
-            entered_otp = request.POST.get("otp")
-            otp = request.session.get("otp")
-            if entered_otp == otp:
-                request.session["otp_verified"] = True
-            else:
-                messages.error(request, "Invalid OTP.")
-                return render(request, "verify_otp.html", {"step": "otp"})
-        elif step == "password" or request.session.get("otp_verified", False):
-            new_password = request.POST.get("new_password")
-            confirm = request.POST.get("confirm_password")
-            if new_password != confirm:
-                messages.error(request, "Passwords do not match.")
-                return render(request, "verify_otp.html", {"step": "password"})
-            employee = Employee.objects.get(mobile_number=mobile)
-            employee.password = new_password
-            employee.save()
-            # Clean up session
-            request.session.flush()
-            messages.success(request, "Password changed successfully.")
-            return redirect('login_view')
-    step = "password" if request.session.get("otp_verified", False) else "otp"
-    return render(request, "verify_otp.html", {"step": step})
+    return render(request, 'worksheet.html', {
+        'employee': employee,
+        'date': timezone.now(),
+        'formset': formset,
+    })

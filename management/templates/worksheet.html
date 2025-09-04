@@ -1,0 +1,109 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+<main class="container py-4">
+  <div class="card">
+    <div class="card-body" style="overflow-x: auto;">
+      <h3 class="mb-4">Worksheet</h3>
+      <p><strong>Employee:</strong> {{ employee.name }}</p>
+      <p><strong>Date:</strong> {{ date|date:"d-m-Y" }}</p>
+      <form method="post">
+        {% csrf_token %}
+        {{ formset.management_form }}
+        <table class="table table-bordered table-sm" id="worksheet-items-table" style="min-width:900px; table-layout: fixed; word-wrap: break-word;">
+          <thead class="thead-light">
+            <tr>
+              <th style="width:40px; text-align:center;">Sl.No</th>
+              <th style="width:120px;">Tk.No</th>
+              <th style="width:150px;">Customer Name</th>
+              <th style="width:150px;">Service</th>
+              <th style="width:150px;">Transaction No.</th>
+              <th style="width:150px;">Certificate No.</th>
+              <th style="width:100px; text-align:right;">Amount (₹)</th>
+              <th style="width:80px; text-align:center;">Remove</th>
+            </tr>
+          </thead>
+          <tbody id="formset-body">
+            {% for form in formset %}
+            <tr class="formset-row">
+              <td class="sl-no-cell text-center align-middle"></td>
+              <td>{{ form.ticket_no }}</td>
+              <td>{{ form.customer_name }}</td>
+              <td>{{ form.service }}</td>
+              <td>{{ form.transaction_no }}</td>
+              <td>{{ form.certificate_no }}</td>
+              <td>{{ form.amount }}</td>
+              <td class="text-center align-middle">
+                <button type="button" class="btn btn-danger btn-sm remove-row">Remove</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <button type="button" class="btn btn-secondary mb-2" id="add-row">Add Particular</button>
+        <div class="mt-3">
+          <strong>Total: ₹<span id="worksheet-total">0.00</span></strong>
+        </div>
+        <button type="submit" class="btn btn-primary">Preview & Print Worksheet</button>
+      </form>
+    </div>
+  </div>
+</main>
+
+<style>
+  #worksheet-items-table input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    font-size: 0.9rem;
+  }
+  #worksheet-items-table th,
+  #worksheet-items-table td {
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  let formIdx = {{ formset.total_form_count }};
+  function updateSlNo() {
+    $('#formset-body .formset-row').each(function(index) {
+      $(this).find('.sl-no-cell').text(index + 1);
+    });
+  }
+  $('#add-row').click(function() {
+    let row = $('.formset-row:first').clone(false, false);
+    row.find('input').each(function() {
+      let name = $(this).attr('name').replace(/-\d+-/, `-${formIdx}-`);
+      $(this).attr({'name': name, 'id': 'id_' + name}).val('');
+    });
+    row.find('input[type="hidden"]').remove();
+    $('#formset-body').append(row);
+    $('input[name="form-TOTAL_FORMS"]').val(++formIdx);
+    updateSlNo();
+    updateTotal();
+  });
+  $('#worksheet-items-table').on('click', '.remove-row', function() {
+    if ($('#formset-body .formset-row').length > 1) {
+      $(this).closest('tr').remove();
+      updateSlNo();
+      updateTotal();
+    }
+  });
+  function updateTotal() {
+    let total = 0;
+    $('#formset-body .formset-row').each(function() {
+      let val = parseFloat($(this).find('input[name$="-amount"]').val()) || 0;
+      total += val;
+    });
+    $('#worksheet-total').text(total.toFixed(2));
+  }
+  $('#formset-body').on('input', 'input[name$="-amount"]', updateTotal);
+  $(document).ready(function() {
+    updateSlNo();
+    updateTotal();
+  });
+</script>
+{% endblock %}

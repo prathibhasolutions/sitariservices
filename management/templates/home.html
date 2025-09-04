@@ -1,102 +1,47 @@
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Bhu Bharati | Revenue Dept. Telangana</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-    <!-- Add any custom css in your static files if needed -->
-    <style>
-        body { background: #eef2f7; }
-        .header-logo { max-height: 80px; }
-        .card { margin-bottom: 1.5rem; }
-        main { min-height: 70vh; }
-        .footer { background: #273043; color:white; padding: 1.5rem 0; }
-        .footer small { color: #ececec; }
-    </style>
-</head>
-<body>
-    <!-- Header, insert your logo path -->
-    <nav class="navbar navbar-light bg-light shadow mb-4">
-        <div class="container d-flex align-items-center">
-            <img src="{% static 'yourapp/img/bhubharati_logo.png' %}" alt="Bhu Bharati Logo" class="mr-3 header-logo">
-            <div>
-                <h2 class="mb-0" style="font-weight:700;">Bhu Bharati</h2>
-                <h5 class="mb-0 text-muted">Official Website of the Revenue Department, Government of Telangana</h5>
-            </div>
-        </div>
-    </nav>
+  {% extends "masterhome.html" %}
+  
+  {% load static %}
+  {% block content %}
+  <!-- CAROUSEL -->
+  <div id="demo" class="carousel slide custom-carousel" data-bs-ride="carousel" data-bs-interval="4000">
+    <div class="carousel-indicators">
+      <button type="button" data-bs-target="#demo" data-bs-slide-to="0" class="active" aria-label="Slide 1"></button>
+      <button type="button" data-bs-target="#demo" data-bs-slide-to="1" aria-label="Slide 2"></button>
+      <button type="button" data-bs-target="#demo" data-bs-slide-to="2" aria-label="Slide 3"></button>
+    </div>
 
-    <main class="container">
-        <div class="alert alert-secondary my-3">
-            <strong>Latest Announcements &amp; Updates :</strong>
-            <span class="float-right">Visitors Count: <span class="badge badge-info">24041784</span></span>
-        </div>
+    <div class="carousel-inner">
+      <div class="carousel-item active">
+        <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide1">
+      </div>
+      <div class="carousel-item">
+        <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide2">
+      </div>
+      <div class="carousel-item">
+        <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide3">
+      </div>
+    </div>
 
-        <div class="alert alert-warning">This is the official website of the Revenue Department, Government of Telangana.</div>
+    <button class="carousel-control-prev" type="button" data-bs-target="#demo" data-bs-slide="prev">
+      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Previous</span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#demo" data-bs-slide="next">
+      <span class="carousel-control-next-icon" aria-hidden="true"></span>
+      <span class="visually-hidden">Next</span>
+    </button>
+  </div>
 
-        <div class="row">
-            <div class="col-lg-7">
-                <!-- Application Process examples (repeat as necessary) -->
-                <div class="card">
-                    <div class="card-header bg-primary text-white">Application Process (Standard)</div>
-                    <ol class="list-group list-group-flush">
-                        <li class="list-group-item">Step 1: Data entry by Citizen</li>
-                        <li class="list-group-item">Step 2: Payment</li>
-                        <li class="list-group-item">Step 3: Citizen has to download e-Challan &amp; Transaction summary</li>
-                        <li class="list-group-item">Step 4: Slot Booking</li>
-                        <li class="list-group-item">Step 5: Application forwarded to department login for further processing</li>
-                    </ol>
-                </div>
-                <div class="card">
-                    <div class="card-header bg-success text-white">Application Process (Meeseva)</div>
-                    <ol class="list-group list-group-flush">
-                        <li class="list-group-item">Step 1: Data entry by Citizen</li>
-                        <li class="list-group-item">Step 2: Meeseva (eKYC)</li>
-                        <li class="list-group-item">Step 3: Application forwarded to department login for further processing</li>
-                    </ol>
-                </div>
-                <!-- ...repeat cards for each distinct step set found in your original page ... -->
-                <div class="card">
-                    <div class="card-header bg-info text-white">Mutation &amp; NALA Fee Process</div>
-                    <ol class="list-group list-group-flush">
-                        <li class="list-group-item">Step 1: Data entry by Citizen</li>
-                        <li class="list-group-item">Step 2: Citizen Payment (Mutation)</li>
-                        <li class="list-group-item">Step 3: Verification &amp; Approval by Department</li>
-                        <li class="list-group-item">Step 4: Citizen Payment (NALA fee)</li>
-                        <li class="list-group-item">Step 5: Citizen has to download e-Challan &amp; Transaction summary</li>
-                        <li class="list-group-item">Step 6: Slot Booking</li>
-                        <li class="list-group-item">Step 7: Application forwarded to department login for further processing</li>
-                    </ol>
-                </div>
-            </div>
-            <div class="col-lg-5">
-                <div class="card border-danger">
-                    <div class="card-body">
-                        <h5 class="card-title text-danger">Legal Notice</h5>
-                        <p class="card-text">
-                            Unauthorized use or reproduction of content from this website is illegal and liable for prosecution.
-                        </p>
-                    </div>
-                </div>
-                <div class="card border-info">
-                    <div class="card-body">
-                        <p class="mb-1">© All rights reserved with Chief Commissioner of Land Administration, Govt. of Telangana.</p>
-                        <p class="mb-0">Design &amp; Developed By <strong>National Informatics Centre</strong></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+  <!-- Lower disclaimer -->
+  <div class="disclaimer-bar">
+    <span class="disclaimer-text">Latest Anouncements and Updates :</span>
+    <div class="marquee">
+      <span>This is the official website of the Sitari Solutions</span>
+    </div>
+  </div>
 
-    <!-- Footer -->
-    <footer class="footer text-center">
-        <div class="container">
-            <small>
-                Copyright © Chief Commissioner of Land Administration, Govt. of Telangana.<br>
-                Design &amp; Developed By National Informatics Centre
-            </small>
-        </div>
-    </footer>
-</body>
-</html>
+ 
+
+    
+<br><br>
+{% endblock %}

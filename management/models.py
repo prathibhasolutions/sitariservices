@@ -12,30 +12,33 @@ class Employee(models.Model):
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
     mobile_number = models.CharField(max_length=15, unique=True)
-    password = models.CharField(max_length=128)
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     pf = models.DecimalField("Provident Fund (PF)", max_digits=10, decimal_places=2, null=True, blank=True)
     esi = models.DecimalField("Employee State Insurance (ESI)", max_digits=10, decimal_places=2, null=True, blank=True)
     joining_date = models.DateField()
-    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name='employees')
+    department = models.ForeignKey('Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='employees')
 
     def __str__(self):
         return f"{self.employee_id} - {self.name}"
 
-
-
-class Attendance(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendances')
-    date = models.DateField()
-    present = models.BooleanField(default=False)
+class AttendanceSession(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance_sessions')
+    login_time = models.DateTimeField()
+    logout_time = models.DateTimeField(null=True, blank=True)  # Null if session active
 
     class Meta:
-        unique_together = ('employee', 'date')
-        verbose_name_plural = 'Attendance records'
+        verbose_name_plural = 'Attendance Sessions'
+        ordering = ['-login_time']
+
+    def duration(self):
+        if self.logout_time:
+            return self.logout_time - self.login_time
+        else:
+            return timezone.now() - self.login_time
 
     def __str__(self):
-        status = "Present" if self.present else "Absent"
-        return f"{self.employee.name} - {self.date} - {status}"
+        logout_str = self.logout_time.strftime("%H:%M") if self.logout_time else "Active"
+        return f"{self.employee.name} - {self.login_time.date()} {self.login_time.strftime('%H:%M')} to {logout_str}"
 
 class Order(models.Model):
     STAGE_CHOICES = [
@@ -66,4 +69,21 @@ class Invoice(models.Model):
 class Particular(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='particulars', on_delete=models.CASCADE)
     description = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+
+class Worksheet(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='worksheets')
+    date = models.DateField(default=timezone.now)
+
+    def __str__(self):
+        return f"Worksheet {self.id} by {self.employee.name} on {self.date}"
+
+class WorksheetParticular(models.Model):
+    worksheet = models.ForeignKey(Worksheet, related_name='particulars', on_delete=models.CASCADE)
+    ticket_no = models.CharField(max_length=50)
+    customer_name = models.CharField(max_length=255)
+    service = models.CharField(max_length=255)
+    transaction_no = models.CharField(max_length=255, blank=True, null=True)
+    certificate_no = models.CharField(max_length=255, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

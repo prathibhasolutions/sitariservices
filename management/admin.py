@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Employee,
-    Attendance,
+    AttendanceSession,
     Order,
     Department,
     Invoice,
@@ -10,7 +10,7 @@ from .models import (
 
 # Register all models for admin site access
 admin.site.register(Employee)
-admin.site.register(Attendance)
+admin.site.register(AttendanceSession)
 admin.site.register(Order)
 
 admin.site.register(Department)

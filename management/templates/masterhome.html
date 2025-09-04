@@ -1,0 +1,723 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sithari Solutions</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    /* ------------ Variables (tweak if needed) ------------ */
+    :root{
+      --person-w-desktop: 80px;
+      --person-h-desktop: 100px;
+      --logo-size-desktop: 120px;
+      --carousel-h-desktop: 50vh;
+
+      /* base sizes that will be used by clamp() fallbacks below */
+      --nav-font-desktop: 1rem;
+      --disclaimer-font-desktop: 1rem;
+    }
+
+    /* ------------ HEADER ------------ */
+    .header-section{
+      background: url('{% static 'management/img/forest1.jpg' %}') no-repeat center center;
+      background-size: cover;
+      position: relative;
+      color: white;
+      padding: 10px 0;
+      min-height: 110px; /* keeps some vertical room */
+      z-index: 1;
+    }
+    .header-section .container { position: relative; z-index: 2; }
+
+    /* Single-line header that scales rather than wraps */
+    .header-content{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: nowrap; /* IMPORTANT: keep items in one row */
+      align-items: center;
+    }
+
+    /* Allow logo/title to shrink when necessary */
+    .logo-title{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-align:center;
+      flex: 1 1 auto;   /* can grow and shrink */
+      min-width: 0;     /* allow text to shrink without forcing wrap */
+      padding: 4px 8px;
+    }
+
+    /* Person boxes (left / right) remain fixed-size but shrink via variables */
+    .person-box{ flex: 0 0 auto; display:flex; align-items:center; justify-content:center; }
+    .person-box img{
+      width: var(--person-w-desktop);
+      height: var(--person-h-desktop);
+      border: 2px solid #ccc;
+      background: #fff;
+      object-fit: cover;
+      display:block;
+    }
+
+    /* Circular logo */
+    .logo-circle{
+      width: var(--logo-size-desktop);
+      height: var(--logo-size-desktop);
+      border-radius: 50%;
+      border: 3px solid #fff;
+      background: #ddd;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom: 6px;
+    }
+    .logo-circle img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    /* Titles - responsive using clamp() */
+    .logo-title h2{
+      margin:0;
+      font-weight:700;
+      color:white;
+      line-height:1;
+      font-size: clamp(1rem, 2.2vw, 1.4rem); /* scales between 1rem and 1.4rem */
+      white-space: nowrap; /* keep the multi-language header on one line when possible */
+    }
+    .logo-title span{
+      font-size: clamp(0.85rem, 1.9vw, 1rem);
+      display:block;
+    }
+
+    /* .companyname{
+        font-size: 100%
+        font-family:Verdana, Geneva, Tahoma, sans-serif
+    } */
+
+    /* ------------ NAV BAR ------------ */
+    .nav-bar{
+      background-color: #b5e2fa;
+      padding: 8px 16px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: nowrap;    /* try to keep on one line */
+      color: rgb(0, 0, 0);
+      overflow: hidden;
+    }
+
+    /* left links wrapper (flex 1 so middle takes available space) */
+    .nav-links{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex: 1 1 auto;
+      min-width: 0;  /* allow shrinking */
+      overflow: hidden;
+    }
+    .nav-links a{
+      color: rgb(0, 0, 0);
+      text-decoration: none;
+      font-weight:500;
+      white-space: nowrap;
+      font-size: clamp(0.9rem, 1.6vw, var(--nav-font-desktop));
+      margin-right: 6px;
+      display:inline-block;
+    }
+
+    .nav-links a:hover{ text-decoration: underline; }
+
+    /* right block keeps to the right but won't push to next line — shrinks fonts if necessary */
+    .nav-bar .right-block{
+      flex: 0 0 auto;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-left: 12px;
+      white-space: nowrap;
+      font-size: clamp(0.85rem, 1.5vw, 0.95rem);
+    }
+
+    /* If there's extremely little width, allow horizontal scrolling instead of wrapping to next line */
+    @media (max-width: 420px){
+      .nav-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .nav-bar::-webkit-scrollbar { height:6px; }
+    }
+
+    /* ------------ DISCLAIMER / MARQUEE ------------ */
+    .disclaimer-bar{
+      background-color: #0FA3B1;
+      color: white;
+      font-weight: bold;
+      padding: 6px 12px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .disclaimer-text{ color:#ffcc00; flex:0 0 auto; font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop)); }
+
+    .marquee{ flex: 1 1 auto; overflow: hidden; white-space: nowrap; }
+    .marquee span{
+      display:inline-block;
+      padding-left: 100%;
+      animation: marquee 12s linear infinite;
+      font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop));
+    }
+    @keyframes marquee{
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    /* ------------ CAROUSEL ------------ */
+    .custom-carousel{
+      position: relative;
+      overflow: visible; /* ensure controls not clipped */
+    }
+    :root { --carousel-h: var(--carousel-h-desktop); }
+
+    /* Make carousel images follow the variable height and use object-fit to crop */
+    .custom-carousel .carousel-item img{
+      width: 100%;
+      height: var(--carousel-h);
+      object-fit: cover;
+      display:block;
+    }
+
+    /* Ensure controls are visible and clickable */
+    .custom-carousel .carousel-control-prev,
+    .custom-carousel .carousel-control-next{
+      width: 6%;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+      opacity: 1;
+    }
+    /* Keep icon size comfortable */
+    .carousel-control-prev-icon,
+    .carousel-control-next-icon{
+      background-size: 2rem 2rem;
+    }
+    /* indicators above images */
+    .custom-carousel .carousel-indicators { z-index: 10; }
+
+    /* ------------ RESPONSIVE BREAKPOINTS ------------ */
+
+    /* Large screens: default variables (no change) */
+    @media (min-width: 992px){
+      :root{
+        --person-w-desktop: 80px;
+        --person-h-desktop: 100px;
+        --logo-size-desktop: 120px;
+        --carousel-h-desktop: 60vh;
+      }
+    }
+
+    /* Medium screens */
+    @media (max-width: 991.98px){
+      :root{
+        --person-w-desktop: 68px;
+        --person-h-desktop: 86px;
+        --logo-size-desktop: 100px;
+        --carousel-h-desktop: 50vh;
+      }
+      .person-box img{ width: var(--person-w-desktop); height: var(--person-h-desktop); }
+      .logo-circle{ width: var(--logo-size-desktop); height: var(--logo-size-desktop); }
+      .logo-title h2{ font-size: clamp(0.95rem, 2vw, 1.15rem); }
+    }
+
+    /* Small phones — make images and fonts smaller, still on one line */
+    @media (max-width: 575.98px){
+      :root{
+        --person-w-desktop: 52px;
+        --person-h-desktop: 64px;
+        --logo-size-desktop: 84px;
+        --carousel-h-desktop: 32vh;
+      }
+      .person-box img{ width: var(--person-w-desktop); height: var(--person-h-desktop); }
+      .logo-circle{ width: var(--logo-size-desktop); height: var(--logo-size-desktop); }
+      .logo-title h2{ font-size: clamp(0.9rem, 3.2vw, 1rem); white-space: normal; } /* allow wrapping inside the title if needed */
+      .nav-links a{ font-size: clamp(0.85rem, 3vw, 0.95rem); margin-right:6px; }
+      .nav-bar .right-block{ margin-left: 8px; font-size: clamp(0.8rem, 2.6vw, 0.9rem); }
+      .disclaimer-text, .marquee span { font-size: clamp(0.85rem, 2.6vw, 0.9rem); }
+      .marquee span { animation-duration: 10s; }
+    }
+
+    /* fallback: if extremely narrow, allow horizontal scrolling rather than stacking */
+    @media (max-width: 400px){
+      .header-content{ overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom:6px; }
+      .header-content::-webkit-scrollbar{ height:6px; }
+    }
+
+     /* Card Styling */
+    .custom-card {
+      border: none;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+      height: 100%;
+    }
+    .custom-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+    }
+    .custom-card img {
+      height: 180px;
+      object-fit: cover;
+    }
+    .custom-card .card-body {
+      padding: 1rem;
+    }
+    .custom-card h5 {
+      font-weight: 600;
+      color: #0FA3B1;
+    }
+    .custom-card p {
+      font-size: 0.9rem;
+      color: #555;
+    }
+    .custom-card .btn {
+      background: #B5E2FA;
+      border: none;
+      border-radius: 8px;
+      transition: background 0.3s;
+      color: #000000;
+  
+    }
+    .custom-card .btn:hover {
+      background: #0FA3B1;
+      color: #ffffff;
+    }
+
+    /* Pagination Styling */
+    .pagination {
+      justify-content: center;
+      margin-top: 2rem;
+    }
+    .page-item.active .page-link {
+      background-color: #0FA3B1;
+      border-color: #005826;
+    }
+    .page-link {
+      color: #0FA3B1;
+    }
+    .page-link:hover {
+      color: #0FA3B1;
+    }
+
+    /* Calendar CSS */
+
+  .calendar-header {
+      background: #0033ad;
+      color: #fff;
+      text-align: center;
+      padding: 30px 0 15px 0;
+      font-size: 2.5em;
+      font-weight: bold;
+      
+    }
+    .containerc {
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 0 10px;
+      display: flex;
+      gap: 20px;
+    }
+   
+   .main-contentc {
+  max-width: 600px; /* or desired max width */
+  margin: 0 auto;   /* centers horizontally */
+  padding: 0 10px;  /* optional side padding */
+  text-align: left; /* keeps text alignment inside if needed */
+}
+    .main-contentc h2 {
+      font-size: 2em;
+      color: #23478b;
+      margin-bottom: 20px;
+      margin-top: 10px;
+    }
+    .legendc {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      margin-bottom: 8px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .holiday-type {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 1.1em;
+    }
+    .red-box, .green-box {
+      width: 45px;
+      height: 30px;
+      border-radius: 5px;
+      display: inline-block;
+    }
+    .red-box {
+      background: #d90000;
+    }
+    .green-box {
+      background: #269a35;
+    }
+
+    /* Responsive Styles */
+    @media (max-width: 768px) {
+      .containerc {
+        flex-direction: column;
+        max-width: 95%;
+        margin: 20px auto;
+        padding: 0 5px;
+      }
+      
+      .main-contentc {
+        margin-left: 0;
+        margin-top: 15px;
+      }
+      .main-contentc h2 {
+        font-size: 1.6em;
+      }
+      .holiday-type {
+        font-size: 1em;
+      }
+      .red-box, .green-box {
+        width: 30px;
+        height: 20px;
+      }
+    }
+    @media (max-width: 480px) {
+      .calendarc-header {
+        font-size: 2em;
+        padding: 20px 0 10px 0;
+      }
+      
+      .main-contentc h2 {
+        font-size: 1.3em;
+      }
+      .holiday-type {
+        font-size: 0.9em;
+      }
+      .red-box, .green-box {
+        width: 25px;
+        height: 18px;
+      }
+    }
+    .cards-containerc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 25px;
+      justify-content: center;
+      padding: 30px 15px;
+      min-height: 100vh;
+    }
+    .cardc {
+      background: #fff;
+      border-radius: 15px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      width: 500px;
+      max-width: 95vw;
+      overflow: hidden;
+      transition: transform 0.9s cubic-bezier(.45,.05,.55,.95), box-shadow 0.6s;
+      opacity: 0;
+      transform: translateY(50px);
+    }
+    .cardc.visible {
+      opacity: 1;
+      transform: translateY(0);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.13);
+    }
+    .cardc img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 15px;
+    }
+    @media (max-width: 1060px) {
+      .cardc {
+        width: 380px;
+      }
+    }
+    @media (max-width: 900px) {
+      .cardc{
+        width: 300px;
+      }
+    }
+    @media (max-width: 670px) {
+      .cards-containerc {
+        flex-direction: column;
+        gap: 28px;
+        align-items: center;
+      }
+      .cardc {
+        width: 92vw;
+        max-width: 98vw;
+      }
+    }
+
+
+ /* FOOTER */
+    .custom-footer {
+      background: linear-gradient(180deg, #B5E2FA 0%, #a9d9f2 100%);
+      color: #000;
+      font-size: clamp(0.8rem, 1.8vw, 1rem);
+    }
+    .footer-heading {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #063d42;
+    }
+    .footer-list a { color: #000; text-decoration: none; }
+    .footer-list a:hover { color: #0FA3B1; }
+    .footer-logo { max-width: 150px; border-radius: 50%; margin-bottom: 10px; }
+    .social-icons a {
+      font-size: 1.3rem;
+      margin-right: 10px;
+      color: #0FA3B1;
+    }
+    .social-icons a:hover { color: #000; }
+
+  </style>
+</head>
+<body>
+
+<!-- Header Section -->
+  <div class="header-section">
+    <div class="container">
+      <div class="header-content">
+        
+        
+
+        <!-- Logo + Titles -->
+        
+          <div class="d-flex justify-content-center align-items-center">
+            <div class="logo-circle">
+              <img src="{% static 'management/img/logo.jpg' %}"  alt="Logo">
+            </div>
+          </div>
+          <!-- <div class="companyname">Sithari Solutions</div> -->
+          <h1 class="companyname">SITARI SOLUTIONS</h1>
+          
+
+        <!-- Right person image -->
+        <div class="person-box">
+          <img src="{% static 'management/img/person.jpg' %}" alt="Person 2">
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav-bar">
+    <div class="nav-links">
+      <a href="{% url 'home' %}">Home</a>
+      <a href="{% url 'contact' %}">Contact</a>
+     
+      
+    </div>
+
+    <div class="right-block">
+      <span>
+        <div class="nav-links"><i class="bi bi-person"></i><a href="{% url 'login' %}"> Login</a></div>
+      </span>
+    </div>
+  </div>
+
+  <!-- Upper disclaimer -->
+  <div class="disclaimer-bar">
+    <span class="disclaimer-text">⚠ Disclaimer :</span>
+    <div class="marquee">
+      <span>This is the official website of the Sitari Solutions</span>
+    </div>
+  </div>
+
+{% block content %}
+{% endblock %}
+
+
+<!-- FOOTER -->
+<!-- Footer -->
+<footer class="custom-footer">
+  <div class="container py-5">
+    <div class="row gy-4 text-center text-md-start align-items-start">
+      
+      <!-- Logo + About -->
+      <div class="col-lg-4 col-md-6">
+        <img src="{% static 'management/img/logo.jpg' %}" alt="Logo" class="footer-logo mb-3">
+        <p class="small text-dark">
+          Simplify your life with 6K Services, your trusted platform for passport applications, 
+          scholarship registrations, darshan tickets, Aadhaar services, job applications, and more. 
+          Access seamless, government-integrated solutions from anywhere.
+        </p>
+        <div class="social-icons mt-3">
+          <a href="https://instagram.com/saikrupaonlineservice" class="me-3"><i class="bi bi-instagram"></i></a>
+          <a href="https://youtube.com/@saikrupaservicenzb?si=nYjbRRvP3AKOSlwl" class="me-3"><i class="bi bi-youtube"></i></a>
+          <a href="https://wa.me/96063736616"><i class="bi bi-whatsapp"></i></a>
+        </div>
+      </div>
+
+      <!-- Useful Links -->
+      <div class="col-lg-3 col-md-6">
+        <h5 class="footer-heading">Useful Links</h5>
+        <ul class="footer-list" style="list-style: none;">
+          <li><a href="{% url 'home' %}">Home</a></li>
+          <li><a href="{% url 'contact' %}">Contact us</a></li>
+          
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div class="col-lg-4 col-md-12">
+        <h5 class="footer-heading">Contact Us</h5>
+        <address class="small text-dark mb-2">
+          H.No 6-12-55,<br>
+          opp Jain Mandir, Shivaji Chowk,<br>
+          Nizamabad District - 503002,<br>
+          Telangana, India
+        </address>
+        <p class="small text-dark mb-0"><b>Phone:</b></p>
+        <p class="small text-dark mb-0">
+          <b>+91 9701629320</b><br>
+          <b>+91 9032916616</b><br>
+          <b>+91 9581909826</b>
+        </p>
+      </div>
+    </div>
+
+    <hr class="footer-divider my-4">
+
+    <!-- Bottom Row -->
+    <div class="row">
+      <div class="col text-center">
+        <small class="text-dark">&copy; 2025 Sitari Solutions. All rights reserved.</small><br>
+        <small class="text-dark">Designed by <span class="designer-name"><a href="https://www.prathibhasolutions.com/">Prathibha Solutions</a></span></small>
+      </div>
+    </div>
+  </div>
+</footer>
+
+
+
+
+   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script> 
+   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+   
+   
+ <!-- WhatsApp -->
+ <a href="https://wa.me/96063736616" target="_blank" style="position: fixed; right: 25px; bottom: 50px;">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/WhatsApp_icon.png" alt="WhatsApp" width="70">
+</a>
+  <script>
+    // Intersection Observer to add "visible" class when cards come into viewport
+    document.addEventListener("DOMContentLoaded", function() {
+      const cards = document.querySelectorAll('.card-hover');
+      const options = {
+        threshold: 0.2 // 20% visible
+      };
+
+      const observer = new IntersectionObserver(function(entries, observer) {
+        entries.forEach(entry => {
+          if(entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target); // animation once
+          }
+        });
+      }, options);
+
+      cards.forEach(card => {
+        observer.observe(card);
+      });
+    });
+
+     // Dummy card data
+  const cardData = [
+    { img: "POLAR.jpeg", title: "Course 1", text: "Learn the basics of mathematics and improve problem-solving skills." },
+    { img: "POLAR.jpeg", title: "Course 2", text: "Introduction to programming with interactive examples." },
+    { img: "POLAR.jpeg", title: "Course 3", text: "Master science concepts with easy-to-follow lessons." },
+    { img: "POLAR.jpeg", title: "Course 4", text: "Sharpen your logical reasoning and aptitude skills." },
+    { img: "POLAR.jpeg", title: "Course 5", text: "Develop communication skills for personal and career growth." },
+    { img: "POLAR.jpeg", title: "Course 6", text: "Boost your general knowledge and current affairs." },
+    { img: "POLAR.jpeg", title: "Course 7", text: "Deep dive into JEE & EAMCET exam preparation." },
+    { img: "POLAR.jpeg", title: "Course 8", text: "Comprehensive training in computer applications." },
+    { img: "POLAR.jpeg", title: "Course 9", text: "Explore advanced mathematics and statistics." },
+    { img: "POLAR.jpeg", title: "Course 10", text: "Get trained in financial aptitude for competitive exams." },
+    { img: "POLAR.jpeg", title: "Course 11", text: "Learn with practice tests and mock exams." },
+    { img: "POLAR.jpeg", title: "Course 12", text: "Build a strong foundation for higher education." },
+    { img: "POLAR.jpeg", title: "Course 5", text: "Develop communication skills for personal and career growth." },
+    { img: "POLAR.jpeg", title: "Course 6", text: "Boost your general knowledge and current affairs." },
+    { img: "POLAR.jpeg", title: "Course 7", text: "Deep dive into JEE & EAMCET exam preparation." },
+    { img: "POLAR.jpeg", title: "Course 8", text: "Comprehensive training in computer applications." },
+    { img: "POLAR.jpeg", title: "Course 9", text: "Explore advanced mathematics and statistics." },
+    { img: "POLAR.jpeg", title: "Course 10", text: "Get trained in financial aptitude for competitive exams." },
+    { img: "POLAR.jpeg", title: "Course 11", text: "Learn with practice tests and mock exams." },
+    { img: "POLAR.jpeg", title: "Course 12", text: "Build a strong foundation for higher education." }
+  ];
+
+  const cardsPerPage = 8;
+  let currentPage = 1;
+
+  function displayCards(page) {
+    const start = (page - 1) * cardsPerPage;
+    const end = start + cardsPerPage;
+    const cardsToShow = cardData.slice(start, end);
+
+    const container = document.getElementById("cards-container");
+    container.innerHTML = "";
+
+    cardsToShow.forEach(card => {
+      container.innerHTML += `
+        <div class="col-lg-3 col-md-4 col-sm-6">
+          <div class="card custom-card h-100">
+            <img src="${card.img}" class="card-img-top" alt="${card.title}">
+            <div class="card-body d-flex flex-column">
+              <h5 class="card-title">${card.title}</h5>
+              <p class="card-text">${card.text}</p>
+              <a href="#" class="btn btn-success mt-auto">Explore</a>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  function setupPagination() {
+    const totalPages = Math.ceil(cardData.length / cardsPerPage);
+    const pagination = document.getElementById("pagination");
+    pagination.innerHTML = "";
+
+    for (let i = 1; i <= totalPages; i++) {
+      pagination.innerHTML += `
+        <li class="page-item ${i === currentPage ? 'active' : ''}">
+          <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+        </li>
+      `;
+    }
+  }
+
+  function goToPage(page) {
+    currentPage = page;
+    displayCards(page);
+    setupPagination();
+  }
+
+  // Initialize
+  displayCards(currentPage);
+  setupPagination();
+
+  </script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
