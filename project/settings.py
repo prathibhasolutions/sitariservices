@@ -16,9 +16,9 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['www.sitarisolutions.in','13.233.149.155','2406:da1a:14e:cf00:ff1c:57a3:a156:3aea']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
