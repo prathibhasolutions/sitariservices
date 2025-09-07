@@ -1,0 +1,27 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+<div class="container my-4">
+  <div class="card">
+    <div class="card-header">
+      <h4>{{ work_order.work_name }} - Details</h4>
+    </div>
+    <div class="card-body">
+      <p><strong>Customer Name:</strong> {{ work_order.customer_name }}</p>
+      <p><strong>Customer Mobile Number:</strong> {{ work_order.customer_mobile_number }}</p>
+      <p><strong>Description:</strong> {{ work_order.description }}</p>
+      <p><strong>Stage:</strong> {{ work_order.get_stage_display }}</p>
+      <p><strong>Expected Days to Complete:</strong> {{ work_order.expected_days_to_complete }}</p>
+      <p><strong>Commission:</strong> ₹{{ work_order.commission }}</p>
+      <p><strong>Approved:</strong> {{ work_order.approved|yesno:"Yes,No" }}</p>
+      <p><strong>Assigned Employees:</strong>
+        {% for emp in work_order.assigned_employees.all %}
+          {{ emp.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </p>
+    </div>
+    <div class="card-footer">
+      <a href="{% url 'workorders' %}" class="btn btn-secondary">Back</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

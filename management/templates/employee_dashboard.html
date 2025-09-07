@@ -1,4 +1,6 @@
 {% extends "masteremployee.html" %}
+{% load static %}
+
 
 {% block content %}
 <main class="col-md-9 ml-sm-auto col-lg-10 px-4 py-4">
@@ -27,6 +29,19 @@
                                 {% endif %}
                             </td>
                         </tr>
+
+                        <!-- Working Hours Row -->
+                        <tr>
+                            <th scope="row">Working Hours</th>
+                            <td>
+                                {% if employee.working_start_time and employee.working_end_time %}
+                                    {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+
                         <tr>
                             <th scope="row">Salary</th>
                             <td>
@@ -34,20 +49,33 @@
                                     ₹{{ employee.salary }}
                                 {% else %}
                                     {% if otp_sent and not otp_verified %}
-                                    <form method="post" class="form-inline">
-                                        {% csrf_token %}
-                                        <input type="text" name="otp" class="form-control form-control-sm mr-2" placeholder="Enter OTP" required>
-                                        <button type="submit" name="verify_otp" class="btn btn-sm btn-primary">Verify OTP</button>
-                                    </form>
+                                        <form method="post" class="form-inline">
+                                            {% csrf_token %}
+                                            <input type="text" name="otp" class="form-control form-control-sm mr-2" placeholder="Enter OTP" required>
+                                            <button type="submit" name="verify_otp" class="btn btn-sm btn-primary">Verify OTP</button>
+                                        </form>
                                     {% else %}
-                                    <form method="post" class="form-inline">
-                                        {% csrf_token %}
-                                        <button type="submit" name="send_otp" class="btn btn-sm btn-primary">Unlock with OTP</button>
-                                    </form>
+                                        <form method="post" class="form-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" name="send_otp" class="btn btn-sm btn-primary">Unlock with OTP</button>
+                                        </form>
                                     {% endif %}
                                 {% endif %}
                             </td>
                         </tr>
+
+                        <!-- Commission Row -->
+                        <tr>
+                            <th scope="row">Commission (Current Month)</th>
+                            <td>
+                                {% if show_sensitive %}
+                                    ₹{{ current_month_commission|default:"0.00" }}
+                                {% else %}
+                                    <span class="text-muted">Locked</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+
                         <tr>
                             <th scope="row">PF</th>
                             <td>
@@ -93,4 +121,6 @@
         </div>
     </div>
 </main>
+<script src="{% static 'js/auto_logout.js' %}"></script>
+
 {% endblock %}

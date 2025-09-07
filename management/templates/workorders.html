@@ -1,0 +1,148 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+<div class="container">
+
+
+  <!-- Create Work Order Section -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white">
+      <h4>Create Work Order</h4>
+    </div>
+    <div class="card-body">
+      <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label for="workName">Work Name</label>
+            <input type="text" class="form-control" id="workName" name="work_name" required>
+          </div>
+          <div class="form-group col-md-6">
+            <label for="customerName">Customer Name</label>
+            <input type="text" class="form-control" id="customerName" name="customer_name" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label for="customerMobile">Customer Mobile Number</label>
+            <input type="text" class="form-control" id="customerMobile" name="customer_mobile_number" required>
+          </div>
+          <div class="form-group col-md-6">
+            <label for="expectedDays">Expected Days to Complete</label>
+            <input type="number" class="form-control" id="expectedDays" name="expected_days" min="0" placeholder="Days" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="description">Work Description</label>
+          <textarea class="form-control" id="description" name="description" required></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label for="commission">Commission Amount</label>
+            <input type="number" step="0.01" class="form-control" id="commission" name="commission" required>
+          </div>
+          <div class="form-group col-md-6">
+            <label for="assignType">Assign Type</label>
+            <select class="form-control" id="assignType" name="assigned_type" required onchange="toggleOtherEmployee()">
+              <option value="own">Own Assigned</option>
+              <option value="sharing">Sharing</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="otherEmployeeDiv" style="display:none;">
+          <label for="otherEmployee">Select Employee to share with</label>
+          <select class="form-control" id="otherEmployee" name="other_employee">
+            <option value="">-- Select Employee --</option>
+            {% for emp in other_employees %}
+            <option value="{{ emp.employee_id }}">{{ emp.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-success">Create Work Order</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- Your Work Orders Section -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-info text-white">
+      <h4>Your Work Orders</h4>
+    </div>
+    <div class="card-body">
+      {% if work_orders %}
+      <div class="row">
+        {% for wo in work_orders %}
+        <div class="col-md-6 mb-3">
+          <div class="card border-primary">
+            <div class="card-header">
+              <strong>{{ wo.work_name }}</strong>
+              <span class="badge badge-secondary float-right">{{ wo.get_stage_display }}</span>
+            </div>
+            <div class="card-body">
+              <p><strong>Customer:</strong> {{ wo.customer_name }} - {{ wo.customer_mobile_number }}</p>
+              <p><strong>Created On:</strong> {{ wo.date_created|date:"d M Y" }}</p>
+              <p><strong>Commission:</strong> ₹{{ wo.commission|floatformat:2 }}</p>
+              <p><strong>Approved:</strong> {{ wo.approved|yesno:"Yes,No" }}</p>
+              <a href="{% url 'workorder-detail' wo.id %}" class="btn btn-sm btn-primary">View Details</a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p>No Work Orders assigned.</p>
+      {% endif %}
+    </div>
+  </div>
+
+
+  <!-- Monthly Commissions Section -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+      <h4>Monthly Commissions</h4>
+      <form method="get" class="form-inline">
+        <label for="monthSelect" class="mr-2 mb-0">Month:</label>
+        <select name="month" id="monthSelect" class="form-control mr-3" onchange="this.form.submit()">
+          {% for m in months %}
+          <option value="{{ m.value }}" {% if m.value == selected_month %}selected{% endif %}>{{ m.display }}</option>
+          {% endfor %}
+        </select>
+
+        <label for="yearSelect" class="mr-2 mb-0">Year:</label>
+        <select name="year" id="yearSelect" class="form-control" onchange="this.form.submit()">
+          {% for y in years %}
+          <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+    <div class="card-body">
+      {% if approved_work_orders %}
+      <ul class="list-group mb-3">
+        {% for wo in approved_work_orders %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          {{ wo.work_name }} ({{ wo.date_created|date:"d M Y" }})
+          <span>₹{{ wo.commission_share|floatformat:2 }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <h5>Total Commission: ₹{{ total_commission|floatformat:2 }}</h5>
+      {% else %}
+      <p>No approved work orders in this month.</p>
+      {% endif %}
+    </div>
+  </div>
+
+
+</div>
+
+
+<script>
+function toggleOtherEmployee() {
+  var val = document.getElementById('assignType').value;
+  document.getElementById('otherEmployeeDiv').style.display = (val === 'sharing') ? 'block' : 'none';
+}
+</script>
+
+
+{% endblock %}
