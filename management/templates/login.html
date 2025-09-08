@@ -33,6 +33,23 @@
             color: white;
         }
         
+        .home-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 25px;
+            text-decoration: none;
+        }
+        
+        .home-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        
         .card {
             border-radius: 15px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
@@ -51,6 +68,12 @@
     </style>
 </head>
 <body>
+    <!-- Back to Home Button -->
+    <a href="https://www.sitarisolutions.in" class="home-btn">
+        <i class="fas fa-home me-2"></i>
+        Back to Home
+    </a>
+
     <!-- Admin Login Button -->
     <a href="/admin/" class="admin-btn">
         <i class="fas fa-user-shield me-2"></i>
