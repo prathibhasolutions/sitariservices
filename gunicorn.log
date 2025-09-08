@@ -1,0 +1,8 @@
+[2025-09-08 22:47:22 +0000] [22537] [INFO] Starting gunicorn 23.0.0
+[2025-09-08 22:47:22 +0000] [22537] [INFO] Listening at: http://127.0.0.1:8000 (22537)
+[2025-09-08 22:47:22 +0000] [22537] [INFO] Using worker: sync
+[2025-09-08 22:47:22 +0000] [22538] [INFO] Booting worker with pid: 22538
+[2025-09-08 22:56:12 +0000] [22537] [INFO] Handling signal: hup
+[2025-09-08 22:56:12 +0000] [22537] [INFO] Hang up: Master
+[2025-09-08 22:56:12 +0000] [22537] [ERROR] Worker (pid:22538) was sent SIGHUP!
+[2025-09-08 22:56:12 +0000] [22548] [INFO] Booting worker with pid: 22548

@@ -16,7 +16,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = False
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['13.233.164.39', 'sitarisolutions.in']
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [
@@ -100,9 +100,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Include your static source folders for development convenience
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+STATICFILES_DIRS = []
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
