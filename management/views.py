@@ -20,7 +20,6 @@ def login_with_otp(request):
         mobile = request.POST.get('mobile')
         otp_entered = request.POST.get('otp')
         resend = request.POST.get('resend')
-
         if resend and mobile:
             otp = generate_otp()
             request.session['otp'] = otp
