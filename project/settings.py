@@ -13,10 +13,10 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
 # Set debug to False for production
-DEBUG = False
+DEBUG = True
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['13.233.164.39', 'sitarisolutions.in']
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [

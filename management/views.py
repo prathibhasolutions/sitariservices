@@ -15,17 +15,6 @@ from datetime import datetime
 from django.db.models import Count
 
 
-
-def home(request):
-    return render(request, "home.html")
-
-def calender(request):
-    return render(request, "calender.html")
-
-def contact(request):
-    return render(request, "contact.html")
-
-
 def login_with_otp(request):
     if request.method == 'POST':
         mobile = request.POST.get('mobile')
