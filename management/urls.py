@@ -11,6 +11,7 @@ urlpatterns = [
     path('links', views.links_view, name='links'),
     path('workorders/', views.work_order_list_create_view, name='workorders'),
     path('workorders/<int:pk>/', views.work_order_detail_view, name='workorder-detail'),
+    path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
     
 ]
 

@@ -15,14 +15,17 @@
       <table class="table table-sm table-bordered mb-0">
         <thead class="thead-light">
           <tr>
+            <th>ID</th>
             <th>Login Time</th>
             <th>Logout Time</th>
             <th>Duration</th>
+            <th>Reason</th>
           </tr>
         </thead>
         <tbody>
           {% for session in todays_sessions %}
           <tr>
+            <td>{{ session.id }}</td>
             <td>{{ session.login_time|time:"H:i" }}</td>
             <td>
               {% if session.logout_time %}
@@ -32,6 +35,7 @@
               {% endif %}
             </td>
             <td>{{ session.duration_str }}</td>
+            <td>{{ session.logout_reason }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -42,7 +46,7 @@
     </div>
   </div>
 
-  <!-- Date Filter Section moved here -->
+  <!-- Date Filter Section -->
   <div class="card mb-4 shadow-sm">
     <div class="card-body">
       <form method="get" class="form-inline">
@@ -83,34 +87,45 @@
             <td>
               <ul class="mb-0 pl-3">
                 {% for session in sessions %}
-                <li>
-                  Login: {{ session.login_time|time:"H:i" }} - 
-                  Logout: {% if session.logout_time %}{{ session.logout_time|time:"H:i" }}{% else %}<span class="text-warning">Active</span>{% endif %}
-                  | Duration: {{ session.duration_str }}
-                </li>
+                  <li>
+                    <b>ID:</b> {{ session.id }}<br>
+                    Login: {{ session.login_time|time:"H:i" }} -
+                    Logout: {% if session.logout_time %}{{ session.logout_time|time:"H:i" }}{% else %}<span class="text-warning">Active</span>{% endif %}
+                    <br>
+                    <b>Duration:</b> {{ session.duration_str }}<br>
+                    <b>Reason:</b> {{ session.logout_reason }}
+                  </li>
                 {% endfor %}
               </ul>
             </td>
           </tr>
           {% endfor %}
         </tbody>
-
-        <!-- Break Sessions -->
         <tfoot>
           <tr>
-            <th colspan="2">Break Sessions</th>
+            <th colspan="2" class="text-center">Break Sessions</th>
           </tr>
           {% for bs in break_sessions %}
           <tr>
-            <td>{{ bs.start_time|date:"d-m-Y" }}<br>{{ bs.start_time|time:"H:i" }} - {{ bs.end_time|time:"H:i" }}</td>
             <td>
-              Reason: {{ bs.logout_reason }} <br>
-              Approved: 
+              <b>ID:</b> {{ bs.id }}<br>
+              {{ bs.start_time|date:"d-m-Y" }}<br>{{ bs.start_time|time:"H:i" }} -
+              {% if bs.end_time %}
+                {{ bs.end_time|time:"H:i" }}
+              {% else %}
+                <span class="text-warning">Active</span>
+              {% endif %}
+            </td>
+            <td>
+              Reason: {{ bs.logout_reason }}<br>
+              Approved:
               {% if bs.approved %}
                 <span class="badge badge-success">Approved</span>
               {% else %}
                 <span class="badge badge-danger">Not Approved</span>
               {% endif %}
+              <br>
+              <b>Duration:</b> {{ bs.duration_str }}
             </td>
           </tr>
           {% endfor %}
@@ -122,17 +137,25 @@
     </div>
   </div>
 
-  
-
   <!-- Monthly Salary -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <h5>Monthly Salary: ₹{{ calculated_salary|floatformat:2 }}</h5>
-      <small>(Based on attended sessions and approved breaks out of 25 working days)</small>
-    </div>
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5>Monthly Salary: ₹{{ calculated_salary|floatformat:2 }}</h5>
+    <small>(Based on attended sessions and approved breaks during working hours out of {{ days_in_month }} days in {{ selected_month_name }})</small>
+<div class="mt-2">
+  <small class="text-muted">
+    Working Hours: {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }} 
+    ({{ daily_working_hours|floatformat:1 }} hours/day)
+  </small>
+</div>
+<div class="mt-1">
+  <small class="text-muted">
+    Expected Hours: {{ expected_hours|floatformat:1 }} hours ({{ days_in_month }} days × {{ daily_working_hours|floatformat:1 }} hours/day)
+  </small>
+</div>
+
+
   </div>
-
+</div>
 </main>
-
-
 {% endblock %}

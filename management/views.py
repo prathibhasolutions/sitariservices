@@ -3,9 +3,10 @@ from django.contrib import messages
 from collections import defaultdict
 from datetime import datetime,timedelta
 from django.utils import timezone
-from calendar import month_name
+from calendar import month_name,monthrange
 from django.shortcuts import render, get_object_or_404
 from .models import Invoice
+from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet
 from .utils import generate_otp, send_otp_whatsapp
 from .models import Employee,AttendanceSession, WorkOrder, Commission,BreakSession
@@ -20,6 +21,7 @@ def login_with_otp(request):
         mobile = request.POST.get('mobile')
         otp_entered = request.POST.get('otp')
         resend = request.POST.get('resend')
+
         if resend and mobile:
             otp = generate_otp()
             request.session['otp'] = otp
@@ -41,15 +43,29 @@ def login_with_otp(request):
                     employee = Employee.objects.get(mobile_number=mobile)
                     request.session['employee_id'] = employee.employee_id
 
+                    now = timezone.now()
+
+                    # If a break session is still open (from idle/tab close/previous logout), end it NOW
+                    last_break = BreakSession.objects.filter(
+                        employee=employee,
+                        end_time__isnull=True
+                    ).order_by('-start_time').first()
+                    if last_break:
+                        last_break.end_time = now
+                        last_break.ended_by_login = True  # optional for tracking
+                        last_break.save()
+
+                    # Create a new attendance session for this login
                     AttendanceSession.objects.create(
                         employee=employee,
-                        login_time=timezone.now(),
-                        logout_time=None
+                        login_time=now,
+                        logout_time=None,
+                        logout_reason=""
                     )
 
                     request.session.pop('otp', None)
                     request.session.pop('mobile', None)
-                    
+
                     return redirect('employee_dashboard')
                 except Employee.DoesNotExist:
                     messages.error(request, "Employee with this mobile number not found.")
@@ -74,6 +90,7 @@ def login_with_otp(request):
 
     return render(request, 'login.html', {'otp_sent': False})
 
+
 @csrf_exempt
 def logout_view(request):
     employee_id = request.session.get('employee_id')
@@ -84,22 +101,31 @@ def logout_view(request):
     if employee_id:
         try:
             employee = Employee.objects.get(employee_id=employee_id)
-            active_session = AttendanceSession.objects.filter(employee=employee, logout_time__isnull=True).last()
+            
+            # Find the last open attendance session
+            active_session = AttendanceSession.objects.filter(
+                employee=employee,
+                logout_time__isnull=True,
+                session_closed=False
+            ).order_by('-login_time').first()
+            
             if active_session:
-                active_session.logout_time = timezone.now()
-                active_session.logout_reason = logout_reason if logout_reason else "No reason provided"
+                now = timezone.now()
+                reason = logout_reason if logout_reason else "Manual Logout"
+                active_session.logout_time = now
+                active_session.logout_reason = reason
+                active_session.session_closed = True
                 active_session.save()
-                # Create BreakSession from previous logout to current login
-                prev_logout = AttendanceSession.objects.filter(
-                    employee=employee, logout_time__lt=active_session.login_time).order_by('-logout_time').first()
-                if prev_logout and prev_logout.logout_time:
-                    BreakSession.objects.create(
-                        employee=employee,
-                        start_time=prev_logout.logout_time,
-                        end_time=active_session.login_time,
-                        logout_reason=prev_logout.logout_reason,
-                        approved=False
-                    )
+                
+                # Start a BreakSession (ends at next login)
+                BreakSession.objects.create(
+                    employee=employee,
+                    start_time=now,
+                    end_time=None,
+                    logout_reason=reason if "idle" not in reason.lower() else "Inactive - Auto Logout",
+                    approved=False,
+                    ended_by_login=False
+                )
         except Employee.DoesNotExist:
             pass
 
@@ -184,6 +210,7 @@ def employee_dashboard(request):
     }
     return render(request, 'employee_dashboard.html', context)
 
+
 def attendance_view(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
@@ -199,40 +226,102 @@ def attendance_view(request):
     month = int(request.GET.get('month', today.month))
     year = int(request.GET.get('year', today.year))
 
-    filtered_sessions = AttendanceSession.objects.filter(
+    # Get total days in the selected month
+    days_in_month = monthrange(year, month)[1]
+
+    # Calculate employee's daily working hours
+    if employee.working_start_time and employee.working_end_time:
+        # Convert time objects to datetime for calculation
+        start_dt = datetime.combine(datetime.today().date(), employee.working_start_time)
+        end_dt = datetime.combine(datetime.today().date(), employee.working_end_time)
+        
+        # Handle overnight shifts (if end time is before start time)
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)
+        
+        daily_working_seconds = (end_dt - start_dt).total_seconds()
+        daily_working_hours = daily_working_seconds / 3600
+    else:
+        # Default to 8 hours if working times not set
+        daily_working_seconds = 8 * 3600
+        daily_working_hours = 8.0
+
+    qs = AttendanceSession.objects.filter(
         employee=employee,
         login_time__year=year,
         login_time__month=month
     ).order_by('login_time')
 
+    # Apply working hours filter if present
+    if employee.working_start_time and employee.working_end_time:
+        qs = qs.filter(
+            login_time__time__gte=employee.working_start_time,
+            login_time__time__lte=employee.working_end_time
+        )
+
     sessions_by_date = defaultdict(list)
-    for session in filtered_sessions:
+    for session in qs:
         login_local = timezone.localtime(session.login_time)
         logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
         duration = session.duration()
-        total_seconds = duration.total_seconds()
+        total_seconds = duration.total_seconds() if duration else 0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
         duration_str = f"{hours}h {minutes}m"
         sessions_by_date[login_local.date()].append({
+            'id': session.uuid.hex[:6],
             'login_time': login_local,
             'logout_time': logout_local,
             'duration_str': duration_str,
             'logout_reason': session.logout_reason,
         })
 
-    # Break Sessions for same period
-    break_sessions = BreakSession.objects.filter(
+    # Build a list of breaks with precomputed duration string
+    break_sessions_qs = BreakSession.objects.filter(
         employee=employee,
         start_time__year=year,
         start_time__month=month
     ).order_by('start_time')
+    
+    # Apply working hours filter to break sessions too
+    if employee.working_start_time and employee.working_end_time:
+        break_sessions_qs = break_sessions_qs.filter(
+            start_time__time__gte=employee.working_start_time,
+            start_time__time__lte=employee.working_end_time
+        )
 
-    # Salary calculation for 25 working days x 8 hours/day
-    attended_seconds = sum([session.duration().total_seconds() for session in filtered_sessions])
-    approved_break_seconds = sum([bs.duration().total_seconds() for bs in break_sessions if bs.approved])
+    break_list = []
+    for bs in break_sessions_qs:
+        if bs.end_time:
+            td = bs.end_time - bs.start_time
+            total_seconds = int(td.total_seconds())
+            h = total_seconds // 3600
+            m = (total_seconds % 3600) // 60
+            duration_str = f"{h}h {m}m"
+        else:
+            duration_str = "Ongoing"
+        break_list.append({
+            'id': bs.uuid.hex[:6],
+            'start_time': bs.start_time,
+            'end_time': bs.end_time,
+            'logout_reason': bs.logout_reason,
+            'approved': bs.approved,
+            'duration_str': duration_str,
+        })
+
+    # Salary calculation based on employee's actual working hours
+    attended_seconds = sum([s.duration().total_seconds() for s in qs])
+    
+    # Only count approved breaks within working hours
+    approved_break_seconds = sum([
+        (bs.end_time - bs.start_time).total_seconds()
+        for bs in break_sessions_qs.filter(approved=True, end_time__isnull=False)
+    ])
+    
     total_work_seconds = attended_seconds + approved_break_seconds
-    expected_seconds = 25 * 8 * 3600
+    
+    # Use employee's actual daily working hours × days in month
+    expected_seconds = days_in_month * daily_working_seconds
     salary = float(employee.salary) * (total_work_seconds / expected_seconds) if expected_seconds else 0
 
     months = [{'value': i, 'display': month_name[i]} for i in range(1, 13)]
@@ -240,18 +329,30 @@ def attendance_view(request):
     years = [current_year - i for i in range(5)][::-1]
     selected_month_name = month_name[month]
 
-    # Today's active sessions
-    todays_sessions_qs = AttendanceSession.objects.filter(employee=employee, login_time__date=today.date()).order_by('login_time')
+    # Today's sessions - also apply working hours filter
+    todays_sessions_qs = AttendanceSession.objects.filter(
+        employee=employee, 
+        login_time__date=today.date()
+    ).order_by('login_time')
+    
+    # Apply working hours filter to today's sessions
+    if employee.working_start_time and employee.working_end_time:
+        todays_sessions_qs = todays_sessions_qs.filter(
+            login_time__time__gte=employee.working_start_time,
+            login_time__time__lte=employee.working_end_time
+        )
+
     todays_sessions = []
     for session in todays_sessions_qs:
         login_local = timezone.localtime(session.login_time)
         logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
         duration = session.duration()
-        total_seconds = duration.total_seconds()
+        total_seconds = duration.total_seconds() if duration else 0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
         duration_str = f"{hours}h {minutes}m"
         todays_sessions.append({
+            'id': session.uuid.hex[:6],
             'login_time': login_local,
             'logout_time': logout_local,
             'duration_str': duration_str,
@@ -261,7 +362,7 @@ def attendance_view(request):
     context = {
         'employee': employee,
         'sessions_by_date': dict(sessions_by_date),
-        'break_sessions': break_sessions,
+        'break_sessions': break_list,
         'months': months,
         'years': years,
         'selected_month': month,
@@ -270,8 +371,27 @@ def attendance_view(request):
         'today': today,
         'todays_sessions': todays_sessions,
         'calculated_salary': salary,
+        'days_in_month': days_in_month,
+        'daily_working_hours': daily_working_hours,  # Now properly calculated
+        'expected_hours': days_in_month * daily_working_hours,  # Uses employee's actual hours
     }
     return render(request, 'attendance.html', context)
+
+
+@csrf_exempt  # Only use csrf_exempt if you cannot get CSRF cookie in JS; otherwise, handle it securely
+def attendance_ping(request):
+    if request.method == "POST":
+        employee_id = request.session.get('employee_id')
+        if employee_id:
+            from .models import AttendanceSession
+            session = AttendanceSession.objects.filter(
+                employee_id=employee_id, logout_time__isnull=True
+            ).order_by('-login_time').first()
+            if session:
+                session.last_ping = timezone.now()
+                session.save(update_fields=['last_ping'])
+            return JsonResponse({'status': 'pong'})
+    return JsonResponse({'status': 'notpong'}, status=400)
 
 
 def get_logged_in_employee(request):
