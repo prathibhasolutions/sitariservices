@@ -17,7 +17,7 @@
 
 <!-- Google Fonts: Open Sans, Roboto, Poppins, Raleway -->
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&family=Poppins:wght@100..900&family=Raleway:wght@100..900&family=Open+Sans:wght@300..700&display=swap" rel="stylesheet">
-
+<meta name="csrf-token" content="{{ csrf_token }}">
     <style>
         body { min-height: 100vh; }
         .sidebar {
@@ -105,7 +105,109 @@
   </div>
 </div>
 
-<script src="{% static 'js/auto_logout.js' %}"></script>
+<!-- In your HTML template file -->
+<script>
+let idleSeconds = 0;
+let isActive = true;
+
+// This will work because it's in the template
+const loginUrl = "{% url 'login' %}";
+
+function resetIdle() {
+    idleSeconds = 0;
+    isActive = true;
+    console.log('User activity detected, idle timer reset');
+}
+
+// Track only scroll, click, and typing activities
+const events = ['click', 'keypress', 'keydown', 'scroll', 'touchstart'];
+events.forEach(event => {
+    document.addEventListener(event, resetIdle, true);
+});
+
+// Get CSRF token safely
+function getCSRFToken() {
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        return csrfMeta.getAttribute('content');
+    }
+
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'csrftoken') {
+            return value;
+        }
+    }
+
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) {
+        return csrfInput.value;
+    }
+
+    return null;
+}
+
+// Auto-logout function
+function performAutoLogout() {
+    const csrftoken = getCSRFToken();
+
+    if (!csrftoken) {
+        console.error('CSRF token not found, redirecting directly');
+        window.location.href = loginUrl;
+        return;
+    }
+
+    console.log('Performing auto-logout due to inactivity');
+
+    const formData = new FormData();
+    formData.append('logout_reason', 'Auto-logout: Employee idle for more than 60 seconds');
+
+    fetch('/logout/', {
+        method: 'POST',
+        headers: {
+            "X-CSRFToken": csrftoken,
+        },
+        body: formData
+    })
+        .then(response => {
+            console.log('Logout response:', response.status);
+            if (response.ok || response.redirected) {
+                window.location.href = loginUrl;
+            } else {
+                console.error('Logout failed with status:', response.status);
+                window.location.href = loginUrl;
+            }
+        })
+        .catch(error => {
+            console.error('Logout error:', error);
+            window.location.href = loginUrl;
+        });
+}
+
+// Main idle timer
+setInterval(function () {
+    if (isActive) {
+        idleSeconds++;
+
+        if (idleSeconds % 10 === 0) {
+            console.log(`User idle for ${idleSeconds} seconds`);
+        }
+
+        if (idleSeconds === 50) {
+            console.log('Warning: Auto-logout in 10 seconds due to inactivity');
+        }
+
+        if (idleSeconds >= 60) {
+            isActive = false;
+            performAutoLogout();
+        }
+    }
+}, 1000);
+
+console.log('Idle timeout script initialized - will redirect to:', loginUrl);
+</script>
+
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
