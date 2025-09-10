@@ -1,6 +1,6 @@
-import os
+import os,environ
 from pathlib import Path
-import environ
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -13,10 +13,10 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
 # Set debug to False for production
-DEBUG = True
+DEBUG = False
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['13.126.140.26', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
 
 # Application definition
 INSTALLED_APPS = [
@@ -38,7 +38,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'management.ip_restriction.RestrictIPMiddleware',
+    #'management.ip_restriction.RestrictIPMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
@@ -97,10 +97,20 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 # Directory where collectstatic will collect static files for production
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Include your static source folders for development convenience
 STATICFILES_DIRS = []
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Security settings for production
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# Session security
+SESSION_COOKIE_SECURE = False  # Set to True after SSL setup
+CSRF_COOKIE_SECURE = False     # Set to True after SSL setup
