@@ -9,10 +9,12 @@ from .models import Invoice
 from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet
 from .utils import generate_otp, send_otp_whatsapp
-from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission
+from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission,Worksheet
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime
 from decimal import Decimal
+from django.db.models import Sum
+from .forms import MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, XeroxWorksheetForm
 
 
 def login_with_otp(request):
@@ -599,6 +601,106 @@ def links_view(request):
     else:
         return render(request, 'login.html')
     
+@require_employee
+def worksheet_view(request, employee):
+    department = employee.department
+    if not department:
+        messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
+        return redirect('employee_dashboard') # Redirect to a dashboard or profile page
+
+    # Map department names to their respective forms
+    form_map = {
+        'Mee Seva': MeesevaWorksheetForm,
+        'Online Hub': MeesevaWorksheetForm, # Uses the same form as Meeseva
+        'Aadhaar': AadharWorksheetForm,
+        'Bhu Bharathi': BhuBharathiWorksheetForm,
+        'xerox': XeroxWorksheetForm,
+    }
+
+    WorksheetForm = form_map.get(department.name)
+    if not WorksheetForm:
+        messages.error(request, f"No worksheet available for the '{department.name}' department.")
+        return redirect('employee_dashboard')
+
+    if request.method == 'POST':
+        form = WorksheetForm(request.POST)
+        if form.is_valid():
+            worksheet_entry = form.save(commit=False)
+            worksheet_entry.employee = employee
+            worksheet_entry.department_name = department.name # Store department name
+            worksheet_entry.save()
+            messages.success(request, "Worksheet entry added successfully.")
+            return redirect('worksheet')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = WorksheetForm()
+
+    # Get data for display
+    today = timezone.now().date()
+    
+    # Filter for date range, default to today
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    # Today's Entries
+    todays_entries = Worksheet.objects.filter(employee=employee, date=today)
+    todays_total = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
+
+    # Historical Entries
+    all_entries = Worksheet.objects.filter(employee=employee)
+    if start_date_str and end_date_str:
+        all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
+    
+    context = {
+        'employee':employee,
+        'form': form,
+        'department': department,
+        'todays_entries': todays_entries,
+        'todays_total': todays_total,
+        'all_entries': all_entries,
+        'today': today,
+    }
+    return render(request, 'worksheet.html', context)
 
 
+@require_employee
+def worksheet_entry_edit_view(request, employee, entry_id):
+    entry = get_object_or_404(Worksheet, pk=entry_id, employee=employee)
 
+    if entry.approved:
+        messages.error(request, "This entry is approved and cannot be edited.")
+        return redirect('worksheet')
+
+    department = employee.department
+    form_map = {
+        'Mee Seva': MeesevaWorksheetForm,
+        'Online Hub': MeesevaWorksheetForm,
+        'Aadhaar': AadharWorksheetForm,
+        'Bhu Bharathi': BhuBharathiWorksheetForm,
+        'xerox': XeroxWorksheetForm,
+    }
+    WorksheetForm = form_map.get(department.name)
+
+    if not WorksheetForm:
+        messages.error(request, "Cannot find a valid form for your department.")
+        return redirect('worksheet')
+
+    if request.method == 'POST':
+        form = WorksheetForm(request.POST, instance=entry)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Worksheet entry updated successfully.")
+            return redirect('worksheet')
+        else:
+            # Re-render the partial form with errors if validation fails
+            context = {'form': form, 'entry_id': entry_id}
+            return render(request, 'partials/worksheet_edit_form.html', context)
+    else:
+        form = WorksheetForm(instance=entry)
+
+    context = {
+        'form': form,
+        'entry_id': entry_id
+    }
+    return render(request, 'partials/worksheet_edit_form.html', context)

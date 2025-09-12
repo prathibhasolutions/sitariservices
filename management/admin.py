@@ -7,7 +7,8 @@ from .models import (
     Department,
     Invoice,
     Particular,
-    BreakSession
+    BreakSession,
+    Worksheet,
 )
 
 # Register all models for admin site access
@@ -19,6 +20,7 @@ admin.site.register(Department)
 admin.site.register(Invoice)
 admin.site.register(Particular)
 admin.site.register(BreakSession)
+admin.site.register(Worksheet)
 
 
 from django.contrib import admin

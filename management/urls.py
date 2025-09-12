@@ -12,6 +12,8 @@ urlpatterns = [
    path('applications/', views.application_list_create_view, name='applications'),
     path('applications/<int:pk>/', views.application_detail_view, name='application-detail'),
     path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
+    path('worksheet/', views.worksheet_view, name='worksheet'),
+    path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
     
 ]
 

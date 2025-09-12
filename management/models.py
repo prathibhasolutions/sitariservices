@@ -177,3 +177,33 @@ class Commission(models.Model):
 
     def __str__(self):
         return f"Commission for {self.employee.name} - {self.month}/{self.year} : ₹{self.total_commission}"
+
+
+class Worksheet(models.Model):
+    # Common fields
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='worksheet_entries')
+    date = models.DateField(default=timezone.now)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    department_name = models.CharField(max_length=50, editable=False)
+    
+    # NEW: Approval status field
+    approved = models.BooleanField(default=False)
+
+    # Department-Specific Fields (all optional)
+    token_no = models.CharField(max_length=100, blank=True, null=True)
+    customer_name = models.CharField(max_length=150, blank=True, null=True)
+    service = models.CharField(max_length=200, blank=True, null=True)
+    certificate_number = models.CharField(max_length=100, blank=True, null=True)
+    transaction_num = models.CharField("Transaction Number", max_length=100, blank=True, null=True)
+    enrollment_no = models.CharField("Enrollment Number", max_length=100, blank=True, null=True)
+    login_mobile_no = models.CharField("Login Mobile No.", max_length=15, blank=True, null=True)
+    application_no = models.CharField("Application No.", max_length=100, blank=True, null=True)
+    status = models.CharField(max_length=100, blank=True, null=True)
+    particulars = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        approval_status = "Approved" if self.approved else "Pending"
+        return f"Entry by {self.employee.name} on {self.date} for {self.department_name} ({approval_status})"
