@@ -9,11 +9,10 @@ from .models import Invoice
 from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet
 from .utils import generate_otp, send_otp_whatsapp
-from .models import Employee,AttendanceSession, WorkOrder, Commission,BreakSession
+from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
 from datetime import datetime
-from django.db.models import Count
+from decimal import Decimal
 
 
 def login_with_otp(request):
@@ -134,21 +133,27 @@ def logout_view(request):
 
 
 def calculate_employee_monthly_commission(employee, year, month):
-    # Fetch all approved work orders for employee in given month and year
-    work_orders = WorkOrder.objects.filter(
-        approved=True,
-        assigned_employees=employee,
-        date_created__year=year,
-        date_created__month=month,
-    ).prefetch_related('assigned_employees')
+    """
+    Calculates the total commission for a given employee for a specific month and year.
+    
+    This function finds all approved applications the employee was assigned to
+    in the given period and sums their commission based on their stored percentage share.
+    """
+    # Find all of the employee's assignments that were for applications
+    # approved in the specified month and year.
+    approved_assignments = ApplicationAssignment.objects.filter(
+        employee=employee,
+        application__approved=True,
+        application__date_created__year=year,
+        application__date_created__month=month
+    ).select_related('application') # Use select_related to efficiently fetch the related Application
 
-    total_commission = 0.0
-    for wo in work_orders:
-        assignees = list(wo.assigned_employees.all())
-        assignee_count = len(assignees) if assignees else 1
-        if employee in assignees:
-            share = float(wo.commission) / assignee_count
-            total_commission += share
+    total_commission = Decimal('0.0')
+    for assignment in approved_assignments:
+        # Calculate the share for this specific assignment
+        commission_share = (assignment.commission_percentage / 100) * assignment.application.total_commission
+        total_commission += commission_share
+        
     return total_commission
 
 
@@ -394,7 +399,11 @@ def attendance_ping(request):
     return JsonResponse({'status': 'notpong'}, status=400)
 
 
+
+# --- Helper Functions ---
+
 def get_logged_in_employee(request):
+    """Retrieves the logged-in employee from the session."""
     employee_id = request.session.get('employee_id')
     if not employee_id:
         return None
@@ -404,102 +413,153 @@ def get_logged_in_employee(request):
         return None
 
 def require_employee(view_func):
+    """Decorator to ensure an employee is logged in before accessing a view."""
     def wrapped_view(request, *args, **kwargs):
         employee = get_logged_in_employee(request)
         if not employee:
-            messages.error(request, "Employee not logged in.")
-            return redirect('login')
+            messages.error(request, "You must be logged in to view this page.")
+            return redirect('login') # Make sure you have a 'login' URL name
+        # Pass the employee object to the view
         return view_func(request, employee, *args, **kwargs)
     return wrapped_view
 
+# --- Main Views ---
+
 @require_employee
-def work_order_list_create_view(request, employee):
-    # Month/Year filter for commissions
+def application_list_create_view(request, employee):
+    """
+    Handles both the creation of new applications (POST) and the display
+    of existing applications and monthly commissions (GET).
+    """
     today = timezone.localtime(timezone.now())
+    
+    # --- HANDLE FORM SUBMISSION (POST) ---
+    if request.method == 'POST':
+        try:
+            assign_type = request.POST.get('assign_type')
+            total_commission = Decimal(request.POST.get('total_commission'))
+            
+            # Create the Application instance
+            app = Application.objects.create(
+                application_name=request.POST.get('application_name'),
+                customer_name=request.POST.get('customer_name'),
+                customer_mobile_number=request.POST.get('customer_mobile_number'),
+                description=request.POST.get('description'),
+                expected_days_to_complete=int(request.POST.get('expected_days', 1)),
+                total_commission=total_commission,
+                approved=False
+            )
+
+            # Create the assignments based on type
+            if assign_type == 'own':
+                ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=100)
+            
+            elif assign_type == 'sharing':
+                other_employee_id = request.POST.get('other_employee')
+                creator_share = Decimal(request.POST.get('creator_share'))
+                partner_share = Decimal(request.POST.get('partner_share'))
+
+                if not other_employee_id:
+                    app.delete() # Clean up the created application
+                    raise ValueError("Please select an employee to share with.")
+                
+                if creator_share + partner_share != 100:
+                    app.delete()
+                    raise ValueError("Commission shares must add up to 100%.")
+
+                other_emp = Employee.objects.get(employee_id=other_employee_id)
+                ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=creator_share)
+                ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_percentage=partner_share)
+
+            messages.success(request, f"Application '{app.application_name}' created successfully!")
+            return redirect('applications')
+
+        except (ValueError, TypeError, Employee.DoesNotExist) as e:
+            messages.error(request, f"Error creating application: {e}")
+            return redirect('applications')
+
+    # --- PREPARE DATA FOR DISPLAY (GET) ---
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
-    if request.method == 'POST':
-        work_name = request.POST.get('work_name')
-        customer_name = request.POST.get('customer_name')
-        customer_mobile = request.POST.get('customer_mobile_number')
-        description = request.POST.get('description')
-        expected_days = int(request.POST.get('expected_days', 0))
-        commission = request.POST.get('commission')
-        assigned_type = request.POST.get('assigned_type')
-        other_employee_id = request.POST.get('other_employee')
+    # Get all applications assigned to the current employee
+    your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
 
-        if not (work_name and customer_name and customer_mobile and description and commission):
-            messages.error(request, "Please fill all required fields.")
-            return redirect('workorders')
+    # Calculate monthly commission from approved applications
+    approved_assignments = ApplicationAssignment.objects.filter(
+        employee=employee,
+        application__approved=True,
+        application__date_created__year=selected_year,
+        application__date_created__month=selected_month
+    ).select_related('application')
 
-        work_order = WorkOrder.objects.create(
-            work_name=work_name,
-            customer_name=customer_name,
-            customer_mobile_number=customer_mobile,
-            description=description,
-            expected_days_to_complete=expected_days,
-            commission=commission,
-            approved=False,
-        )
-        work_order.assigned_employees.add(employee)
+    total_monthly_commission = 0
+    for assignment in approved_assignments:
+        commission_share = (assignment.commission_percentage / 100) * assignment.application.total_commission
+        assignment.commission_share = commission_share # Annotate object for template
+        total_monthly_commission += commission_share
 
-        if assigned_type == 'sharing' and other_employee_id:
-            try:
-                other_emp = Employee.objects.get(employee_id=other_employee_id)
-                work_order.assigned_employees.add(other_emp)
-            except Employee.DoesNotExist:
-                messages.error(request, "Selected employee to share with does not exist.")
-                work_order.delete()
-                return redirect('workorders')
-
-        messages.success(request, "Work Order created successfully!")
-        return redirect('workorders')
-
-    # Your work orders
-    work_orders = WorkOrder.objects.filter(assigned_employees=employee).order_by('-date_created')
-
-    # Approved work orders filtered by selected month/year
-    approved_work_orders = WorkOrder.objects.filter(
-        approved=True,
-        assigned_employees=employee,
-        date_created__year=selected_year,
-        date_created__month=selected_month,
-    ).order_by('date_created')
-
-    # Calculate commission share for each approved work order
-    for wo in approved_work_orders:
-        count = wo.assigned_employees.count() or 1
-        wo.commission_share = float(wo.commission) / count
-
-    # Total commission sum for the employee in selected month
-    total_commission = sum([wo.commission_share for wo in approved_work_orders])
-
+    # Data for dropdowns
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
-
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
-    years = [selected_year - i for i in range(5)][::-1]
+    selected_month_display = months[selected_month - 1]['display']
+    current_year = timezone.now().year
+    years = list(range(current_year - 5, current_year + 2)) # Range up to next year
 
     context = {
-        'work_orders': work_orders,
-        'approved_work_orders': approved_work_orders,
-        'total_commission': total_commission,
+        'applications': your_applications,
+        'approved_assignments': approved_assignments,
+        'total_commission': total_monthly_commission,
         'other_employees': other_employees,
         'selected_month': selected_month,
+        'selected_month_display': selected_month_display,
         'selected_year': selected_year,
         'months': months,
         'years': years,
     }
-    return render(request, 'workorders.html', context)
+    return render(request, 'applications.html', context)
 
 
 @require_employee
-def work_order_detail_view(request, employee, pk):
-    work_order = get_object_or_404(WorkOrder, pk=pk, assigned_employees=employee)
-    return render(request, 'workorder_detail.html', {'work_order': work_order})
+def application_detail_view(request, employee, pk):
+    """
+    Displays the details of a single application and handles the chat functionality.
+    """
+    # Ensure the logged-in employee is actually assigned to this application
+    application = get_object_or_404(Application, pk=pk, assigned_employees=employee)
+    
+    # Check if the application is shared and not yet approved to enable chat
+    is_shared = application.assigned_employees.count() > 1
+    is_chat_active = is_shared and not application.approved
 
+    # Handle chat message submission
+    if request.method == 'POST' and is_chat_active:
+        message_text = request.POST.get('message')
+        message_file = request.FILES.get('file')
+        
+        if message_text or message_file:
+            ChatMessage.objects.create(
+                application=application,
+                employee=employee,
+                message=message_text,
+                file=message_file
+            )
+            # Redirect to the same page to show the new message and clear the form
+            return redirect('application-detail', pk=application.pk)
 
+    # Fetch data for display
+    assignments = application.applicationassignment_set.all().select_related('employee')
+    chat_messages = []
+    if is_chat_active:
+        chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
 
+    context = {
+        'application': application,
+        'assignments': assignments,
+        'is_chat_active': is_chat_active,
+        'chat_messages': chat_messages
+    }
+    return render(request, 'application_detail.html', context)
 
 
 
@@ -530,6 +590,7 @@ def invoice_detail(request, pk):
         'particulars': particulars,
         'total': total,
     })
+
 
 def links_view(request):
     employee_id = request.session.get('employee_id')

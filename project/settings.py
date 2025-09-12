@@ -13,7 +13,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
 # Set debug to False for production
-DEBUG = False
+DEBUG = True
 
 # Allowed hosts include your instance IP and domain
 ALLOWED_HOSTS = ['13.126.140.26', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
@@ -114,3 +114,7 @@ X_FRAME_OPTIONS = 'DENY'
 # Session security
 SESSION_COOKIE_SECURE = False  # Set to True after SSL setup
 CSRF_COOKIE_SECURE = False     # Set to True after SSL setup
+
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

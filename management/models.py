@@ -3,6 +3,8 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 from datetime import datetime
 import uuid
+from django.conf import settings
+import os
 
 class Department(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -112,33 +114,58 @@ class Particular(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
 
-class WorkOrder(models.Model):
-    STAGE_CHOICES = [
-        ('start', 'Start'),
-        ('stage2', 'Stage 2'),
-        ('stage3', 'Stage 3'),
-        ('stage4', 'Stage 4'),
-        ('complete', 'Complete'),
-    ]
-
+class Application(models.Model):
+    """
+    Renamed from WorkOrder. This is the central model for a client's job.
+    """
+    id = models.AutoField(primary_key=True)
     date_created = models.DateTimeField(auto_now_add=True)
-    work_name = models.CharField(max_length=255)
+    application_name = models.CharField(max_length=255)
     customer_name = models.CharField(max_length=150)
     customer_mobile_number = models.CharField(max_length=15)
     description = models.TextField()
-    stage = models.CharField(max_length=10, choices=STAGE_CHOICES, default='start')
-    expected_days_to_complete = models.PositiveIntegerField(default=1,help_text="Expected number of days to complete the work")
-    commission = models.DecimalField(max_digits=10, decimal_places=2)
+    expected_days_to_complete = models.PositiveIntegerField(default=1, help_text="Expected number of days to complete the work")
+    total_commission = models.DecimalField(max_digits=10, decimal_places=2)
     approved = models.BooleanField(default=False)
-    assigned_employees = models.ManyToManyField(Employee, related_name='work_orders')
-
-    def assigned_employee_count(self):
-        return self.assigned_employees.count() or 1
+    # assigned_employees links through the ApplicationAssignment model
+    assigned_employees = models.ManyToManyField(Employee, through='ApplicationAssignment', related_name='applications')
 
     def __str__(self):
-        return f"WorkOrder#{self.id} ({self.work_name}) for {self.customer_name} - {self.get_stage_display()}"
+        return f"Application#{self.id} ({self.application_name}) for {self.customer_name}"
+
+class ApplicationAssignment(models.Model):
+    """
+    NEW: Manages the relationship between an Application and an Employee,
+    storing the specific commission percentage for that assignment.
+    """
+    application = models.ForeignKey(Application, on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    commission_percentage = models.DecimalField(max_digits=5, decimal_places=2, help_text="Percentage of the commission for this employee")
+
+    class Meta:
+        unique_together = ('application', 'employee')
+
+    def __str__(self):
+        return f"{self.employee.name} has {self.commission_percentage}% share in {self.application.application_name}"
+
+class ChatMessage(models.Model):
+    """
+    NEW: Stores a single message or file upload in the chat for an Application.
+    """
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name='chat_messages')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    message = models.TextField(blank=True, null=True)
+    file = models.FileField(upload_to='chat_files/', blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Message by {self.employee.name} on {self.application.application_name} at {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
 
 class Commission(models.Model):
+    """
+    This model stores the calculated monthly total commission for an employee.
+    Its data is generated based on approved ApplicationAssignments.
+    """
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='commissions')
     month = models.PositiveSmallIntegerField()  # 1 to 12
     year = models.PositiveSmallIntegerField()
@@ -150,21 +177,3 @@ class Commission(models.Model):
 
     def __str__(self):
         return f"Commission for {self.employee.name} - {self.month}/{self.year} : ₹{self.total_commission}"
-
-    @staticmethod
-    def calculate_for_month(employee, month, year):
-        qs = WorkOrder.objects.filter(
-            approved=True,
-            assigned_employees=employee,
-            date_created__year=year,
-            date_created__month=month,
-        ).annotate(num_assignees=models.Count('assigned_employees'))
-
-        total = 0
-        for work_order in qs:
-            total += work_order.commission / work_order.num_assignees
-
-        obj, created = Commission.objects.get_or_create(employee=employee, month=month, year=year)
-        obj.total_commission = total
-        obj.save()
-        return obj

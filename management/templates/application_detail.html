@@ -1,0 +1,94 @@
+{% extends "masteremployee.html" %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+      <h4>Application Details: {{ application.application_name }}</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-12">
+              <p><strong>Application ID:</strong> {{ application.id }}</p>
+              <div><strong>Assigned Employees & Share:</strong>
+                    <ul class="list-group mt-2">
+                        {% for assignment in assignments %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ assignment.employee.name }}
+                            <span class="badge badge-info badge-pill">{{ assignment.commission_percentage|floatformat:2 }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div><br>
+                <p><strong>Customer Name:</strong> {{ application.customer_name }}</p>
+                <p><strong>Customer Mobile:</strong> {{ application.customer_mobile_number }}</p>
+                <p><strong>Created On:</strong> {{ application.date_created|date:"l, d F Y" }}</p>
+                
+                <strong>Work Description:</strong>
+                <p class="border p-2 bg-light rounded">{{ application.description|linebreaksbr }}</p>
+            
+                <p><strong>Expected Completion:</strong> {{ application.expected_days_to_complete }} days</p>
+                <p><strong>Total Commission:</strong> ₹{{ application.total_commission|floatformat:2 }}</p>
+                <p><strong>Status:</strong> 
+                    <span class="badge {% if application.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
+                        {{ application.approved|yesno:"Approved,Pending Approval" }}
+                    </span>
+                </p>
+                
+            </div>
+            
+        </div>
+    </div>
+  </div>
+
+  <!-- Chat Box Section -->
+  {% if is_chat_active %}
+  <div class="card mt-4 shadow-sm">
+    <div class="card-header bg-secondary text-white">
+      <h5>Collaboration Chat</h5>
+    </div>
+    <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="chat-box">
+      {% if chat_messages %}
+        {% for msg in chat_messages %}
+          <div class="mb-3 p-2 rounded {% if msg.employee.employee_id == request.session.employee_id %}bg-light text-right{% else %}border{% endif %}">
+            <strong>{{ msg.employee.name }}</strong> 
+            <small class="text-muted">({{ msg.timestamp|date:"d M, H:i" }})</small>
+            {% if msg.message %}
+              <p class="mb-1 mt-1">{{ msg.message|linebreaksbr }}</p>
+            {% endif %}
+            {% if msg.file %}
+              <a href="{{ msg.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                Download: {{ msg.file.name|cut:"chat_files/" }}
+              </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-center text-muted">No messages yet. Start the conversation!</p>
+      {% endif %}
+    </div>
+    <div class="card-footer">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-group">
+          <textarea name="message" class="form-control" rows="2" placeholder="Type your message..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="fileUpload">Attach File (Optional)</label>
+          <input type="file" name="file" class="form-control-file" id="fileUpload">
+        </div>
+        <button type="submit" class="btn btn-primary">Send</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+    {% if application.assigned_employees.count > 1 %}
+    <div class="alert alert-info mt-4">Chat is disabled because this application has been approved.</div>
+    {% endif %}
+  {% endif %}
+  
+  <div class="mt-4">
+      <a href="{% url 'applications' %}" class="btn btn-outline-secondary">&larr; Back to Applications List</a>
+  </div>
+</div>
+{% endblock %}

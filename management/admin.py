@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Employee,
     AttendanceSession,
-    WorkOrder,
+    Application,
     Commission,
     Department,
     Invoice,
@@ -13,9 +13,8 @@ from .models import (
 # Register all models for admin site access
 admin.site.register(Employee)
 admin.site.register(AttendanceSession)
-admin.site.register(WorkOrder)
+admin.site.register(Application)
 admin.site.register(Commission)
-
 admin.site.register(Department)
 admin.site.register(Invoice)
 admin.site.register(Particular)

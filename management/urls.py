@@ -9,8 +9,8 @@ urlpatterns = [
     path('create-invoice/', views.create_invoice, name='create_invoice'),
     path('invoice/<int:pk>/', views.invoice_detail, name='invoice_detail'),
     path('links', views.links_view, name='links'),
-    path('workorders/', views.work_order_list_create_view, name='workorders'),
-    path('workorders/<int:pk>/', views.work_order_detail_view, name='workorder-detail'),
+   path('applications/', views.application_list_create_view, name='applications'),
+    path('applications/<int:pk>/', views.application_detail_view, name='application-detail'),
     path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
     
 ]
