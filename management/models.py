@@ -183,6 +183,7 @@ class Worksheet(models.Model):
     # Common fields
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='worksheet_entries')
     date = models.DateField(default=timezone.now)
+    payment = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     department_name = models.CharField(max_length=50, editable=False)
     
@@ -192,6 +193,8 @@ class Worksheet(models.Model):
     # Department-Specific Fields (all optional)
     token_no = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=150, blank=True, null=True)
+    customer_mobile = models.CharField(max_length=15, blank=True, null=True)
+
     service = models.CharField(max_length=200, blank=True, null=True)
     certificate_number = models.CharField(max_length=100, blank=True, null=True)
     transaction_num = models.CharField("Transaction Number", max_length=100, blank=True, null=True)

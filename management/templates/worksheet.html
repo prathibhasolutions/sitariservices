@@ -60,11 +60,11 @@
                         <tr>
                             <th>Sl.No</th>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                                <th>T.K No</th><th>Customer Name</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th>
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment</th>
                             {% elif department.name == "Aadhaar" %}
-                                <th>T.K No</th><th>Customer Name</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th>
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment</th>
                             {% elif department.name == "Bhu Bharathi" %}
-                                <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th>
+                                <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment</th>
                             {% elif department.name == "xerox" %}
                                 <th>Particulars</th>
                             {% endif %}
@@ -76,11 +76,12 @@
                         <tr>
                             <td>{{ forloop.counter }}</td>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
                             {% elif department.name == "Aadhaar" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td>
+                               <td>{{ entry.payment|default:"-" }}</td>
                             {% elif department.name == "Bhu Bharathi" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
                             {% elif department.name == "xerox" %}
                                 <td>{{ entry.particulars|default:"-" }}</td>
                             {% endif %}
@@ -88,7 +89,7 @@
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No entries for today.</td></tr>
-                        {% endfor %}
+                        {% endfor %}  
                     </tbody>
                     <tfoot>
                         <tr class="font-weight-bold bg-light">
