@@ -207,3 +207,36 @@ class Worksheet(models.Model):
     def __str__(self):
         approval_status = "Approved" if self.approved else "Pending"
         return f"Entry by {self.employee.name} on {self.date} for {self.department_name} ({approval_status})"
+
+
+class Notification(models.Model):
+    """
+    Represents the core notification message.
+    """
+    description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    # The relationship is managed through the UserNotificationStatus model
+    recipients = models.ManyToManyField(Employee, through='UserNotificationStatus', related_name='notifications')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.description[:50]
+
+class UserNotificationStatus(models.Model):
+    """
+    Acts as a "through" model, linking each Employee to a Notification
+    and tracking their individual read status.
+    """
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    notification = models.ForeignKey(Notification, on_delete=models.CASCADE)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        # Ensures an employee can't have multiple statuses for the same notification
+        unique_together = ('employee', 'notification')
+
+    def __str__(self):
+        status = 'Read' if self.is_read else 'Unread'
+        return f"{self.employee.name} - '{self.notification.description[:20]}...' ({status})"

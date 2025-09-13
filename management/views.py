@@ -5,6 +5,7 @@ from datetime import datetime,timedelta
 from django.utils import timezone
 from calendar import month_name,monthrange
 from django.shortcuts import render, get_object_or_404
+from django.db import models
 from .models import Invoice
 from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet
@@ -15,7 +16,9 @@ from datetime import datetime
 from decimal import Decimal
 from django.db.models import Sum
 from .forms import MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, XeroxWorksheetForm
-
+from .models import UserNotificationStatus,Notification
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 def login_with_otp(request):
     if request.method == 'POST':
@@ -704,3 +707,49 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         'entry_id': entry_id
     }
     return render(request, 'partials/worksheet_edit_form.html', context)
+
+
+@require_employee
+def notification_list_view(request, employee):
+    """
+    Displays all notifications for the logged-in employee.
+    """
+    notifications = UserNotificationStatus.objects.filter(employee=employee).select_related('notification').order_by('-notification__created_at')
+    
+    context = {
+        'notifications': notifications
+    }
+    return render(request, 'notifications.html', context)
+
+@require_employee
+def mark_notification_as_read(request, employee, pk):
+    """
+    Marks a specific notification as read for the logged-in employee.
+    """
+    notification_status = get_object_or_404(UserNotificationStatus, pk=pk, employee=employee)
+    
+    if not notification_status.is_read:
+        notification_status.is_read = True
+        notification_status.save()
+    
+    # Redirect back to the notification list
+    return redirect('notification_list')
+
+
+@receiver(post_save, sender=Notification)
+def create_user_notification_statuses(sender, instance, created, **kwargs):
+    """
+    When a new Notification is created, this function creates a
+    UserNotificationStatus object for every single employee in the system.
+    """
+    if created:
+        # Get all employees
+        all_employees = Employee.objects.all()
+        # Create a UserNotificationStatus for each employee for the new notification
+        for employee in all_employees:
+            UserNotificationStatus.objects.create(
+                employee=employee,
+                notification=instance,
+                is_read=False  # Default to unread
+            )
+        print(f"Created notification statuses for {all_employees.count()} employees for notification ID {instance.id}")

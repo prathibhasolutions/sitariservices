@@ -9,6 +9,7 @@ from .models import (
     Particular,
     BreakSession,
     Worksheet,
+    Notification,
 )
 
 # Register all models for admin site access
@@ -21,6 +22,7 @@ admin.site.register(Invoice)
 admin.site.register(Particular)
 admin.site.register(BreakSession)
 admin.site.register(Worksheet)
+admin.site.register(Notification)
 
 
 from django.contrib import admin

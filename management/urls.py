@@ -14,6 +14,8 @@ urlpatterns = [
     path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
     path('worksheet/', views.worksheet_view, name='worksheet'),
     path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
+    path('notifications/', views.notification_list_view, name='notification_list'),
+    path('notifications/mark-as-read/<int:pk>/', views.mark_notification_as_read, name='mark_notification_as_read'),
     
 ]
 

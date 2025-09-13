@@ -34,16 +34,16 @@
         @media (max-width: 767.98px) {
             .sidebar { min-height: auto; }
         }
+        
         /* Notification bell and badge for navbar */
-        .navbar-bell {
-            position: relative;
-        }
+        .navbar-bell { position: relative; }
         .navbar-bell .badge {
             position: absolute;
-            top: 0.1rem;
-            right: -0.3rem;
+            top: -5px;      /* Position badge slightly above the bell */
+            right: -10px;   /* Position badge slightly to the right */
             font-size: 0.7rem;
-            z-index: 10;
+            padding: 3px 6px;
+            border-radius: 50%;
         }
     </style>
 </head>
@@ -59,6 +59,14 @@
         <span class="navbar-brand mb-0 h1">Employee Dashboard</span>
     </div>
     
+    <div class="navbar-bell">
+        <a href="{% url 'notification_list' %}" class="text-white">
+            <i class="fas fa-bell fa-lg"></i>
+            {% if unread_notification_count > 0 %}
+                <span class="badge badge-danger">{{ unread_notification_count }}</span>
+            {% endif %}
+        </a>
+    </div>
 
 </nav>
 
