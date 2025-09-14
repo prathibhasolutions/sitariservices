@@ -50,3 +50,12 @@ class AllowedIPAdmin(admin.ModelAdmin):
         # Clear cache when IP settings change
         from django.core.cache import cache
         cache.clear()
+
+# admin.py
+from .models import MonthlyDeduction # Add this import
+
+@admin.register(MonthlyDeduction)
+class MonthlyDeductionAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'month', 'year', 'amount', 'notes')
+    list_filter = ('year', 'month', 'employee')
+    search_fields = ('employee__name', 'notes')

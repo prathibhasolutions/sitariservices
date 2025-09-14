@@ -37,4 +37,24 @@ class XeroxWorksheetForm(forms.ModelForm):
         fields = ['particulars', 'amount']
 
 
+# In your forms.py file
+
+from django import forms
+from .models import Worksheet
+
+# ... (your other forms like MeesevaWorksheetForm are here) ...
+
+# NEW: Create a form specifically for editing the certificate number
+class WorksheetEntryEditForm(forms.ModelForm):
+    class Meta:
+        model = Worksheet
+        # This is the key: only include the fields you want to be editable
+        fields = ['certificate_number']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Optional: Add Bootstrap class for styling
+        self.fields['certificate_number'].widget.attrs.update({'class': 'form-control'})
+
+
 

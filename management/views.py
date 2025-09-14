@@ -8,7 +8,7 @@ from django.shortcuts import render, get_object_or_404
 from django.db import models
 from .models import Invoice
 from django.http import JsonResponse
-from .forms import InvoiceForm, ParticularFormSet
+from .forms import InvoiceForm, ParticularFormSet,WorksheetEntryEditForm
 from .utils import generate_otp, send_otp_whatsapp
 from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission,Worksheet
 from django.views.decorators.csrf import csrf_exempt
@@ -173,9 +173,13 @@ def employee_dashboard(request):
         request.session.flush()
         return redirect('login')
 
+    # --- Your existing OTP state management ---
     show_sensitive = False
-    otp_sent = False
-    otp_verified = False
+    otp_sent = request.session.get('otp_sent_flag', False) # Preserve state across GET requests
+    otp_verified = request.session.get('otp_verified', False)
+
+    if otp_verified:
+        show_sensitive = True
 
     if request.method == 'POST':
         if 'send_otp' in request.POST:
@@ -184,40 +188,62 @@ def employee_dashboard(request):
             otp = generate_otp()
             request.session['emp_otp'] = otp
             send_otp_whatsapp(employee.mobile_number, otp)
-            otp_sent = True
+            
+            # Set flags in session to remember state after redirect
+            request.session['otp_sent_flag'] = True
+            otp_sent = True # Update for current context
             messages.success(request, f"OTP sent to {employee.mobile_number}")
+            return redirect('employee_dashboard') # Redirect to prevent form resubmission
+
         elif 'verify_otp' in request.POST:
             entered_otp = request.POST.get('otp')
             expected_otp = request.session.get('emp_otp')
-            if entered_otp == expected_otp:
+
+            if entered_otp and entered_otp == expected_otp:
+                request.session['otp_verified'] = True
                 show_sensitive = True
                 otp_verified = True
-                request.session['otp_verified'] = True
                 messages.success(request, "OTP verified. Sensitive data unlocked.")
+                # Clean up session OTP variables
+                if 'emp_otp' in request.session:
+                    del request.session['emp_otp']
+                if 'otp_sent_flag' in request.session:
+                    del request.session['otp_sent_flag']
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
-        else:
-            # In case of other POST forms, preserve show_sensitive if previously verified
-            if request.session.get('otp_verified'):
-                show_sensitive = True
-    else:
-        if request.session.get('otp_verified'):
-            show_sensitive = True
+                # Keep the otp_sent flag true so the form is re-shown
+                request.session['otp_sent_flag'] = True
 
-    today = timezone.localtime(timezone.now())
-    current_year = today.year
-    current_month = today.month
+            return redirect('employee_dashboard') # Redirect to show messages and update state
 
-    current_month_commission = calculate_employee_monthly_commission(employee, current_year, current_month)
+    # If it's a GET request, clear the otp_sent flag unless an OTP was just sent
+    if request.method == 'GET' and not request.session.get('otp_sent_flag'):
+        otp_sent = False
+    # If the POST failed verification, otp_sent must remain true for the template
+    elif request.session.get('otp_sent_flag'):
+        otp_sent = True
+
+
+    # --- THE ONLY CHANGE IS HERE ---
+    # Replace the old calculation with the new, powerful model method.
+    current_month_earnings_data = employee.get_current_month_earnings()
+    # --- END OF CHANGE ---
 
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
-        'messages': messages.get_messages(request),
-        'current_month_commission': current_month_commission,
+        # The 'messages' framework handles this automatically, no need to pass it in context
+        
+        # Pass the entire earnings dictionary to the template
+        'current_month_earnings': current_month_earnings_data,
     }
+
+    # Reset the one-time flag after rendering
+    if 'otp_sent_flag' in request.session and request.method == 'GET':
+        del request.session['otp_sent_flag']
+
     return render(request, 'employee_dashboard.html', context)
 
 
@@ -604,23 +630,26 @@ def links_view(request):
     else:
         return render(request, 'login.html')
     
+# In your views.py file
+
+from django.db.models import Q # Make sure to import Q for complex lookups
+
 @require_employee
 def worksheet_view(request, employee):
     department = employee.department
     if not department:
         messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
-        return redirect('employee_dashboard') # Redirect to a dashboard or profile page
+        return redirect('employee_dashboard')
 
-    # Map department names to their respective forms
     form_map = {
         'Mee Seva': MeesevaWorksheetForm,
-        'Online Hub': MeesevaWorksheetForm, # Uses the same form as Meeseva
+        'Online Hub': MeesevaWorksheetForm,
         'Aadhaar': AadharWorksheetForm,
         'Bhu Bharathi': BhuBharathiWorksheetForm,
         'xerox': XeroxWorksheetForm,
     }
-
     WorksheetForm = form_map.get(department.name)
+
     if not WorksheetForm:
         messages.error(request, f"No worksheet available for the '{department.name}' department.")
         return redirect('employee_dashboard')
@@ -630,7 +659,7 @@ def worksheet_view(request, employee):
         if form.is_valid():
             worksheet_entry = form.save(commit=False)
             worksheet_entry.employee = employee
-            worksheet_entry.department_name = department.name # Store department name
+            worksheet_entry.department_name = department.name
             worksheet_entry.save()
             messages.success(request, "Worksheet entry added successfully.")
             return redirect('worksheet')
@@ -639,29 +668,39 @@ def worksheet_view(request, employee):
     else:
         form = WorksheetForm()
 
-    # Get data for display
     today = timezone.now().date()
     
-    # Filter for date range, default to today
+    # --- Today's Entries with DUAL totals ---
+    todays_entries = Worksheet.objects.filter(employee=employee, date=today)
+    todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
+    # NEW: Calculate total for the 'payment' column
+    todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
+
+    # --- Historical Entries with NEW mobile filter ---
+    all_entries = Worksheet.objects.filter(employee=employee)
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
+    mobile_filter = request.GET.get('mobile_number') # Get the mobile number from the URL
 
-    # Today's Entries
-    todays_entries = Worksheet.objects.filter(employee=employee, date=today)
-    todays_total = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
-
-    # Historical Entries
-    all_entries = Worksheet.objects.filter(employee=employee)
     if start_date_str and end_date_str:
         all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
     
+    # NEW: Apply the mobile number filter
+    if mobile_filter:
+        # Use Q objects to search in either customer_mobile OR login_mobile_no
+        all_entries = all_entries.filter(
+            Q(customer_mobile__icontains=mobile_filter) | 
+            Q(login_mobile_no__icontains=mobile_filter)
+        )
+    
     context = {
-        'employee':employee,
+        'employee': employee,
         'form': form,
         'department': department,
         'todays_entries': todays_entries,
-        'todays_total': todays_total,
-        'all_entries': all_entries,
+        'todays_total_amount': todays_total_amount, # Changed name for clarity
+        'todays_total_payment': todays_total_payment, # Pass new total to template
+        'all_entries': all_entries.order_by('-date'), # Ensure consistent ordering
         'today': today,
     }
     return render(request, 'worksheet.html', context)
@@ -675,38 +714,27 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         messages.error(request, "This entry is approved and cannot be edited.")
         return redirect('worksheet')
 
-    department = employee.department
-    form_map = {
-        'Mee Seva': MeesevaWorksheetForm,
-        'Online Hub': MeesevaWorksheetForm,
-        'Aadhaar': AadharWorksheetForm,
-        'Bhu Bharathi': BhuBharathiWorksheetForm,
-        'xerox': XeroxWorksheetForm,
-    }
-    WorksheetForm = form_map.get(department.name)
-
-    if not WorksheetForm:
-        messages.error(request, "Cannot find a valid form for your department.")
-        return redirect('worksheet')
-
+    # NEW: Use a separate, restricted form for editing
     if request.method == 'POST':
-        form = WorksheetForm(request.POST, instance=entry)
+        # Pass the instance to the restricted form
+        form = WorksheetEntryEditForm(request.POST, instance=entry)
         if form.is_valid():
             form.save()
-            messages.success(request, "Worksheet entry updated successfully.")
+            messages.success(request, "Certificate number updated successfully.")
             return redirect('worksheet')
         else:
-            # Re-render the partial form with errors if validation fails
             context = {'form': form, 'entry_id': entry_id}
             return render(request, 'partials/worksheet_edit_form.html', context)
     else:
-        form = WorksheetForm(instance=entry)
+        # Show the restricted form on GET request
+        form = WorksheetEntryEditForm(instance=entry)
 
     context = {
         'form': form,
         'entry_id': entry_id
     }
     return render(request, 'partials/worksheet_edit_form.html', context)
+
 
 
 @require_employee

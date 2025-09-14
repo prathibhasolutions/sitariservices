@@ -5,6 +5,8 @@ from datetime import datetime
 import uuid
 from django.conf import settings
 import os
+from django.db.models import Sum, F, ExpressionWrapper, fields
+import calendar
 
 class Department(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -28,6 +30,134 @@ class Employee(models.Model):
     
     def __str__(self):
         return f"{self.employee_id} - {self.name}{' 🟢 Active' if self.is_active() else ''}"
+    
+    def net_salary(self):
+        if self.salary is None:
+            return 0
+        pf_deduction = self.pf or 0
+        esi_deduction = self.esi or 0
+        return self.salary - pf_deduction - esi_deduction
+
+    
+
+    # In models.py, replace your method with this one.
+
+# In models.py, inside the Employee model
+
+    def get_current_month_earnings(self):
+        # Imports needed for the calculation
+        from datetime import datetime, timedelta
+        from calendar import monthrange
+
+        # Set up the time period (always the current month)
+        now = timezone.now()
+        current_month = now.month
+        current_year = now.year
+
+        # Initialize the results dictionary
+        earnings = {
+            'attendance_salary': 0,
+            'application_commissions': 0,
+            'worksheet_commissions': 0,
+            'deduction_amount': 0,
+            'deduction_notes': '',
+            'total_earnings': 0,
+        }
+
+        # --- REPLICATION OF ATTENDANCE_VIEW SALARY LOGIC ---
+
+        # Step 1: Calculate Expected Work Seconds (using all calendar days)
+        if self.working_start_time and self.working_end_time:
+            start_dt = datetime.combine(datetime.today(), self.working_start_time)
+            end_dt = datetime.combine(datetime.today(), self.working_end_time)
+            if end_dt < start_dt:
+                end_dt += timedelta(days=1)
+            daily_working_seconds = (end_dt - start_dt).total_seconds()
+        else:
+            # Default to 8 hours, as seen in the attendance_view
+            daily_working_seconds = 8 * 3600
+
+        # Get total calendar days in the month
+        days_in_month = monthrange(current_year, current_month)[1]
+        expected_seconds = days_in_month * daily_working_seconds
+
+        # Step 2: Fetch and filter Attendance Sessions
+        qs = self.attendance_sessions.filter(
+            login_time__year=current_year,
+            login_time__month=current_month
+        )
+        # Apply the working hours filter, exactly as in the view
+        if self.working_start_time and self.working_end_time:
+            qs = qs.filter(
+                login_time__time__gte=self.working_start_time,
+                login_time__time__lte=self.working_end_time
+            )
+        
+        # Calculate attended_seconds from the filtered queryset
+        attended_seconds = sum([s.duration().total_seconds() for s in qs if s.duration()])
+
+        # Step 3: Fetch and filter Break Sessions
+        break_sessions_qs = self.break_sessions.filter(
+            start_time__year=current_year,
+            start_time__month=current_month
+        )
+        # Apply the same working hours filter to breaks
+        if self.working_start_time and self.working_end_time:
+            break_sessions_qs = break_sessions_qs.filter(
+                start_time__time__gte=self.working_start_time,
+                start_time__time__lte=self.working_end_time
+            )
+
+        # Calculate approved_break_seconds from the filtered queryset
+        approved_break_seconds = sum([
+            (bs.end_time - bs.start_time).total_seconds()
+            for bs in break_sessions_qs.filter(approved=True, end_time__isnull=False)
+        ])
+        
+        # Step 4: Calculate total_work_seconds by ADDING breaks, as per the view's logic
+        total_work_seconds = attended_seconds + approved_break_seconds
+
+        # Step 5: Final Salary Calculation
+        salary = 0
+        if expected_seconds > 0:
+            salary_ratio = total_work_seconds / expected_seconds
+            salary = float(self.salary) * salary_ratio
+        
+        earnings['attendance_salary'] = salary
+
+        # --- END OF REPLICATION ---
+
+
+        # --- Other calculations remain unchanged ---
+        application_commissions = self.applicationassignment_set.filter(
+            application__approved=True,
+            application__date_created__year=current_year,
+            application__date_created__month=current_month
+        ).aggregate(total=Sum(ExpressionWrapper(F('application__total_commission') * F('commission_percentage') / 100.0, output_field=models.FloatField())))['total'] or 0
+        earnings['application_commissions'] = application_commissions
+
+        worksheet_commissions = self.worksheet_entries.filter(
+            date__year=current_year,
+            date__month=current_month
+        ).aggregate(total=Sum(ExpressionWrapper(F('amount') * 0.05, output_field=models.FloatField())))['total'] or 0
+        earnings['worksheet_commissions'] = worksheet_commissions
+
+        try:
+            monthly_deduction = self.monthly_deductions.get(month=current_month, year=current_year)
+            earnings['deduction_amount'] = monthly_deduction.amount
+            earnings['deduction_notes'] = monthly_deduction.notes
+        except MonthlyDeduction.DoesNotExist:
+            earnings['deduction_amount'] = 0
+            earnings['deduction_notes'] = ''
+
+        total_before_deduction = (earnings['attendance_salary'] + float(earnings['application_commissions']) + float(earnings['worksheet_commissions']))
+        earnings['total_earnings'] = total_before_deduction - float(earnings['deduction_amount'])
+
+        return earnings
+
+
+
+
 
 class AttendanceSession(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -243,3 +373,26 @@ class UserNotificationStatus(models.Model):
     def __str__(self):
         status = 'Read' if self.is_read else 'Unread'
         return f"{self.employee.name} - '{self.notification.description[:20]}...' ({status})"
+    
+
+
+# models.py
+
+class MonthlyDeduction(models.Model):
+    """
+    NEW: Stores monthly miscellaneous deductions for an employee.
+    This allows admins to make adjustments on a per-month basis.
+    """
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='monthly_deductions')
+    month = models.PositiveSmallIntegerField() # 1 to 12
+    year = models.PositiveSmallIntegerField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes = models.CharField(max_length=255, blank=True, help_text="Reason for the deduction (e.g., 'Late fees', 'Advance adjustment')")
+
+    class Meta:
+        unique_together = ('employee', 'month', 'year') # Only one deduction entry per employee per month
+        ordering = ['-year', '-month']
+
+    def __str__(self):
+        return f"Deduction for {self.employee.name} - {self.month}/{self.year}: ₹{self.amount}"
+

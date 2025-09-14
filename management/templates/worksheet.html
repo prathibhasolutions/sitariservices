@@ -14,7 +14,7 @@
 
     <h2 class="mb-4">Daily Worksheet: <span class="text-primary">{{ department.name }}</span></h2>
 
-    <!-- Section to Add New Entry -->
+    <!-- Section to Add New Entry (Unchanged) -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header">
             <h4>Add New Entry for {{ today|date:"d M Y" }}</h4>
@@ -22,24 +22,32 @@
         <div class="card-body">
             <form method="post">
                 {% csrf_token %}
-                <div class="form-row">
+                <div class="form-row align-items-end">
                     {% for field in form %}
-                        <div class="form-group col-md-2">
-                            {{ field.label_tag }}
-                            <input type="{{ field.field.widget.input_type }}" name="{{ field.name }}" class="form-control" 
-                                   {% if field.field.required %}required{% endif %}>
-                            {% if field.errors %}
-                                <div class="text-danger small">{{ field.errors.as_text }}</div>
-                            {% endif %}
+                        <div class="col">
+                            <div class="form-group mb-0">
+                                {{ field.label_tag }}
+                                <input type="{{ field.field.widget.input_type }}" 
+                                       name="{{ field.name }}" 
+                                       class="form-control" 
+                                       {% if field.field.required %}required{% endif %}>
+                                {% if field.errors %}
+                                    <div class="text-danger small">{{ field.errors.as_text }}</div>
+                                {% endif %}
+                            </div>
                         </div>
                     {% endfor %}
+                    <div class="col-auto">
+                        <div class="form-group mb-0">
+                            <button type="submit" class="btn btn-success">Add Entry</button>
+                        </div>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-success">Add Entry</button>
             </form>
         </div>
     </div>
 
-    <!-- Section for Today's Entries -->
+    <!-- Section for Today's Entries (UPDATED with Dual Totals) -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>Today's Entries ({{ today|date:"d M Y" }})</h4>
@@ -76,12 +84,11 @@
                         <tr>
                             <td>{{ forloop.counter }}</td>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Aadhaar" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td>
-                               <td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Bhu Bharathi" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "xerox" %}
                                 <td>{{ entry.particulars|default:"-" }}</td>
                             {% endif %}
@@ -92,27 +99,46 @@
                         {% endfor %}  
                     </tbody>
                     <tfoot>
+                        <!-- NEW: Total for Payment -->
                         <tr class="font-weight-bold bg-light">
-                            <td colspan="{% if department.name == 'xerox' %}1{% else %}5{% endif %}" class="text-right">Total</td>
-                            <td>₹{{ todays_total|floatformat:2 }}</td>
+                            <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}6{% else %}7{% endif %}" class="text-right">Total Payment</td>
+                            <td>₹{{ todays_total_payment|floatformat:2 }}</td>
                         </tr>
+                        <!-- Total for Amount -->
+                        <tr class="font-weight-bold bg-light">
+                            <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}6{% else %}7{% endif %}" class="text-right">Total Amount</td>
+                            <td>₹{{ todays_total_amount|floatformat:2 }}</td>
+                        </tr>
+                        
                     </tfoot>
                 </table>
             </div>
         </div>
     </div>
     
-    <!-- Section for All Historical Entries (UPDATED with Status and Actions) -->
+    <!-- Section for All Historical Entries (UPDATED with New Mobile Filter) -->
     <div class="card shadow-sm">
         <div class="card-header"><h4>Historical Entries</h4></div>
         <div class="card-body">
-            <form method="get" class="form-inline mb-3">
-                <label for="start_date" class="mr-2">From:</label>
-                <input type="date" name="start_date" id="start_date" class="form-control mr-3" value="{{ request.GET.start_date|default:'' }}">
-                <label for="end_date" class="mr-2">To:</label>
-                <input type="date" name="end_date" id="end_date" class="form-control mr-3" value="{{ request.GET.end_date|default:'' }}">
-                <button type="submit" class="btn btn-primary">Filter</button>
-                <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear Filter</a>
+            <!-- UPDATED Filter Form -->
+            <form method="get" class="form-row align-items-center mb-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="sr-only">From:</label>
+                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ request.GET.start_date|default:'' }}" placeholder="Start Date">
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="sr-only">To:</label>
+                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ request.GET.end_date|default:'' }}" placeholder="End Date">
+                </div>
+                <!-- NEW Mobile Number Filter Input -->
+                <div class="col-md-4">
+                    <label for="mobile_number" class="sr-only">Mobile Number</label>
+                    <input type="text" name="mobile_number" id="mobile_number" class="form-control" placeholder="Search by Customer/Login Mobile..." value="{{ request.GET.mobile_number|default:'' }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear</a>
+                </div>
             </form>
             
             <div class="table-responsive">
@@ -121,11 +147,11 @@
                         <tr>
                             <th>Date</th>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>payment (₹)</th>
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment (₹)</th>
                             {% elif department.name == "Aadhaar" %}
-                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>payment (₹)</th>
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment (₹)</th>
                             {% elif department.name == "Bhu Bharathi" %}
-                                <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>payment (₹)</th>
+                                <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment (₹)</th>
                             {% elif department.name == "xerox" %}
                                 <th>Particulars</th>
                             {% endif %}
@@ -139,11 +165,11 @@
                         <tr>
                             <td>{{ entry.date|date:"d M Y" }}</td>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Aadhaar" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Bhu Bharathi" %}
-                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|default:"-" }}</td>
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "xerox" %}
                                 <td>{{ entry.particulars|default:"-" }}</td>
                             {% endif %}
@@ -174,7 +200,7 @@
     </div>
 </div>
 
-<!-- NEW Bootstrap Modal for the Edit Form -->
+<!-- Bootstrap Modal for the Edit Form (Unchanged) -->
 <div class="modal fade" id="editEntryModal" tabindex="-1" role="dialog" aria-labelledby="editEntryModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
@@ -185,7 +211,6 @@
         </button>
       </div>
       <div class="modal-body" id="edit-form-container">
-        <!-- The dynamic edit form will be loaded here -->
         <div class="text-center">Loading...</div>
       </div>
     </div>
@@ -193,7 +218,7 @@
 </div>
 
 <script>
-    // Your existing print script
+    // Print script (Unchanged)
     function printTodayEntries() {
         var printHeader = document.getElementById('print-header').innerHTML;
         var printContent = document.getElementById('todays-report-printable').getElementsByTagName('table')[0].outerHTML;
@@ -208,7 +233,7 @@
         location.reload(); 
     }
 
-    // NEW JavaScript to handle loading the edit form into the modal
+    // Modal handling script (Unchanged)
     document.addEventListener('click', function(event) {
         if (event.target.classList.contains('edit-btn')) {
             const url = event.target.dataset.url;
@@ -217,7 +242,7 @@
                 .then(response => response.text())
                 .then(html => {
                     document.getElementById('edit-form-container').innerHTML = html;
-                    $('#editEntryModal').modal('show'); // This requires jQuery, which is part of Bootstrap's JS bundle
+                    $('#editEntryModal').modal('show'); // This requires jQuery
                 })
                 .catch(err => console.error('Failed to load edit form:', err));
         }
