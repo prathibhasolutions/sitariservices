@@ -10,5 +10,5 @@ def close_stale_sessions():
     )
     for session in stale_sessions:
         session.logout_time = timezone.now()
-        session.logout_reason = "Auto-logout: no ping"
+        session.logout_reason = "Auto-logout: Tab closed"
         session.save(update_fields=['logout_time', 'logout_reason'])

@@ -3,27 +3,46 @@
 {% block content %}
 <div class="container mt-4">
     <h2 class="mb-4">Your Notifications</h2>
-
-    <div class="list-group">
-        {% for status in notifications %}
-            <div class="list-group-item list-group-item-action flex-column align-items-start {% if not status.is_read %}list-group-item-success{% endif %}">
-                <div class="d-flex w-100 justify-content-between">
-                    <p class="mb-1">{{ status.notification.description }}</p>
-                    <small>{{ status.notification.created_at|timesince }} ago</small>
-                </div>
-                <div class="d-flex w-100 justify-content-end mt-2">
-                    {% if not status.is_read %}
-                        <a href="{% url 'mark_notification_as_read' status.pk %}" class="btn btn-primary btn-sm">Mark as Read</a>
-                    {% else %}
-                        <span class="text-muted"><i class="fas fa-check-circle"></i> Read</span>
-                    {% endif %}
-                </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="list-group">
+                {% for status in notifications %}
+                    <div class="card mb-4 shadow-sm border-0 {% if not status.is_read %}bg-warning bg-opacity-25 border border-warning{% else %}bg-light{% endif %}">
+                        <div class="card-body px-4 py-3">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="font-weight-bold text-dark small">
+                                    {% if not status.is_read %}
+                                        <span class="badge bg-warning text-dark me-2">New</span>
+                                    {% endif %}
+                                    <span>{{ status.notification.created_at|timesince }} ago</span>
+                                </div>
+                                <div>
+                                    {% if not status.is_read %}
+                                        <a href="{% url 'mark_notification_as_read' status.pk %}" 
+                                           class="btn btn-success btn-sm text-dark fw-semibold shadow-sm">
+                                           Mark as Read
+                                        </a>
+                                    {% else %}
+                                        <span class="text-success fw-bold">
+                                            <i class="fas fa-check-circle me-1"></i>Read
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="text-body mb-1 fs-5">
+                                {{ status.notification.description }}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="card mb-3 shadow-sm border-0 bg-light">
+                        <div class="card-body text-center text-muted">
+                            You have no notifications.
+                        </div>
+                    </div>
+                {% endfor %}
             </div>
-        {% empty %}
-            <div class="list-group-item">
-                <p class="mb-0 text-center">You have no notifications.</p>
-            </div>
-        {% endfor %}
+        </div>
     </div>
 </div>
 {% endblock %}

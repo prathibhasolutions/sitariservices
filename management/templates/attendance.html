@@ -5,46 +5,63 @@
 <main class="container ml-sm-auto col-lg-12 px-4 py-4">
 
   <!-- Attendance Section -->
-  <div class="card mb-4 shadow-sm">
-    <div class="card-header bg-primary text-white">
-      <h5>Attendance for {{ employee.name }}</h5>
+<div class="card mb-4 shadow-sm" id="attendance-section">
+    <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+        <h5>Attendance for {{ employee.name }}</h5>
+        <button class="btn btn-light btn-sm" onclick="printAttendance()">
+            <i class="fas fa-print"></i> Print Today's Attendance
+        </button>
     </div>
-    <div class="card-body">
-      <h6>Login Sessions Today ({{ today|date:"d-m-Y" }})</h6>
-      {% if todays_sessions %}
-      <table class="table table-sm table-bordered mb-0">
-        <thead class="thead-light">
-          <tr>
-            <th>ID</th>
-            <th>Login Time</th>
-            <th>Logout Time</th>
-            <th>Duration</th>
-            <th>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for session in todays_sessions %}
-          <tr>
-            <td>{{ session.id }}</td>
-            <td>{{ session.login_time|time:"H:i" }}</td>
-            <td>
-              {% if session.logout_time %}
-                {{ session.logout_time|time:"H:i" }}
-              {% else %}
-                <span class="text-warning">Active</span>
-              {% endif %}
-            </td>
-            <td>{{ session.duration_str }}</td>
-            <td>{{ session.logout_reason }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="p-3 mb-0">No login sessions found for today.</p>
-      {% endif %}
+    <div class="card-body" >
+        <h6>Login Sessions Today ({{ today|date:"d-m-Y" }})</h6>
+        {% if todays_sessions %}
+        <table class="table table-sm table-bordered mb-0">
+            <thead class="thead-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Login Time</th>
+                    <th>Logout Time</th>
+                    <th>Duration</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in todays_sessions %}
+                <tr>
+                    <td>{{ session.id }}</td>
+                    <td>{{ session.login_time|time:"H:i" }}</td>
+                    <td>
+                        {% if session.logout_time %}
+                            {{ session.logout_time|time:"H:i" }}
+                        {% else %}
+                            <span class="text-warning">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ session.duration_str }}</td>
+                    <td>{{ session.logout_reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="p-3 mb-0">No login sessions found for today.</p>
+        {% endif %}
     </div>
-  </div>
+</div>
+
+<script>
+function printAttendance() {
+    var printContents = document.getElementById('attendance-section').innerHTML;
+    var originalContents = document.body.innerHTML;
+
+    document.body.innerHTML = printContents;
+
+    window.print();
+
+    document.body.innerHTML = originalContents;
+    window.location.reload(); // reload to restore JS event handlers/styles
+}
+</script>
 
   <!-- Date Filter Section -->
   <div class="card mb-4 shadow-sm">

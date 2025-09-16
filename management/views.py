@@ -95,6 +95,84 @@ def login_with_otp(request):
     return render(request, 'login.html', {'otp_sent': False})
 
 
+def change_password_request(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login_with_otp')  # Or your login page
+
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+    except Employee.DoesNotExist:
+        return redirect('login_with_otp')
+
+    if request.method == 'POST':
+        mobile = employee.mobile_number
+        otp = generate_otp()
+        request.session['change_pwd_otp'] = otp
+        request.session['change_pwd_mobile'] = mobile
+        send_otp_whatsapp(mobile, otp)
+        messages.success(request, f"OTP sent to your registered mobile ({mobile}). Please verify to change password.")
+        return redirect('change_password_verify')
+
+    return render(request, 'change_password_request.html', {'employee': employee})
+
+
+def change_password_verify(request):
+    mobile = request.session.get('change_pwd_mobile')
+    if not mobile:
+        messages.error(request, "Please start the password change process again.")
+        return redirect('change_password_request')
+
+    otp_verified = request.session.get('otp_verified_for_pwd_change', False)
+
+    if request.method == 'POST':
+        if not otp_verified:
+            # Verify OTP
+            otp_entered = request.POST.get('otp')
+            expected_otp = request.session.get('change_pwd_otp')
+
+            if otp_entered != expected_otp:
+                messages.error(request, "Invalid OTP. Please try again.")
+                return render(request, 'change_password_verify.html')
+
+            request.session['otp_verified_for_pwd_change'] = True
+            messages.success(request, "OTP verified. Please set your new password.")
+            return render(request, 'change_password_verify.html', {'otp_verified': True})
+
+        else:
+            # OTP already verified, set new password
+            new_password = request.POST.get('new_password')
+            confirm_password = request.POST.get('confirm_password')
+
+            if not new_password:
+                messages.error(request, "Password cannot be empty.")
+                return render(request, 'change_password_verify.html', {'otp_verified': True})
+
+            if new_password != confirm_password:
+                messages.error(request, "Passwords do not match.")
+                return render(request, 'change_password_verify.html', {'otp_verified': True})
+
+            try:
+                employee = Employee.objects.get(mobile_number=mobile)
+                employee.password = new_password  # Optionally hash here
+                employee.save()
+            except Employee.DoesNotExist:
+                messages.error(request, "Employee not found during password update.")
+                return redirect('change_password_request')
+
+            # Clear session flags after password change
+            request.session.pop('change_pwd_otp', None)
+            request.session.pop('change_pwd_mobile', None)
+            request.session.pop('otp_verified_for_pwd_change', None)
+
+            messages.success(request, "Password changed successfully! You can now use the new password.")
+            return redirect('employee_dashboard')
+
+    # GET request
+    return render(request, 'change_password_verify.html', {'otp_verified': otp_verified})
+
+
+
 @csrf_exempt
 def logout_view(request):
     employee_id = request.session.get('employee_id')
@@ -188,12 +266,12 @@ def employee_dashboard(request):
             otp = generate_otp()
             request.session['emp_otp'] = otp
             send_otp_whatsapp(employee.mobile_number, otp)
-            
+
             # Set flags in session to remember state after redirect
             request.session['otp_sent_flag'] = True
-            otp_sent = True # Update for current context
+            otp_sent = True
             messages.success(request, f"OTP sent to {employee.mobile_number}")
-            return redirect('employee_dashboard') # Redirect to prevent form resubmission
+            return redirect('employee_dashboard')
 
         elif 'verify_otp' in request.POST:
             entered_otp = request.POST.get('otp')
@@ -204,28 +282,22 @@ def employee_dashboard(request):
                 show_sensitive = True
                 otp_verified = True
                 messages.success(request, "OTP verified. Sensitive data unlocked.")
-                # Clean up session OTP variables
                 if 'emp_otp' in request.session:
                     del request.session['emp_otp']
                 if 'otp_sent_flag' in request.session:
                     del request.session['otp_sent_flag']
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
-                # Keep the otp_sent flag true so the form is re-shown
                 request.session['otp_sent_flag'] = True
 
-            return redirect('employee_dashboard') # Redirect to show messages and update state
+            return redirect('employee_dashboard')
 
-    # If it's a GET request, clear the otp_sent flag unless an OTP was just sent
     if request.method == 'GET' and not request.session.get('otp_sent_flag'):
         otp_sent = False
-    # If the POST failed verification, otp_sent must remain true for the template
     elif request.session.get('otp_sent_flag'):
         otp_sent = True
 
-
     # --- THE ONLY CHANGE IS HERE ---
-    # Replace the old calculation with the new, powerful model method.
     current_month_earnings_data = employee.get_current_month_earnings()
     # --- END OF CHANGE ---
 
@@ -234,17 +306,20 @@ def employee_dashboard(request):
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
-        # The 'messages' framework handles this automatically, no need to pass it in context
-        
-        # Pass the entire earnings dictionary to the template
         'current_month_earnings': current_month_earnings_data,
     }
+
+    # --- ADD THIS BLOCK: RESET OTP VERIFIED FLAG AFTER RENDERING THE PAGE ---
+    if 'otp_verified' in request.session and request.method == 'GET':
+        del request.session['otp_verified']
+    # --- END OF CHANGE ---
 
     # Reset the one-time flag after rendering
     if 'otp_sent_flag' in request.session and request.method == 'GET':
         del request.session['otp_sent_flag']
 
     return render(request, 'employee_dashboard.html', context)
+
 
 
 def attendance_view(request):
@@ -458,19 +533,28 @@ def require_employee(view_func):
 
 @require_employee
 def application_list_create_view(request, employee):
-    """
-    Handles both the creation of new applications (POST) and the display
-    of existing applications and monthly commissions (GET).
-    """
+    password_verified = False
+
+    # Password prompt branch (always checked first)
+    if request.method == 'POST' and 'verify_password' in request.POST:
+        entered_password = request.POST.get('password')
+        if entered_password == employee.password:
+            password_verified = True
+        else:
+            messages.error(request, "Incorrect password. Please try again.")
+
+    # Only proceed if password is verified this request
+    if not password_verified:
+        return render(request, 'application_password_prompt.html', {'employee': employee})
+
     today = timezone.localtime(timezone.now())
-    
+
     # --- HANDLE FORM SUBMISSION (POST) ---
-    if request.method == 'POST':
+    if request.method == 'POST' and 'verify_password' not in request.POST:
         try:
             assign_type = request.POST.get('assign_type')
             total_commission = Decimal(request.POST.get('total_commission'))
-            
-            # Create the Application instance
+
             app = Application.objects.create(
                 application_name=request.POST.get('application_name'),
                 customer_name=request.POST.get('customer_name'),
@@ -481,19 +565,18 @@ def application_list_create_view(request, employee):
                 approved=False
             )
 
-            # Create the assignments based on type
             if assign_type == 'own':
                 ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=100)
-            
+
             elif assign_type == 'sharing':
                 other_employee_id = request.POST.get('other_employee')
                 creator_share = Decimal(request.POST.get('creator_share'))
                 partner_share = Decimal(request.POST.get('partner_share'))
 
                 if not other_employee_id:
-                    app.delete() # Clean up the created application
+                    app.delete()
                     raise ValueError("Please select an employee to share with.")
-                
+
                 if creator_share + partner_share != 100:
                     app.delete()
                     raise ValueError("Commission shares must add up to 100%.")
@@ -513,10 +596,8 @@ def application_list_create_view(request, employee):
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
-    # Get all applications assigned to the current employee
     your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
 
-    # Calculate monthly commission from approved applications
     approved_assignments = ApplicationAssignment.objects.filter(
         employee=employee,
         application__approved=True,
@@ -527,15 +608,14 @@ def application_list_create_view(request, employee):
     total_monthly_commission = 0
     for assignment in approved_assignments:
         commission_share = (assignment.commission_percentage / 100) * assignment.application.total_commission
-        assignment.commission_share = commission_share # Annotate object for template
+        assignment.commission_share = commission_share
         total_monthly_commission += commission_share
 
-    # Data for dropdowns
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
     selected_month_display = months[selected_month - 1]['display']
     current_year = timezone.now().year
-    years = list(range(current_year - 5, current_year + 2)) # Range up to next year
+    years = list(range(current_year - 5, current_year + 2))
 
     context = {
         'applications': your_applications,

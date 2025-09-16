@@ -24,6 +24,7 @@ class Employee(models.Model):
     department = models.ForeignKey('Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='employees')
     working_start_time = models.TimeField(null=True, blank=True)  # e.g., 09:00
     working_end_time = models.TimeField(null=True, blank=True)    # e.g., 18:00
+    password = models.CharField(max_length=128, default="123")
 
     def is_active(self):
         return self.attendance_sessions.filter(logout_time__isnull=True).exists()

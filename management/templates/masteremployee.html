@@ -82,6 +82,7 @@
                 <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
                 <a class="nav-link mb-2" href="{% url 'create_invoice' %}">Generate Invoice</a>
                 <a class="nav-link mb-2" href="{% url 'links' %}">Links</a>
+                <a class="nav-link mb-2" href="{% url 'change_password_request' %}">Change Password</a>
                 <a href="#" class="nav-link text-danger mt-3" data-toggle="modal" data-target="#logoutModal">Logout</a>
             </div>
         </nav>
@@ -206,7 +207,7 @@ setInterval(function () {
             console.log('Warning: Auto-logout in 10 seconds due to inactivity');
         }
 
-        if (idleSeconds >= 300) {
+        if (idleSeconds >= 3000) {
             isActive = false;
             performAutoLogout();
         }
@@ -233,7 +234,7 @@ setInterval(function() {
             "X-CSRFToken": getCSRFToken(),
         },
     });
-}, 3000); // Ping every 30 seconds
+}, 5000); // Ping every 30 seconds
 </script>
 
 

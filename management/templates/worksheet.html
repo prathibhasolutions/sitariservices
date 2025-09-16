@@ -11,9 +11,12 @@
         </div>
         {% endfor %}
     {% endif %}
+    <h1 style="text-decoration: underline;">Daily Worksheet</h1>
 
-    <h2 class="mb-4">Daily Worksheet: <span class="text-primary">{{ department.name }}</span></h2>
-
+    <div class="row">
+    <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
+    <h3 class="mb-4 col-6">Department: <span class="text-primary">{{ department.name }}</span></h3>
+</div>
     <!-- Section to Add New Entry (Unchanged) -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header">
@@ -99,18 +102,15 @@
                         {% endfor %}  
                     </tbody>
                     <tfoot>
-                        <!-- NEW: Total for Payment -->
-                        <tr class="font-weight-bold bg-light">
-                            <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}6{% else %}7{% endif %}" class="text-right">Total Payment</td>
-                            <td>₹{{ todays_total_payment|floatformat:2 }}</td>
-                        </tr>
-                        <!-- Total for Amount -->
-                        <tr class="font-weight-bold bg-light">
-                            <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}6{% else %}7{% endif %}" class="text-right">Total Amount</td>
-                            <td>₹{{ todays_total_amount|floatformat:2 }}</td>
-                        </tr>
-                        
-                    </tfoot>
+    <tr class="font-weight-bold bg-light">
+        <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}5{% else %}7{% endif %}" class="text-right">Total</td>
+        {% if department.name != 'xerox' %}
+            <td>₹{{ todays_total_payment|floatformat:2 }}</td>
+        {% endif %}
+        <td>₹{{ todays_total_amount|floatformat:2 }}</td>
+    </tr>
+</tfoot>
+
                 </table>
             </div>
         </div>
@@ -118,7 +118,7 @@
     
     <!-- Section for All Historical Entries (UPDATED with New Mobile Filter) -->
     <div class="card shadow-sm">
-        <div class="card-header"><h4>Historical Entries</h4></div>
+        <div class="card-header"><h4>All Entries</h4></div>
         <div class="card-body">
             <!-- UPDATED Filter Form -->
             <form method="get" class="form-row align-items-center mb-3">
