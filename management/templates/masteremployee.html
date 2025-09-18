@@ -18,34 +18,124 @@
 <!-- Google Fonts: Open Sans, Roboto, Poppins, Raleway -->
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&family=Poppins:wght@100..900&family=Raleway:wght@100..900&family=Open+Sans:wght@300..700&display=swap" rel="stylesheet">
 <meta name="csrf-token" content="{{ csrf_token }}">
-    <style>
-        body { min-height: 100vh; }
+  <style>
+    body {
+        /* A light, neutral background for the main content area */
+        background-color: #f8f9fa;
+        /* Prevent body from scrolling, as the main section will handle it */
+        overflow: hidden; 
+    }
+
+    /* === Sticky Navbar === */
+    .navbar {
+        background: linear-gradient(135deg, #0062E0 0%, #19AFFF 100%) !important;
+        position: sticky;
+        top: 0;
+        z-index: 1030; /* Ensures it stays above other content */
+    }
+    
+    /* === Sidebar: Solid Dark Slate Blue === */
+.sidebar {
+    position: fixed;
+    top: 76px; /* Adjust to your navbar's height */
+    bottom: 0;
+    left: 0;
+    z-index: 1020;
+    color: #fff;
+    overflow-y: auto;
+    /* A clean, professional dark blue */
+    background-color: #2c3e50; 
+}
+
+.sidebar .nav-link {
+    color: #fff;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.sidebar .nav-link.active, 
+.sidebar .nav-link:hover {
+    /* A slightly lighter blue for the hover/active state */
+    background-color: #067ac7;
+}
+
+    
+    /* === Main Content Area - The only scrollable part === */
+    main.col-md-10 {
+        /* Height is viewport height minus navbar height */
+        height: calc(100vh - 76px); 
+        /* This makes the main content area scrollable */
+        overflow-y: auto;
+        padding-top: 1.5rem;
+    }
+
+    /* === Responsive behavior for mobile === */
+    @media (max-width: 767.98px) {
+        body {
+            overflow: auto; /* Re-enable body scrolling on mobile */
+        }
         .sidebar {
-            min-height: 100vh;
-            background: #343a40;
-            color: #fff;
+            position: static; /* Return to normal flow */
+            height: auto;
+            min-height: auto;
         }
-        .sidebar .nav-link {
-            color: #fff;
+        main.col-md-10 {
+            height: auto; /* Let content determine height */
+            overflow-y: visible;
         }
-        .sidebar .nav-link.active, .sidebar .nav-link:hover {
-            background-color: #495057;
-        }
-        @media (max-width: 767.98px) {
-            .sidebar { min-height: auto; }
-        }
-        
-        /* Notification bell and badge for navbar */
-        .navbar-bell { position: relative; }
-        .navbar-bell .badge {
-            position: absolute;
-            top: -5px;      /* Position badge slightly above the bell */
-            right: -10px;   /* Position badge slightly to the right */
-            font-size: 0.7rem;
-            padding: 3px 6px;
-            border-radius: 50%;
-        }
-    </style>
+    }
+    
+   /* === Enhanced Notification Bell === */
+    .navbar-bell {
+        position: relative;
+        margin-right: 25px; /* Added more space on the right */
+        cursor: pointer;
+    }
+
+    .navbar-bell a {
+        color: white;
+        transition: color 0.3s ease;
+    }
+
+    .navbar-bell a:hover {
+        /* A subtle gold color on hover for a premium feel */
+        color: #ffd700; 
+    }
+
+    /* The bell icon itself */
+    .navbar-bell .fa-bell {
+        font-size: 1.8rem; /* Increased icon size */
+        transition: transform 0.2s ease-in-out;
+    }
+
+    /* Animate the bell on hover */
+    .navbar-bell:hover .fa-bell {
+        /* Creates a subtle "wobble" effect */
+        transform: rotate(15deg);
+    }
+
+    /* The notification count badge */
+    .navbar-bell .badge {
+        position: absolute;
+        top: -8px;
+        right: -15px;
+        font-size: 0.8rem; /* Larger font */
+        font-weight: 600;
+        padding: 4px 7px; /* More padding */
+        border-radius: 50%;
+        /* Adds a subtle "glow" to the badge */
+        box-shadow: 0 0 10px rgba(220, 53, 69, 0.8);
+    }
+
+
+    /* Logo styles (no change) */
+    .navbar-logo {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+    }
+</style>
+
+
 </head>
 <body>
     <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
@@ -56,6 +146,9 @@
         <button class="navbar-toggler d-md-none mr-2" type="button" data-toggle="collapse" data-target="#sidebarCollapse" aria-controls="sidebarCollapse" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
+
+         <!-- === Logo Added Here === -->
+        <img src="{% static '/management/img/logo.jpg' %}" alt="Logo" class="navbar-logo rounded-circle mr-4">
         <span class="navbar-brand mb-0 h1">Employee Dashboard</span>
     </div>
     
@@ -73,19 +166,36 @@
 <div class="container-fluid">
     <div class="row">
         <!-- Sidebar -->
-        <nav class="col-md-2 bg-dark sidebar py-4 collapse d-md-block" id="sidebarCollapse">
-            <div class="nav flex-column">
-                <a class="nav-link active mb-2" href="{% url 'employee_dashboard' %}">Profile</a>
-                <a class="nav-link mb-2" href="{% url 'attendance' %}">Attendance</a>
-                <a class="nav-link mb-2" href="{% url 'applications' %}">Applications</a>
-                <a class="nav-link mb-2" href="{% url 'worksheet' %}">Worksheet</a>
-                <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
-                <a class="nav-link mb-2" href="{% url 'create_invoice' %}">Generate Invoice</a>
-                <a class="nav-link mb-2" href="{% url 'links' %}">Links</a>
-                <a class="nav-link mb-2" href="{% url 'change_password_request' %}">Change Password</a>
-                <a href="#" class="nav-link text-danger mt-3" data-toggle="modal" data-target="#logoutModal">Logout</a>
-            </div>
-        </nav>
+<nav class="col-md-2 bg-dark sidebar py-4 collapse d-md-block" id="sidebarCollapse">
+    <div class="nav flex-column">
+        <br>
+        {% url 'employee_dashboard' as profile_url %}
+        <a class="nav-link mb-2 {% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}">Profile</a>
+
+        {% url 'attendance' as attendance_url %}
+        <a class="nav-link mb-2 {% if request.path == attendance_url %}active{% endif %}" href="{{ attendance_url }}">Attendance</a>
+        
+        {% url 'applications' as applications_url %}
+        <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">Applications</a>
+
+        {% url 'worksheet' as worksheet_url %}
+        <a class="nav-link mb-2 {% if request.path == worksheet_url %}active{% endif %}" href="{{ worksheet_url }}">Worksheet</a>
+
+        <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
+
+        {% url 'create_invoice' as invoice_url %}
+        <a class="nav-link mb-2 {% if request.path == invoice_url %}active{% endif %}" href="{{ invoice_url }}">Generate Invoice</a>
+
+        {% url 'links' as links_url %}
+        <a class="nav-link mb-2 {% if request.path == links_url %}active{% endif %}" href="{{ links_url }}">Links</a>
+
+        {% url 'change_password_request' as change_pass_url %}
+        <a class="nav-link mb-2 {% if request.path == change_pass_url %}active{% endif %}" href="{{ change_pass_url }}">Change Password</a>
+
+        <a href="#" class="nav-link text-danger mt-3" data-toggle="modal" data-target="#logoutModal">Logout</a>
+    </div>
+</nav>
+
         <!-- Main content area -->
         <main class="col-md-10 ml-sm-auto col-lg-10 px-4 py-4">
             {% block content %}

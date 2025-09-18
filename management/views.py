@@ -533,28 +533,44 @@ def require_employee(view_func):
 
 @require_employee
 def application_list_create_view(request, employee):
-    password_verified = False
-
-    # Password prompt branch (always checked first)
-    if request.method == 'POST' and 'verify_password' in request.POST:
-        entered_password = request.POST.get('password')
-        if entered_password == employee.password:
-            password_verified = True
-        else:
-            messages.error(request, "Incorrect password. Please try again.")
-
-    # Only proceed if password is verified this request
-    if not password_verified:
+    """
+    Handles viewing and creating work applications.
+    Requires a password verification once per session to access the page.
+    """
+    
+    # --- STEP 1: PASSWORD VERIFICATION GATE ---
+    # Check if the user has already verified their password in this session.
+    if not request.session.get('application_password_verified', False):
+        
+        # If the user is submitting the password form...
+        if request.method == 'POST' and 'verify_password' in request.POST:
+            entered_password = request.POST.get('password')
+            
+            # Check if the entered password is correct.
+            if entered_password == employee.password:
+                # If correct, set a flag in the session to "remember" the verification.
+                request.session['application_password_verified'] = True
+                # Redirect back to this same page to clear the POST data and load the main content.
+                return redirect('applications')
+            else:
+                # If incorrect, show an error message.
+                messages.error(request, "Incorrect password. Please try again.")
+        
+        # If the password is not verified yet (either a GET request or a failed attempt),
+        # render the password prompt template.
         return render(request, 'application_password_prompt.html', {'employee': employee})
 
-    today = timezone.localtime(timezone.now())
+    # --- FROM THIS POINT ON, THE PASSWORD IS VERIFIED FOR THE CURRENT SESSION ---
 
-    # --- HANDLE FORM SUBMISSION (POST) ---
-    if request.method == 'POST' and 'verify_password' not in request.POST:
+    # --- STEP 2: HANDLE APPLICATION CREATION (POST REQUEST) ---
+    # This block only runs if the request is a POST and is NOT from the password form.
+    if request.method == 'POST':
         try:
+            # Retrieve data from the application creation form.
             assign_type = request.POST.get('assign_type')
             total_commission = Decimal(request.POST.get('total_commission'))
 
+            # Create the main application object.
             app = Application.objects.create(
                 application_name=request.POST.get('application_name'),
                 customer_name=request.POST.get('customer_name'),
@@ -562,42 +578,55 @@ def application_list_create_view(request, employee):
                 description=request.POST.get('description'),
                 expected_days_to_complete=int(request.POST.get('expected_days', 1)),
                 total_commission=total_commission,
-                approved=False
+                approved=False  # New applications are not approved by default.
             )
 
+            # Handle the assignment based on whether it's for self or shared.
             if assign_type == 'own':
+                # Assign 100% of the commission to the creator.
                 ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=100)
-
+            
             elif assign_type == 'sharing':
+                # Retrieve details for sharing.
                 other_employee_id = request.POST.get('other_employee')
                 creator_share = Decimal(request.POST.get('creator_share'))
                 partner_share = Decimal(request.POST.get('partner_share'))
 
+                # Validate the sharing inputs.
                 if not other_employee_id:
-                    app.delete()
+                    app.delete()  # Clean up the created application if validation fails.
                     raise ValueError("Please select an employee to share with.")
 
                 if creator_share + partner_share != 100:
                     app.delete()
                     raise ValueError("Commission shares must add up to 100%.")
 
+                # Create assignments for both employees.
                 other_emp = Employee.objects.get(employee_id=other_employee_id)
                 ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=creator_share)
                 ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_percentage=partner_share)
 
+            # If everything succeeds, show a success message and redirect.
             messages.success(request, f"Application '{app.application_name}' created successfully!")
             return redirect('applications')
 
         except (ValueError, TypeError, Employee.DoesNotExist) as e:
+            # If any error occurs during creation, show an error message and redirect.
             messages.error(request, f"Error creating application: {e}")
             return redirect('applications')
 
-    # --- PREPARE DATA FOR DISPLAY (GET) ---
+    # --- STEP 3: PREPARE DATA FOR PAGE DISPLAY (GET REQUEST) ---
+    # This block runs for GET requests or after a form submission redirects.
+    today = timezone.localtime(timezone.now())
+
+    # Get month and year from URL parameters for filtering, or use current month/year.
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
+    # Fetch all applications assigned to the current employee.
     your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
 
+    # Fetch approved assignments for the selected month/year to calculate commission.
     approved_assignments = ApplicationAssignment.objects.filter(
         employee=employee,
         application__approved=True,
@@ -605,18 +634,21 @@ def application_list_create_view(request, employee):
         application__date_created__month=selected_month
     ).select_related('application')
 
+    # Calculate the total commission for the month.
     total_monthly_commission = 0
     for assignment in approved_assignments:
         commission_share = (assignment.commission_percentage / 100) * assignment.application.total_commission
-        assignment.commission_share = commission_share
+        assignment.commission_share = commission_share # Attach the calculated share to the object for the template.
         total_monthly_commission += commission_share
 
+    # Prepare context data for the template.
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
     selected_month_display = months[selected_month - 1]['display']
     current_year = timezone.now().year
     years = list(range(current_year - 5, current_year + 2))
 
+    # Bundle all data into the context dictionary.
     context = {
         'applications': your_applications,
         'approved_assignments': approved_assignments,
@@ -628,6 +660,8 @@ def application_list_create_view(request, employee):
         'months': months,
         'years': years,
     }
+    
+    # Render the main applications page with the prepared context.
     return render(request, 'applications.html', context)
 
 
@@ -861,3 +895,5 @@ def create_user_notification_statuses(sender, instance, created, **kwargs):
                 is_read=False  # Default to unread
             )
         print(f"Created notification statuses for {all_employees.count()} employees for notification ID {instance.id}")
+
+

@@ -13,89 +13,98 @@
     {% endfor %}
   {% endif %}
 
-  <!-- Create Application Section -->
-  <div class="card mb-4 shadow-sm">
+  <!-- Create Application Section (Corrected) -->
+<div class="card mb-4 shadow-sm">
     <div class="card-header bg-primary text-white">
-      <h4>Create New Application</h4>
+        <h4>Create New Application</h4>
     </div>
-    <div class="card-body">
-      <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate id="applicationForm">
-        {% csrf_token %}
+    <div class="card-body p-4">
+        <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate id="applicationForm">
+            {% csrf_token %}
+            <div class="row">
+                <!-- Left Column -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="assignType"><strong>Assign Type</strong></label>
+                        <select class="form-control" id="assignType" name="assign_type" required onchange="toggleSharingFields()">
+                            <option value="own" selected>Own (100% Commission)</option>
+                            <option value="sharing">Sharing (Split Commission)</option>
+                        </select>
+                    </div>
 
-        <!-- 1. Assign Type -->
-        <div class="form-group">
-          <label for="assignType"><strong>Assign Type</strong></label>
-          <select class="form-control" id="assignType" name="assign_type" required onchange="toggleSharingFields()">
-            <option value="own" selected>Own (100% Commission for you)</option>
-            <option value="sharing">Sharing (Split commission with another employee)</option>
-          </select>
-        </div>
-
-        <!-- 2. Sharing Details (Conditional) -->
-        <div id="sharingDiv" style="display:none; border-left: 3px solid #007bff; padding-left: 15px; margin-bottom: 1rem;">
-          <div class="form-group">
-            <label for="otherEmployee"><strong>2. Select Employee to Share With</strong></label>
-            <select class="form-control" id="otherEmployee" name="other_employee">
-              <option value="">-- Select Employee --</option>
-              {% for emp in other_employees %}
-                <option value="{{ emp.employee_id }}">{{ emp.name }}</option>
-              {% endfor %}
-            </select>
-            <div class="invalid-feedback">Please select an employee to share with.</div>
-          </div>
-          <div class="form-group">
-            <label><strong>3. Commission Share (%)</strong></label>
-            <div class="d-flex justify-content-between">
-                <div style="width: 48%;">
-                    <label for="creatorShare">Your Share (%)</label>
-                    <input type="number" class="form-control" id="creatorShare" name="creator_share" placeholder="e.g., 60">
-                    <div class="invalid-feedback" id="shareValidationFeedback">Shares must add up to 100.</div>
+                    <!-- Sharing Details (Moved to the correct location) -->
+                    <div id="sharingDiv" style="display:none; border-left: 3px solid #007bff; padding-left: 15px; margin-bottom: 1rem;">
+                        <div class="form-group">
+                            <label for="otherEmployee"><strong>Select Employee to Share With</strong></label>
+                            <select class="form-control" id="otherEmployee" name="other_employee">
+                                <option value="">-- Select Employee --</option>
+                                {% for emp in other_employees %}
+                                    <option value="{{ emp.employee_id }}">{{ emp.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback">Please select an employee to share with.</div>
+                        </div>
+                        <div class="form-group">
+                            <label><strong>Commission Share (%)</strong></label>
+                            <div class="d-flex justify-content-between">
+                                <div style="width: 48%;">
+                                    <label for="creatorShare" class="small">Your Share</label>
+                                    <input type="number" class="form-control" id="creatorShare" name="creator_share" placeholder="e.g., 60">
+                                    <div class="invalid-feedback" id="shareValidationFeedback">Shares must total 100.</div>
+                                </div>
+                                <div style="width: 48%;">
+                                    <label for="partnerShare" class="small">Partner's Share</label>
+                                    <input type="number" class="form-control" id="partnerShare" name="partner_share" placeholder="e.g., 40">
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Both shares must add up to 100.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="applicationName"><strong>Application Name</strong></label>
+                        <input type="text" class="form-control" id="applicationName" name="application_name" required>
+                        <div class="invalid-feedback">Please provide an application name.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="customerName"><strong>Customer Name</strong></label>
+                        <input type="text" class="form-control" id="customerName" name="customer_name" required>
+                        <div class="invalid-feedback">Please provide the customer's name.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="customerMobile"><strong>Customer Mobile Number</strong></label>
+                        <input type="text" class="form-control" id="customerMobile" name="customer_mobile_number" required>
+                        <div class="invalid-feedback">Please provide the customer's mobile number.</div>
+                    </div>
                 </div>
-                <div style="width: 48%;">
-                    <label for="partnerShare">Partner's Share (%)</label>
-                    <input type="number" class="form-control" id="partnerShare" name="partner_share" placeholder="e.g., 40">
+
+                <!-- Right Column -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="totalCommission"><strong>Total Commission Amount (₹)</strong></label>
+                        <input type="number" step="0.01" class="form-control" id="totalCommission" name="total_commission" required>
+                        <div class="invalid-feedback">Please enter the total commission.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="expectedDays"><strong>Expected Days to Complete</strong></label>
+                        <input type="number" class="form-control" id="expectedDays" name="expected_days" min="1" value="1" required>
+                        <div class="invalid-feedback">Please enter the expected days.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="description"><strong>Work Description</strong></label>
+                        <textarea class="form-control" id="description" name="description" rows="5" required></textarea>
+                        <div class="invalid-feedback">Please provide a work description.</div>
+                    </div>
                 </div>
             </div>
-            <small class="form-text text-muted">Both shares must add up to 100.</small>
-          </div>
-        </div>
 
-        <!-- General Application Details -->
-        <div class="form-group">
-            <label for="applicationName"><strong>Application Name</strong></label>
-            <input type="text" class="form-control" id="applicationName" name="application_name" required>
-            <div class="invalid-feedback">Please provide an application name.</div>
-        </div>
-        <div class="form-group">
-            <label for="totalCommission"><strong>Total Commission Amount (₹)</strong></label>
-            <input type="number" step="0.01" class="form-control" id="totalCommission" name="total_commission" required>
-            <div class="invalid-feedback">Please enter the total commission.</div>
-        </div>
-        <div class="form-group">
-            <label for="customerName"><strong>Customer Name</strong></label>
-            <input type="text" class="form-control" id="customerName" name="customer_name" required>
-            <div class="invalid-feedback">Please provide the customer's name.</div>
-        </div>
-        <div class="form-group">
-            <label for="customerMobile"><strong>Customer Mobile Number</strong></label>
-            <input type="text" class="form-control" id="customerMobile" name="customer_mobile_number" required>
-            <div class="invalid-feedback">Please provide the customer's mobile number.</div>
-        </div>
-         <div class="form-group">
-            <label for="expectedDays"><strong>Expected Days to Complete</strong></label>
-            <input type="number" class="form-control" id="expectedDays" name="expected_days" min="1" value="1" required>
-            <div class="invalid-feedback">Please enter the expected days to complete.</div>
-        </div>
-        <div class="form-group">
-            <label for="description"><strong>Work Description</strong></label>
-            <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
-            <div class="invalid-feedback">Please provide a work description.</div>
-        </div>
-
-        <button type="submit" class="btn btn-success btn-lg">Create Application</button>
-      </form>
+            <div class="text-center mt-3">
+                <button type="submit" class="btn btn-success btn-lg px-5">Create Application</button>
+            </div>
+        </form>
     </div>
-  </div>
+</div>
+
 
   <!-- Your Assigned Applications Section -->
   <div class="card mb-4 shadow-sm">

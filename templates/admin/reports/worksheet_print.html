@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Print Worksheet Report</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <style>
+        body { font-family: sans-serif; }
+        @media print { .no-print { display: none; } }
+        tfoot {
+            font-weight: bold;
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body onload="window.print();">
+    <div class="container-fluid mt-4">
+        <h3 class="text-center">Worksheet Report</h3>
+        
+        {# --- NEW: Display Employee and Department at the top --- #}
+        {% if employee %}
+            <p class="text-center"><strong>Employee:</strong> {{ employee.name }}</p>
+        {% endif %}
+        {% if department %}
+            <p class="text-center"><strong>Department:</strong> {{ department.name }}</p>
+        {% endif %}
+
+        <table class="table table-bordered table-sm">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Sl.No</th>
+                    <th>Date</th>
+                    {# --- Department-specific headers (Approved column removed) --- #}
+                    {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
+                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment</th>
+                    {% elif department.name == "Aadhaar" %}
+                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment</th>
+                    {% elif department.name == "Bhu Bharathi" %}
+                        <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>App No</th><th>Status</th><th>Payment</th>
+                    {% elif department.name == "xerox" %}
+                        <th>Particulars</th>
+                    {% endif %}
+                    <th>Amount (&#8377;)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in queryset %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ entry.date|date:"d M Y" }}</td>
+                    {# --- Department-specific cells --- #}
+                    {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                    {% elif department.name == "Aadhaar" %}
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                    {% elif department.name == "Bhu Bharathi" %}
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                    {% elif department.name == "xerox" %}
+                        <td>{{ entry.particulars|default:"-" }}</td>
+                    {% endif %}
+                    <td>{{ entry.amount|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="100%" class="text-center">No entries found for this filter.</td></tr>
+                {% endfor %}
+            </tbody>
+            {# --- NEW: Footer section to display totals --- #}
+            <tfoot>
+                <tr>
+                    {# Adjust colspan dynamically to push totals to the correct columns #}
+                    {% if department.name == "Mee Seva" or department.name == "Online Hub" or department.name == "Aadhaar" %}
+                        <td colspan="8" class="text-right"><strong>Total:</strong></td>
+                    {% elif department.name == "Bhu Bharathi" %}
+                        <td colspan="7" class="text-right"><strong>Total:</strong></td>
+                    {% elif department.name == "xerox" %}
+                        <td colspan="2" class="text-right"><strong>Total:</strong></td>
+                    {% else %}
+                        {# Default fallback #}
+                        <td colspan="2" class="text-right"><strong>Total:</strong></td>
+                    {% endif %}
+                    
+                    {# Display total payment only if the column exists #}
+                    {% if department.name != "xerox" %}
+                        <td>{{ total_payment|floatformat:2 }}</td>
+                    {% endif %}
+                    <td>{{ total_amount|floatformat:2 }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</body>
+</html>
