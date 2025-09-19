@@ -397,3 +397,16 @@ class MonthlyDeduction(models.Model):
     def __str__(self):
         return f"Deduction for {self.employee.name} - {self.month}/{self.year}: ₹{self.amount}"
 
+
+
+class EmployeeUpload(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='file_uploads')
+    description = models.TextField(help_text="A brief description of the uploaded file.")
+    file = models.FileField(upload_to='employee_uploads/%Y/%m/%d/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"File from {self.employee.name} on {self.uploaded_at.strftime('%d-%m-%Y')}"

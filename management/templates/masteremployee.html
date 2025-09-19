@@ -126,6 +126,17 @@
         box-shadow: 0 0 10px rgba(220, 53, 69, 0.8);
     }
 
+    /* === New styles for the Upload Icon === */
+.navbar-upload-icon {
+    font-size: 1.9rem; /* Makes the icon a bit larger */
+    color: white;
+    transition: color 0.3s ease;
+}
+
+.navbar-upload-icon:hover {
+    color: #ffd700; /* Gold hover color, same as notification bell */
+}
+
 
     /* Logo styles (no change) */
     .navbar-logo {
@@ -152,14 +163,26 @@
         <span class="navbar-brand mb-0 h1">Employee Dashboard</span>
     </div>
     
+    {# This div groups the icons together on the right #}
+<div class="d-flex align-items-center">
+
+    {# 1. Upload Icon (now on the left) #}
+    <a href="#" class="mr-4" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files">
+        <i class="fas fa-upload navbar-upload-icon"></i>
+    </a>
+
+    {# 2. Notification Bell Icon #}
     <div class="navbar-bell">
-        <a href="{% url 'notification_list' %}" class="text-white">
+        <a href="{% url 'notification_list' %}" class="text-white" title="View Notifications">
             <i class="fas fa-bell fa-lg"></i>
             {% if unread_notification_count > 0 %}
                 <span class="badge badge-danger">{{ unread_notification_count }}</span>
             {% endif %}
         </a>
     </div>
+
+</div>
+
 
 </nav>
 
@@ -348,6 +371,36 @@ setInterval(function() {
 </script>
 
 
+<!-- File Upload Modal -->
+<div class="modal fade" id="uploadFileModal" tabindex="-1" role="dialog" aria-labelledby="uploadFileModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="uploadFileModalLabel">Upload a Document</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="id_description">Description</label>
+                <textarea name="description" id="id_description" rows="3" class="form-control" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="id_file">File</label>
+                <input type="file" name="file" id="id_file" class="form-control-file" required>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Upload File</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

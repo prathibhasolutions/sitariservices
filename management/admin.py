@@ -20,6 +20,7 @@ from .models import (
     UserNotificationStatus,
     MonthlyDeduction,
 )
+from .models import EmployeeUpload
 
 # Import the filters
 from admin_auto_filters.filters import AutocompleteFilter
@@ -140,6 +141,23 @@ class MonthlyDeductionAdmin(admin.ModelAdmin):
     list_filter = ('year', 'month', 'employee')
     search_fields = ('employee__name', 'notes')
 
+
+@admin.register(EmployeeUpload)
+class EmployeeUploadAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'description', 'file_link', 'uploaded_at')
+    list_filter = ('uploaded_at', 'employee')
+    search_fields = ('employee__name', 'description')
+    readonly_fields = ('uploaded_at',)
+
+    # Makes the file path a clickable link in the admin
+    def file_link(self, obj):
+        from django.utils.html import format_html
+        if obj.file:
+            return format_html('<a href="{}" target="_blank">{}</a>', obj.file.url, obj.file.name)
+        return "No file"
+    file_link.short_description = 'File'
+
+    
 # --- Register All Other Models with Default Admin ---
 # These models will just show up in the admin with no special customizations.
 admin.site.register(Department)

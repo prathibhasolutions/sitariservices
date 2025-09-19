@@ -58,3 +58,14 @@ class WorksheetEntryEditForm(forms.ModelForm):
 
 
 
+from django import forms
+from .models import EmployeeUpload
+
+class EmployeeUploadForm(forms.ModelForm):
+    class Meta:
+        model = EmployeeUpload
+        fields = ['description', 'file']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'file': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+        }

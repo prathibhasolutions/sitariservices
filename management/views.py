@@ -896,4 +896,34 @@ def create_user_notification_statuses(sender, instance, created, **kwargs):
             )
         print(f"Created notification statuses for {all_employees.count()} employees for notification ID {instance.id}")
 
+from .forms import EmployeeUploadForm
 
+def upload_file_view(request):
+    # Get employee_id from session, just like in your dashboard
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        messages.error(request, "Your session has expired. Please log in to upload files.")
+        return redirect('login')
+
+    if request.method == 'POST':
+        form = EmployeeUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                # Get the current employee instance
+                current_employee = Employee.objects.get(employee_id=employee_id)
+                
+                # Save the form but don't commit to DB yet
+                upload = form.save(commit=False)
+                # Assign the employee from the session
+                upload.employee = current_employee
+                upload.save()
+                
+                messages.success(request, 'File uploaded successfully!')
+            except Employee.DoesNotExist:
+                messages.error(request, "Could not identify the employee. Please log in again.")
+        else:
+            # You can loop through form.errors for more specific messages if needed
+            messages.error(request, 'There was an error with your upload. Please check the form and try again.')
+            
+    # Redirect back to the dashboard whether the upload was successful or not
+    return redirect('employee_dashboard')
