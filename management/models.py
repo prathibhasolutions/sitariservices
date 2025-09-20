@@ -241,6 +241,28 @@ class AllowedIP(models.Model):
         return f"{self.ip_address} - {self.description}"
 
 
+class GlobalIPSettings(models.Model):
+    allow_all_ips = models.BooleanField(
+        default=False,
+        help_text="If checked, the IP restriction middleware will be disabled and all IPs will be allowed."
+    )
+
+    def __str__(self):
+        return "Global IP Restriction Settings"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one instance of this model ever exists
+        self.pk = 1
+        super().save(*args, **kwargs)
+        # Clear the IP cache whenever this setting is saved
+        from django.core.cache import cache
+        cache.clear()
+
+    class Meta:
+        verbose_name_plural = "Global IP Settings"
+
+        
+
 class Invoice(models.Model):
     invoice_id = models.AutoField(primary_key=True)
     date = models.DateField(default=timezone.now)

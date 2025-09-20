@@ -20,37 +20,52 @@ class RestrictIPMiddleware:
         return response
 
     def is_ip_allowed(self, ip):
-        # Use caching to avoid database hits on every request
+        from management.models import AllowedIP
+        from django.core.cache import cache
+
+        # --- 1. Check for the global 'Block All' rule FIRST ---
+        global_block_key = "ip_restriction_global_block_status"
+        is_globally_blocked = cache.get(global_block_key)
+        if is_globally_blocked is None:
+            # Look for the specific description
+            is_globally_blocked = AllowedIP.objects.filter(description='GLOBAL_BLOCK', is_active=True).exists()
+            cache.set(global_block_key, is_globally_blocked, 300)
+        
+        if is_globally_blocked:
+            return False # If this rule exists, block everyone.
+
+        # --- 2. If not blocked, check for the global 'Allow All' rule ---
+        global_allow_key = "ip_restriction_global_allow_status"
+        is_globally_allowed = cache.get(global_allow_key)
+        if is_globally_allowed is None:
+            # Look for the specific description
+            is_globally_allowed = AllowedIP.objects.filter(description='GLOBAL_ALLOW_ALL', is_active=True).exists()
+            cache.set(global_allow_key, is_globally_allowed, 300)
+        
+        if is_globally_allowed:
+            return True # If this rule exists, allow everyone.
+
+        # --- 3. If no global rules, fall back to checking the IP list ---
         cache_key = f"allowed_ips_check_{ip}"
         cached_result = cache.get(cache_key)
-        
         if cached_result is not None:
             return cached_result
         
-        # Import here to avoid circular imports
-        from management.models import AllowedIP
+        # Exclude global rules from the specific IP check
+        allowed_ips = AllowedIP.objects.filter(is_active=True)\
+            .exclude(description__in=['GLOBAL_ALLOW_ALL', 'GLOBAL_BLOCK'])\
+            .values_list('ip_address', 'subnet_prefix')
         
-        # Get all active allowed IPs
-        allowed_ips = AllowedIP.objects.filter(is_active=True).values_list(
-            'ip_address', 'subnet_prefix'
-        )
-        
-        # Check exact IP match or subnet prefix match
         is_allowed = False
         for allowed_ip, subnet_prefix in allowed_ips:
-            # Exact IP match
-            if ip == allowed_ip:
+            if ip == allowed_ip or (subnet_prefix and ip.startswith(subnet_prefix)):
                 is_allowed = True
                 break
-            
-            # Subnet prefix match
-            if subnet_prefix and ip.startswith(subnet_prefix):
-                is_allowed = True
-                break
-        
-        # Cache the result for 5 minutes to improve performance
+                
         cache.set(cache_key, is_allowed, 300)
         return is_allowed
+
+
 
 def get_client_ip(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')

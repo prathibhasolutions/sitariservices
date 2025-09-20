@@ -25,14 +25,25 @@ from .models import EmployeeUpload
 # Import the filters
 from admin_auto_filters.filters import AutocompleteFilter
 from rangefilter.filters import DateRangeFilter
+from django.utils.html import format_html
 
 # --- ModelAdmin for Employee (CRUCIAL FOR THE FILTER) ---
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    # This search_fields is required for the autocomplete filter to work
     search_fields = ['name', 'mobile_number']
-    list_display = ['employee_id', 'name', 'mobile_number', 'department']
+    # Add 'display_status' to the list of columns
+    list_display = ['employee_id', 'name', 'mobile_number', 'department', 'display_status']
     list_filter = ['department']
+
+    def display_status(self, obj):
+        """
+        Custom method to display the active status with a colored icon.
+        """
+        if obj.is_active():
+            return format_html('<span style="color: green;">&#128994; Active</span>')
+        return format_html('<span style="color: red;">&#128308; Inactive</span>')
+    
+    display_status.short_description = 'Status' # Sets the column header text
 
 # --- Your Custom WorksheetAdmin (Unchanged) ---
 class EmployeeFilter(AutocompleteFilter):
@@ -117,24 +128,71 @@ class WorksheetAdmin(admin.ModelAdmin):
         extra_context['query_string'] = request.GET.urlencode()
         return super().changelist_view(request, extra_context)
 
+
+from django.http import HttpResponseRedirect
+from django.contrib import messages
+from django.core.cache import cache
+
 # --- Your Other Custom Admins (Unchanged) ---
 @admin.register(AllowedIP)
 class AllowedIPAdmin(admin.ModelAdmin):
+    change_list_template = "admin/management/allowedip/change_list.html"
     list_display = ('ip_address', 'subnet_prefix', 'description', 'is_active', 'created_at')
-    list_filter = ('is_active', 'created_at')
+    list_filter = ('is_active',)
     search_fields = ('ip_address', 'subnet_prefix', 'description')
     list_editable = ('is_active',)
     ordering = ('-created_at',)
-    fieldsets = (
-        ('IP Configuration', {'fields': ('ip_address', 'subnet_prefix', 'description')}),
-        ('Status', {'fields': ('is_active',)}),
-    )
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('allow-all/', self.admin_site.admin_view(self.enable_allow_all), name='ip-allow-all'),
+            path('enforce-list/', self.admin_site.admin_view(self.enforce_ip_list), name='ip-enforce-list'),
+            path('block-all/', self.admin_site.admin_view(self.block_all_ips), name='ip-block-all'),
+        ]
+        return custom_urls + urls
 
+    # --- BUTTON LOGIC ---
+
+    def enable_allow_all(self, request):
+        # Delete any conflicting BLOCK rule first
+        AllowedIP.objects.filter(description='GLOBAL_BLOCK').delete()
+        # Create or update the unique ALLOW rule
+        AllowedIP.objects.update_or_create(
+            description='GLOBAL_ALLOW_ALL',
+            defaults={'ip_address': '0.0.0.0/0', 'is_active': True}
+        )
+        cache.clear()
+        self.message_user(request, "Success: IP restrictions are globally DISABLED. All IPs are now allowed.", messages.SUCCESS)
+        return HttpResponseRedirect("../")
+
+    def block_all_ips(self, request):
+        # Delete any conflicting ALLOW rule first
+        AllowedIP.objects.filter(description='GLOBAL_ALLOW_ALL').delete()
+        # Create or update the unique BLOCK rule
+        AllowedIP.objects.update_or_create(
+            description='GLOBAL_BLOCK',
+            defaults={'ip_address': '0.0.0.0/0', 'is_active': True} # The IP doesn't matter, only the description
+        )
+        cache.clear() 
+        self.message_user(request, "CRITICAL: IP restrictions are globally ENABLED. ALL IPs are now blocked.", messages.ERROR)
+        return HttpResponseRedirect("../")
+
+    def enforce_ip_list(self, request):
+        # Remove all global override rules
+        AllowedIP.objects.filter(description__in=['GLOBAL_ALLOW_ALL', 'GLOBAL_BLOCK']).delete()
+        cache.clear() 
+        self.message_user(request, "Success: Global overrides have been removed. Access is now determined by your IP list.", messages.WARNING)
+        return HttpResponseRedirect("../")
+
+    # --- CACHE CLEARING ---
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         from django.core.cache import cache
         cache.clear()
 
+
+    
 @admin.register(MonthlyDeduction)
 class MonthlyDeductionAdmin(admin.ModelAdmin):
     list_display = ('employee', 'month', 'year', 'amount', 'notes')
@@ -207,81 +265,66 @@ class AttendanceSessionAdmin(admin.ModelAdmin):
         employee = None
         department = None
         
-        # --- Salary calculation only runs if a specific employee is filtered ---
         if employee_id:
             try:
                 employee = Employee.objects.get(pk=employee_id)
                 department = employee.department
-                
-                # Use only the sessions for the selected employee from the filtered queryset
                 sessions_for_employee = queryset.filter(employee=employee)
 
                 if sessions_for_employee.exists():
-                    # --- Determine the exact date range from the filtered sessions ---
                     min_date = sessions_for_employee.earliest('login_time').login_time
                     max_date = sessions_for_employee.latest('login_time').login_time
 
-                    # --- 1. Calculate Approved Break Seconds in the period ---
                     approved_breaks_qs = BreakSession.objects.filter(
                         employee=employee,
                         approved=True,
-                        end_time__isnull=False, # Only completed breaks
+                        end_time__isnull=False,
                         start_time__date__range=[min_date.date(), max_date.date()]
                     )
                     approved_break_duration = approved_breaks_qs.annotate(
                         duration=ExpressionWrapper(F('end_time') - F('start_time'), output_field=DurationField())
                     ).aggregate(total_duration=Sum('duration'))['total_duration'] or timezone.timedelta(0)
 
-                    # --- 2. Calculate Attended Seconds in the period ---
+                    # --- THIS IS THE FIX ---
+                    # The sum() function for timedeltas needs a second argument to define the start value.
                     attended_duration = sum(
-                        [s.duration() for s in sessions_for_employee], 
+                        [s.duration() for s in sessions_for_employee if s.duration() is not None], 
                         timezone.timedelta(0)
                     )
+                    # --- END OF FIX ---
 
-                    # --- 3. Calculate Total Work Seconds ---
                     total_work_seconds = attended_duration.total_seconds() + approved_break_duration.total_seconds()
 
-                    # --- 4. Calculate Expected Work Seconds for the period ---
-                    # Default to 8 hours if working times are not set
                     daily_working_seconds = 8 * 3600 
                     if employee.working_start_time and employee.working_end_time:
                         start_dt = datetime.combine(datetime.today(), employee.working_start_time)
                         end_dt = datetime.combine(datetime.today(), employee.working_end_time)
                         daily_working_seconds = (end_dt - start_dt).total_seconds()
 
-                    # Calculate the number of days in the filtered range
                     days_in_period = (max_date.date() - min_date.date()).days + 1
                     expected_seconds = days_in_period * daily_working_seconds
                     
-                    # --- 5. Final Salary Calculation for the period ---
                     if expected_seconds > 0:
                         salary_ratio = total_work_seconds / expected_seconds
-                        # Use the employee's full monthly salary as the base
                         calculated_salary = float(employee.salary) * salary_ratio
 
             except Employee.DoesNotExist:
                 employee = None
 
-        # --- Prepare context for the template ---
         context = {
             'queryset': queryset,
             'employee': employee,
             'department': department,
             'calculated_salary': calculated_salary,
-            'request': request, # Pass the request to access URL parameters in the template
+            'request': request,
         }
         return render(request, 'admin/reports/attendance_print.html', context)
-
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        extra_context['query_string'] = request.GET.urlencode()
-        return super().changelist_view(request, extra_context)
-    
 
 
 # --- Register All Other Models with Default Admin ---
 # These models will just show up in the admin with no special customizations.
 admin.site.register(Department)
+
 admin.site.register(BreakSession)
 admin.site.register(Application)
 admin.site.register(ApplicationAssignment)
