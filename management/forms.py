@@ -58,13 +58,22 @@ class WorksheetEntryEditForm(forms.ModelForm):
 
 
 
+# management/forms.py
 from django import forms
-from .models import EmployeeUpload
+from .models import EmployeeUpload, UploadService
 
 class EmployeeUploadForm(forms.ModelForm):
+    # Explicitly define the service field to add a placeholder
+    service = forms.ModelChoiceField(
+        queryset=UploadService.objects.all(),
+        empty_label="-- Select a Service --",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
     class Meta:
         model = EmployeeUpload
-        fields = ['description', 'file']
+        # Define the order of fields in the form
+        fields = ['service', 'description', 'file']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
             'file': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),

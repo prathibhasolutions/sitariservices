@@ -299,13 +299,14 @@ def employee_dashboard(request):
     # --- THE ONLY CHANGE IS HERE ---
     current_month_earnings_data = employee.get_current_month_earnings()
     # --- END OF CHANGE ---
-
+    upload_form = EmployeeUploadForm()
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
         'current_month_earnings': current_month_earnings_data,
+        'upload_form': upload_form,
     }
 
     # --- ADD THIS BLOCK: RESET OTP VERIFIED FLAG AFTER RENDERING THE PAGE ---
@@ -861,6 +862,7 @@ def notification_list_view(request, employee):
         'notifications': notifications
     }
     return render(request, 'notifications.html', context)
+
 
 @require_employee
 def mark_notification_as_read(request, employee, pk):

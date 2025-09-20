@@ -20,7 +20,7 @@ from .models import (
     UserNotificationStatus,
     MonthlyDeduction,
 )
-from .models import EmployeeUpload
+
 
 # Import the filters
 from admin_auto_filters.filters import AutocompleteFilter
@@ -200,19 +200,41 @@ class MonthlyDeductionAdmin(admin.ModelAdmin):
     search_fields = ('employee__name', 'notes')
 
 
+
+# management/admin.py
+from .models import UploadService, EmployeeUpload
+
+@admin.register(UploadService)
+class UploadServiceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_at')
+    search_fields = ('name',)
+
+# management/admin.py
+from django.contrib import admin
+from django.utils.html import format_html
+
+
+# ... (keep your other admin classes like UploadServiceAdmin) ...
+
 @admin.register(EmployeeUpload)
 class EmployeeUploadAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'description', 'file_link', 'uploaded_at')
-    list_filter = ('uploaded_at', 'employee')
-    search_fields = ('employee__name', 'description')
+    # This list_display now correctly corresponds to the method below
+    list_display = ('employee', 'service', 'description', 'file_link', 'uploaded_at')
+    
+    list_filter = ('service', 'employee', 'uploaded_at')
+    search_fields = ('employee__name', 'service__name', 'description')
     readonly_fields = ('uploaded_at',)
 
-    # Makes the file path a clickable link in the admin
     def file_link(self, obj):
-        from django.utils.html import format_html
+        """
+        Creates a clickable link to the uploaded file.
+        This method is what was missing.
+        """
         if obj.file:
             return format_html('<a href="{}" target="_blank">{}</a>', obj.file.url, obj.file.name)
         return "No file"
+    
+    # Sets the column header text in the admin list view
     file_link.short_description = 'File'
 
 

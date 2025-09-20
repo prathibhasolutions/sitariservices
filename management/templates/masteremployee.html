@@ -1,4 +1,6 @@
 {% load static %}
+{% load upload_tags %}
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -384,14 +386,19 @@ setInterval(function() {
           </button>
         </div>
         <div class="modal-body">
+          {# Get the form instance from our custom template tag #}
+          {% get_upload_form as upload_form %}
+
+          {# Loop through the fields to render them automatically #}
+          {% for field in upload_form %}
             <div class="form-group">
-                <label for="id_description">Description</label>
-                <textarea name="description" id="id_description" rows="3" class="form-control" required></textarea>
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% for error in field.errors %}
+                  <div class="alert alert-danger p-1 mt-1">{{ error }}</div>
+              {% endfor %}
             </div>
-            <div class="form-group">
-                <label for="id_file">File</label>
-                <input type="file" name="file" id="id_file" class="form-control-file" required>
-            </div>
+          {% endfor %}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
@@ -401,6 +408,7 @@ setInterval(function() {
     </div>
   </div>
 </div>
+
 
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

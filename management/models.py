@@ -427,8 +427,34 @@ class MonthlyDeduction(models.Model):
 
 
 
+
+
+# management/models.py
+
+class UploadService(models.Model):
+    """A list of services that can be associated with a file upload."""
+    name = models.CharField(max_length=150, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    
+
+# management/models.py
+
 class EmployeeUpload(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='file_uploads')
+    # --- NEW FIELD ---
+    service = models.ForeignKey(
+        UploadService, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=False # This makes the field required in the form
+    )
     description = models.TextField(help_text="A brief description of the uploaded file.")
     file = models.FileField(upload_to='employee_uploads/%Y/%m/%d/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -437,4 +463,7 @@ class EmployeeUpload(models.Model):
         ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"File from {self.employee.name} on {self.uploaded_at.strftime('%d-%m-%Y')}"
+        # Updated string representation
+        service_name = self.service.name if self.service else "Uncategorized"
+        return f"File from {self.employee.name} for {service_name}"
+
