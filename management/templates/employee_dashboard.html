@@ -106,16 +106,31 @@
                                     <th scope="row">Worksheet Commissions (5%)</th>
                                     <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:2|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
                                 </tr>
-                                <!-- UPDATED DEDUCTION ROW -->
-                                <tr class="table-danger">
-                                    <th scope="row">
-                                        Remarks(Deductions)
-                                        {% if show_sensitive and current_month_earnings.deduction_notes %}
-                                            <br><small class="text-muted font-weight-normal">({{ current_month_earnings.deduction_notes }})</small>
-                                        {% endif %}
-                                    </th>
-                                    <td><strong>{% if show_sensitive %}- ₹{{ current_month_earnings.deduction_amount|floatformat:2|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</strong></td>
-                                </tr>
+                                <!-- NEW: Loop to display multiple deductions -->
+{% if show_sensitive %}
+    {% for deduction in current_month_earnings.monthly_deductions_list %}
+        <tr class="table-danger">
+            <th scope="row">
+                Remarks(Deduction)
+                <br><small class="text-muted font-weight-normal">({{ deduction.notes|default:"No notes" }})</small>
+            </th>
+            <td><strong>- ₹{{ deduction.amount|floatformat:2|intcomma }}</strong></td>
+        </tr>
+    {% empty %}
+        <!-- Optional: Show a row indicating no deductions if the list is empty -->
+        <tr>
+            <th scope="row">Remarks(Deductions)</th>
+            <td>₹0.00</td>
+        </tr>
+    {% endfor %}
+{% else %}
+    <!-- This remains the same for the locked view -->
+    <tr class="table-danger">
+        <th scope="row">Remarks(Deductions)</th>
+        <td><span class="text-muted">Locked</span></td>
+    </tr>
+{% endif %}
+
                                 <tr class="table-info">
                                     <th scope="row">Total This Month</th>
                                     <td><strong>{% if show_sensitive %}₹{{ current_month_earnings.total_earnings|floatformat:2|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</strong></td>

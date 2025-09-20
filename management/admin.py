@@ -157,11 +157,131 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
         return "No file"
     file_link.short_description = 'File'
 
+
+
+from django.db.models import DurationField, ExpressionWrapper, F
+from django.utils import timezone
+import calendar
+from datetime import datetime
+
+# ... (keep your other admin classes) ...
+
+
+# --- NEW: Custom Admin for AttendanceSession ---
+
+@admin.register(AttendanceSession)
+class AttendanceSessionAdmin(admin.ModelAdmin):
+    # --- 1. FILTERS & SEARCH ---
+    list_filter = [
+        EmployeeFilter,  # Re-use the same employee filter
+        ('login_time', DateRangeFilter), # Use the date range filter
+    ]
+    search_fields = ('employee__name', 'logout_reason')
+    list_display = ('employee', 'login_time', 'logout_time', 'duration_display')
+
+    # --- 2. Custom Display Field for Duration ---
+    def duration_display(self, obj):
+        if obj.logout_time:
+            return str(obj.logout_time - obj.login_time).split('.')[0]
+        return "Active"
+    duration_display.short_description = 'Duration'
+
+    # --- 3. PRINT BUTTON & CALCULATION LOGIC ---
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('print/', self.admin_site.admin_view(self.print_view), name='attendance-print'),
+        ]
+        return custom_urls + urls
+
+    def print_view(self, request):
+        """
+        Renders a printable report of attendance sessions based on the admin filters
+        and calculates the salary for that specific period.
+        """
+        cl = self.get_changelist_instance(request)
+        queryset = cl.get_queryset(request)
+
+        calculated_salary = 0
+        employee_id = request.GET.get('employee__employee_id__exact')
+        employee = None
+        department = None
+        
+        # --- Salary calculation only runs if a specific employee is filtered ---
+        if employee_id:
+            try:
+                employee = Employee.objects.get(pk=employee_id)
+                department = employee.department
+                
+                # Use only the sessions for the selected employee from the filtered queryset
+                sessions_for_employee = queryset.filter(employee=employee)
+
+                if sessions_for_employee.exists():
+                    # --- Determine the exact date range from the filtered sessions ---
+                    min_date = sessions_for_employee.earliest('login_time').login_time
+                    max_date = sessions_for_employee.latest('login_time').login_time
+
+                    # --- 1. Calculate Approved Break Seconds in the period ---
+                    approved_breaks_qs = BreakSession.objects.filter(
+                        employee=employee,
+                        approved=True,
+                        end_time__isnull=False, # Only completed breaks
+                        start_time__date__range=[min_date.date(), max_date.date()]
+                    )
+                    approved_break_duration = approved_breaks_qs.annotate(
+                        duration=ExpressionWrapper(F('end_time') - F('start_time'), output_field=DurationField())
+                    ).aggregate(total_duration=Sum('duration'))['total_duration'] or timezone.timedelta(0)
+
+                    # --- 2. Calculate Attended Seconds in the period ---
+                    attended_duration = sum(
+                        [s.duration() for s in sessions_for_employee], 
+                        timezone.timedelta(0)
+                    )
+
+                    # --- 3. Calculate Total Work Seconds ---
+                    total_work_seconds = attended_duration.total_seconds() + approved_break_duration.total_seconds()
+
+                    # --- 4. Calculate Expected Work Seconds for the period ---
+                    # Default to 8 hours if working times are not set
+                    daily_working_seconds = 8 * 3600 
+                    if employee.working_start_time and employee.working_end_time:
+                        start_dt = datetime.combine(datetime.today(), employee.working_start_time)
+                        end_dt = datetime.combine(datetime.today(), employee.working_end_time)
+                        daily_working_seconds = (end_dt - start_dt).total_seconds()
+
+                    # Calculate the number of days in the filtered range
+                    days_in_period = (max_date.date() - min_date.date()).days + 1
+                    expected_seconds = days_in_period * daily_working_seconds
+                    
+                    # --- 5. Final Salary Calculation for the period ---
+                    if expected_seconds > 0:
+                        salary_ratio = total_work_seconds / expected_seconds
+                        # Use the employee's full monthly salary as the base
+                        calculated_salary = float(employee.salary) * salary_ratio
+
+            except Employee.DoesNotExist:
+                employee = None
+
+        # --- Prepare context for the template ---
+        context = {
+            'queryset': queryset,
+            'employee': employee,
+            'department': department,
+            'calculated_salary': calculated_salary,
+            'request': request, # Pass the request to access URL parameters in the template
+        }
+        return render(request, 'admin/reports/attendance_print.html', context)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['query_string'] = request.GET.urlencode()
+        return super().changelist_view(request, extra_context)
     
+
+
 # --- Register All Other Models with Default Admin ---
 # These models will just show up in the admin with no special customizations.
 admin.site.register(Department)
-admin.site.register(AttendanceSession)
 admin.site.register(BreakSession)
 admin.site.register(Application)
 admin.site.register(ApplicationAssignment)

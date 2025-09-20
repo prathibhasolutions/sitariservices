@@ -143,15 +143,22 @@ class Employee(models.Model):
         ).aggregate(total=Sum(ExpressionWrapper(F('amount') * 0.05, output_field=models.FloatField())))['total'] or 0
         earnings['worksheet_commissions'] = worksheet_commissions
 
-        try:
-            monthly_deduction = self.monthly_deductions.get(month=current_month, year=current_year)
-            earnings['deduction_amount'] = monthly_deduction.amount
-            earnings['deduction_notes'] = monthly_deduction.notes
-        except MonthlyDeduction.DoesNotExist:
-            earnings['deduction_amount'] = 0
-            earnings['deduction_notes'] = ''
+            # --- NEW DEDUCTION LOGIC ---
+        deductions_qs = self.monthly_deductions.filter(
+                month=current_month,
+                year=current_year
+            )
+    
+        # Calculate the sum of all deduction amounts
+        total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or 0
+        
+        # Store the queryset and the total amount in the earnings dictionary
+        earnings['monthly_deductions_list'] = deductions_qs
+        earnings['deduction_amount'] = total_deduction_amount
+        # --- END OF NEW LOGIC ---
 
         total_before_deduction = (earnings['attendance_salary'] + float(earnings['application_commissions']) + float(earnings['worksheet_commissions']))
+        # The total_earnings calculation now correctly subtracts the sum of all deductions
         earnings['total_earnings'] = total_before_deduction - float(earnings['deduction_amount'])
 
         return earnings
@@ -391,7 +398,6 @@ class MonthlyDeduction(models.Model):
     notes = models.CharField(max_length=255, blank=True, help_text="Reason for the deduction (e.g., 'Late fees', 'Advance adjustment')")
 
     class Meta:
-        unique_together = ('employee', 'month', 'year') # Only one deduction entry per employee per month
         ordering = ['-year', '-month']
 
     def __str__(self):
