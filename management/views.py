@@ -239,6 +239,10 @@ def calculate_employee_monthly_commission(employee, year, month):
     return total_commission
 
 
+# Make sure all required models and forms are imported
+from .models import Employee, ApplicationAssignment 
+from .forms import EmployeeUploadForm
+
 def employee_dashboard(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
@@ -250,73 +254,59 @@ def employee_dashboard(request):
         request.session.flush()
         return redirect('login')
 
-    # --- Your existing OTP state management ---
-    show_sensitive = False
-    otp_sent = request.session.get('otp_sent_flag', False) # Preserve state across GET requests
+    # --- OTP and Session Management ---
     otp_verified = request.session.get('otp_verified', False)
-
-    if otp_verified:
-        show_sensitive = True
+    show_sensitive = otp_verified
+    otp_sent = request.session.get('otp_sent_flag', False)
 
     if request.method == 'POST':
         if 'send_otp' in request.POST:
             from .utils import generate_otp, send_otp_whatsapp
-
             otp = generate_otp()
             request.session['emp_otp'] = otp
             send_otp_whatsapp(employee.mobile_number, otp)
-
-            # Set flags in session to remember state after redirect
             request.session['otp_sent_flag'] = True
-            otp_sent = True
             messages.success(request, f"OTP sent to {employee.mobile_number}")
             return redirect('employee_dashboard')
 
         elif 'verify_otp' in request.POST:
             entered_otp = request.POST.get('otp')
             expected_otp = request.session.get('emp_otp')
-
             if entered_otp and entered_otp == expected_otp:
                 request.session['otp_verified'] = True
-                show_sensitive = True
-                otp_verified = True
                 messages.success(request, "OTP verified. Sensitive data unlocked.")
                 if 'emp_otp' in request.session:
                     del request.session['emp_otp']
-                if 'otp_sent_flag' in request.session:
-                    del request.session['otp_sent_flag']
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
-                request.session['otp_sent_flag'] = True
-
+                request.session['otp_sent_flag'] = True # Keep the form visible
             return redirect('employee_dashboard')
 
-    if request.method == 'GET' and not request.session.get('otp_sent_flag'):
-        otp_sent = False
-    elif request.session.get('otp_sent_flag'):
-        otp_sent = True
+    # --- Data for Template ---
+    earnings_data = {}
+    if show_sensitive:
+        earnings_data = employee.get_current_month_earnings()
+        
+    # --- For Debugging: Print the earnings data to your console ---
+    print(f"DEBUG: Earnings data for {employee.name}: {earnings_data}")
+    # --- End Debugging ---
 
-    # --- THE ONLY CHANGE IS HERE ---
-    current_month_earnings_data = employee.get_current_month_earnings()
-    # --- END OF CHANGE ---
-    upload_form = EmployeeUploadForm()
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
-        'current_month_earnings': current_month_earnings_data,
-        'upload_form': upload_form,
+        'current_month_earnings': earnings_data,
+        'upload_form': EmployeeUploadForm(),
     }
 
-    # --- ADD THIS BLOCK: RESET OTP VERIFIED FLAG AFTER RENDERING THE PAGE ---
-    if 'otp_verified' in request.session and request.method == 'GET':
+    # --- Session Cleanup for next visit to the page ---
+    if 'otp_verified' in request.session:
         del request.session['otp_verified']
-    # --- END OF CHANGE ---
-
-    # Reset the one-time flag after rendering
-    if 'otp_sent_flag' in request.session and request.method == 'GET':
-        del request.session['otp_sent_flag']
+    if 'otp_sent_flag' in request.session:
+        # We only delete otp_sent_flag if OTP was successfully verified
+        if not 'emp_otp' in request.session:
+             del request.session['otp_sent_flag']
 
     return render(request, 'employee_dashboard.html', context)
 
@@ -531,124 +521,110 @@ def require_employee(view_func):
 
 # --- Main Views ---
 
+# management/views.py
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.utils import timezone
+from decimal import Decimal
+from .models import Application, ApplicationAssignment, Employee, ChatMessage
+
+
 @require_employee
 def application_list_create_view(request, employee):
     """
     Handles viewing and creating work applications.
-    Requires a password verification once per session to access the page.
+    This version requires a password for EVERY visit to the page.
     """
     
-    # --- STEP 1: PASSWORD VERIFICATION GATE ---
-    # Check if the user has already verified their password in this session.
-    if not request.session.get('application_password_verified', False):
-        
-        # If the user is submitting the password form...
-        if request.method == 'POST' and 'verify_password' in request.POST:
-            entered_password = request.POST.get('password')
-            
-            # Check if the entered password is correct.
-            if entered_password == employee.password:
-                # If correct, set a flag in the session to "remember" the verification.
-                request.session['application_password_verified'] = True
-                # Redirect back to this same page to clear the POST data and load the main content.
-                return redirect('applications')
-            else:
-                # If incorrect, show an error message.
-                messages.error(request, "Incorrect password. Please try again.")
-        
-        # If the password is not verified yet (either a GET request or a failed attempt),
-        # render the password prompt template.
-        return render(request, 'application_password_prompt.html', {'employee': employee})
-
-    # --- FROM THIS POINT ON, THE PASSWORD IS VERIFIED FOR THE CURRENT SESSION ---
-
-    # --- STEP 2: HANDLE APPLICATION CREATION (POST REQUEST) ---
-    # This block only runs if the request is a POST and is NOT from the password form.
+    # --- STEP 1: Handle POST requests ---
     if request.method == 'POST':
-        try:
-            # Retrieve data from the application creation form.
-            assign_type = request.POST.get('assign_type')
-            total_commission = Decimal(request.POST.get('total_commission'))
+        # --- A) If it's a password verification attempt ---
+        if 'verify_password' in request.POST:
+            entered_password = request.POST.get('password')
+            if entered_password == employee.password:
+                # Password is correct. Proceed to load the main content.
+                # We will gather all the context data and render the page below.
+                pass # Fall through to the GET request logic at the end.
+            else:
+                # Password is wrong, show an error and re-render the prompt page.
+                messages.error(request, "Incorrect password. Please try again.")
+                return render(request, 'application_password_prompt.html', {'employee': employee})
+        
+        # --- B) If it's an application creation attempt ---
+        else:
+            try:
+                assign_type = request.POST.get('assign_type')
+                
+                # Auto-calculate total commission if sharing
+                if assign_type == 'sharing':
+                    creator_amount = Decimal(request.POST.get('creator_share_amount', '0'))
+                    partner_amount = Decimal(request.POST.get('partner_share_amount', '0'))
+                    total_commission = creator_amount + partner_amount
+                else:
+                    total_commission = Decimal(request.POST.get('total_commission'))
 
-            # Create the main application object.
-            app = Application.objects.create(
-                application_name=request.POST.get('application_name'),
-                customer_name=request.POST.get('customer_name'),
-                customer_mobile_number=request.POST.get('customer_mobile_number'),
-                description=request.POST.get('description'),
-                expected_days_to_complete=int(request.POST.get('expected_days', 1)),
-                total_commission=total_commission,
-                approved=False  # New applications are not approved by default.
-            )
+                expected_date = request.POST.get('expected_date_of_completion') or None
 
-            # Handle the assignment based on whether it's for self or shared.
-            if assign_type == 'own':
-                # Assign 100% of the commission to the creator.
-                ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=100)
-            
-            elif assign_type == 'sharing':
-                # Retrieve details for sharing.
-                other_employee_id = request.POST.get('other_employee')
-                creator_share = Decimal(request.POST.get('creator_share'))
-                partner_share = Decimal(request.POST.get('partner_share'))
+                app = Application.objects.create(
+                    application_name=request.POST.get('application_name'),
+                    customer_name=request.POST.get('customer_name'),
+                    customer_mobile_number=request.POST.get('customer_mobile_number'),
+                    description=request.POST.get('description'),
+                    expected_date_of_completion=expected_date,
+                    total_commission=total_commission,
+                    approved=False
+                )
 
-                # Validate the sharing inputs.
-                if not other_employee_id:
-                    app.delete()  # Clean up the created application if validation fails.
-                    raise ValueError("Please select an employee to share with.")
+                if assign_type == 'own':
+                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=total_commission)
+                elif assign_type == 'sharing':
+                    other_employee_id = request.POST.get('other_employee')
+                    if not other_employee_id:
+                        app.delete()
+                        raise ValueError("Please select an employee to share with.")
+                    
+                    other_emp = Employee.objects.get(employee_id=other_employee_id)
+                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=creator_amount)
+                    ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_amount=partner_amount)
 
-                if creator_share + partner_share != 100:
-                    app.delete()
-                    raise ValueError("Commission shares must add up to 100%.")
+                messages.success(request, f"Application '{app.application_name}' created successfully!")
+                return redirect('applications')
 
-                # Create assignments for both employees.
-                other_emp = Employee.objects.get(employee_id=other_employee_id)
-                ApplicationAssignment.objects.create(application=app, employee=employee, commission_percentage=creator_share)
-                ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_percentage=partner_share)
+            except (ValueError, TypeError, Employee.DoesNotExist) as e:
+                messages.error(request, f"Error creating application: {e}")
+                return redirect('applications')
 
-            # If everything succeeds, show a success message and redirect.
-            messages.success(request, f"Application '{app.application_name}' created successfully!")
-            return redirect('applications')
 
-        except (ValueError, TypeError, Employee.DoesNotExist) as e:
-            # If any error occurs during creation, show an error message and redirect.
-            messages.error(request, f"Error creating application: {e}")
-            return redirect('applications')
+    # --- STEP 2: Handle GET requests or successful password POST ---
+    # If the request is a GET, the password hasn't been verified yet.
+    if request.method == 'GET':
+        # Always show the password prompt for a GET request.
+        return render(request, 'application_password_prompt.html', {'employee': employee})
+    
+    # If we are here, it means it was a POST request with a correct password.
+    # Now we gather all the data needed for the applications.html page.
 
-    # --- STEP 3: PREPARE DATA FOR PAGE DISPLAY (GET REQUEST) ---
-    # This block runs for GET requests or after a form submission redirects.
     today = timezone.localtime(timezone.now())
-
-    # Get month and year from URL parameters for filtering, or use current month/year.
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
-    # Fetch all applications assigned to the current employee.
     your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
 
-    # Fetch approved assignments for the selected month/year to calculate commission.
     approved_assignments = ApplicationAssignment.objects.filter(
         employee=employee,
         application__approved=True,
         application__date_created__year=selected_year,
         application__date_created__month=selected_month
     ).select_related('application')
+    
+    total_monthly_commission = approved_assignments.aggregate(total=Sum('commission_amount'))['total'] or 0
 
-    # Calculate the total commission for the month.
-    total_monthly_commission = 0
-    for assignment in approved_assignments:
-        commission_share = (assignment.commission_percentage / 100) * assignment.application.total_commission
-        assignment.commission_share = commission_share # Attach the calculated share to the object for the template.
-        total_monthly_commission += commission_share
-
-    # Prepare context data for the template.
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
     selected_month_display = months[selected_month - 1]['display']
     current_year = timezone.now().year
     years = list(range(current_year - 5, current_year + 2))
 
-    # Bundle all data into the context dictionary.
     context = {
         'applications': your_applications,
         'approved_assignments': approved_assignments,
@@ -661,39 +637,65 @@ def application_list_create_view(request, employee):
         'years': years,
     }
     
-    # Render the main applications page with the prepared context.
     return render(request, 'applications.html', context)
 
+
+from .models import Application, ApplicationAssignment, ChatMessage, ApplicationDateExtension, Employee
 
 @require_employee
 def application_detail_view(request, employee, pk):
     """
-    Displays the details of a single application and handles the chat functionality.
+    Displays application details, chat, and handles completion date extensions.
     """
-    # Ensure the logged-in employee is actually assigned to this application
     application = get_object_or_404(Application, pk=pk, assigned_employees=employee)
     
     # Check if the application is shared and not yet approved to enable chat
     is_shared = application.assigned_employees.count() > 1
     is_chat_active = is_shared and not application.approved
 
-    # Handle chat message submission
-    if request.method == 'POST' and is_chat_active:
-        message_text = request.POST.get('message')
-        message_file = request.FILES.get('file')
-        
-        if message_text or message_file:
-            ChatMessage.objects.create(
-                application=application,
-                employee=employee,
-                message=message_text,
-                file=message_file
-            )
-            # Redirect to the same page to show the new message and clear the form
-            return redirect('application-detail', pk=application.pk)
+    # --- HANDLE POST REQUESTS ---
+    if request.method == 'POST':
+        # Check if the form submitted is the date extension form
+        if 'extend_date' in request.POST:
+            new_date_str = request.POST.get('new_completion_date')
+            if new_date_str:
+                new_date = timezone.datetime.strptime(new_date_str, '%Y-%m-%d').date()
+                old_date = application.expected_date_of_completion
 
-    # Fetch data for display
+                # Create a record of the extension
+                ApplicationDateExtension.objects.create(
+                    application=application,
+                    previous_date=old_date,
+                    new_date=new_date,
+                    extended_by=employee
+                )
+                
+                # Update the main application with the new date
+                application.expected_date_of_completion = new_date
+                application.save()
+
+                messages.success(request, f"Completion date extended to {new_date.strftime('%d %b %Y')}.")
+            else:
+                messages.error(request, "Please select a new date.")
+            
+            return redirect('application-detail', pk=application.pk)
+        
+        # Handle chat message submission (if chat is active)
+        elif is_chat_active:
+            message_text = request.POST.get('message')
+            message_file = request.FILES.get('file')
+            if message_text or message_file:
+                ChatMessage.objects.create(
+                    application=application,
+                    employee=employee,
+                    message=message_text,
+                    file=message_file
+                )
+                return redirect('application-detail', pk=application.pk)
+
+    # --- PREPARE DATA FOR TEMPLATE (GET REQUEST) ---
     assignments = application.applicationassignment_set.all().select_related('employee')
+    extension_history = application.date_extensions.all().order_by('-timestamp')
     chat_messages = []
     if is_chat_active:
         chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
@@ -702,9 +704,11 @@ def application_detail_view(request, employee, pk):
         'application': application,
         'assignments': assignments,
         'is_chat_active': is_chat_active,
-        'chat_messages': chat_messages
+        'chat_messages': chat_messages,
+        'extension_history': extension_history
     }
     return render(request, 'application_detail.html', context)
+
 
 
 

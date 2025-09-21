@@ -342,14 +342,73 @@ class AttendanceSessionAdmin(admin.ModelAdmin):
         }
         return render(request, 'admin/reports/attendance_print.html', context)
 
+from django.shortcuts import get_object_or_404
+
+class ApplicationAssignmentInline(admin.TabularInline):
+    model = ApplicationAssignment
+    extra = 1 # How many empty forms to show
+    autocomplete_fields = ['employee'] # Makes selecting employees easier if you have many
+
+@admin.register(Application)
+class ApplicationAdmin(admin.ModelAdmin):
+    # This is the default change form that includes the inlines.
+    # We will override the view, but this is good practice to keep.
+    inlines = [ApplicationAssignmentInline]
+    
+    list_display = ('application_name', 'customer_name', 'total_commission', 'date_created', 'approved')
+    list_filter = ('approved', 'date_created')
+    search_fields = ('application_name', 'customer_name')
+    actions = ['approve_applications']
+    
+    # 1. Point to our new custom template
+    change_form_template = 'admin/management/application/change_form_detail.html'
+
+    def approve_applications(self, request, queryset):
+        queryset.update(approved=True)
+        self.message_user(request, "Selected applications have been approved.")
+    approve_applications.short_description = "Approve selected applications"
+
+    # 2. Override the default change view
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        # This method will be called when you click on an application in the admin
+        
+        # Get the application object
+        application = get_object_or_404(Application, pk=object_id)
+        
+        # Gather all the data needed for the detail template
+        assignments = application.applicationassignment_set.all().select_related('employee')
+        extension_history = application.date_extensions.all().order_by('-timestamp')
+        chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
+        
+        # Determine if the chat should be active (shared and not approved)
+        is_shared = application.assigned_employees.count() > 1
+        is_chat_active = is_shared and not application.approved
+
+        # Build the context dictionary for the template
+        context = {
+            # Add admin-specific context
+            **self.admin_site.each_context(request),
+            'title': f"Details for {application.application_name}",
+            'opts': self.model._meta,
+            'original': application,
+            # Add your custom data
+            'application': application,
+            'assignments': assignments,
+            'is_chat_active': is_chat_active,
+            'chat_messages': chat_messages,
+            'extension_history': extension_history
+        }
+        
+        # Render your custom template with the combined context
+        return render(request, self.change_form_template, context)
+    
 
 # --- Register All Other Models with Default Admin ---
 # These models will just show up in the admin with no special customizations.
 admin.site.register(Department)
 
 admin.site.register(BreakSession)
-admin.site.register(Application)
-admin.site.register(ApplicationAssignment)
+
 admin.site.register(Commission)
 admin.site.register(Notification)
 admin.site.register(UserNotificationStatus)

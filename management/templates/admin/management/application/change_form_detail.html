@@ -1,0 +1,101 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container my-4">
+    {# This is the content from your application_detail.html #}
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h4>Application Details: {{ application.application_name }}</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Left Column: Application Details -->
+                <div class="col-md-6">
+                    <p><strong>Application ID:</strong> {{ application.id }}</p>
+                    <div><strong>Assigned Employees & Share:</strong>
+                        <ul class="list-group mt-2">
+                            {% for assignment in assignments %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ assignment.employee.name }}
+                                <span class="badge badge-info badge-pill">₹{{ assignment.commission_amount|floatformat:2 }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div><br>
+                    <p><strong>Customer Name:</strong> {{ application.customer_name }}</p>
+                    <p><strong>Customer Mobile:</strong> {{ application.customer_mobile_number }}</p>
+                    <p><strong>Created On:</strong> {{ application.date_created|date:"l, d F Y" }}</p>
+                    
+                    <p><strong>Expected Completion Date:</strong> 
+                        {% if application.expected_date_of_completion %}
+                            {{ application.expected_date_of_completion|date:"d M Y" }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </p>
+
+                    <!-- Extension History -->
+                    {% if extension_history %}
+                        <div class="mt-3">
+                            <strong>Date Extension History:</strong>
+                            <ul class="list-unstyled mt-2 small">
+                                {% for extension in extension_history %}
+                                    <li class="mb-1">
+                                        <i class="fas fa-history text-muted"></i>
+                                        From <strong>{{ extension.previous_date|date:"d M Y"|default:"(Original)" }}</strong>
+                                        to <strong>{{ extension.new_date|date:"d M Y" }}</strong>
+                                        by {{ extension.extended_by.name }} on {{ extension.timestamp|date:"d M Y" }}.
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <p><strong>Total Commission:</strong> ₹{{ application.total_commission|floatformat:2 }}</p>
+                    <p><strong>Status:</strong> 
+                        <span class="badge {% if application.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
+                            {{ application.approved|yesno:"Approved,Pending Approval" }}
+                        </span>
+                    </p>
+                </div>
+
+                <!-- Right Column: Chat Box Section -->
+                <div class="col-md-6">
+                    {% if is_chat_active %}
+                    <div class="card h-100">
+                        <div class="card-header bg-secondary text-white">
+                            <h5>Collaboration Chat</h5>
+                        </div>
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="chat-box">
+                            {% for msg in chat_messages %}
+                                <div class="mb-3 p-2 rounded border">
+                                    <strong>{{ msg.employee.name }}</strong> 
+                                    <small class="text-muted">({{ msg.timestamp|date:"d M, H:i" }})</small>
+                                    {% if msg.message %}<p class="mb-1 mt-1">{{ msg.message|linebreaksbr }}</p>{% endif %}
+                                    {% if msg.file %}
+                                        <a href="{{ msg.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                            Download: {{ msg.file.name|cut:"chat_files/" }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div class="card-footer">
+                            <p class="text-muted small">Chat is read-only in the admin panel.</p>
+                        </div>
+                    </div>
+                    {% else %}
+                        <div class="alert alert-info mt-4">Chat is not active for this application.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <!-- Link back to the admin application list -->
+        <a href="{% url 'admin:management_application_changelist' %}" class="btn btn-outline-secondary">&larr; Back to Applications List</a>
+    </div>
+</div>
+{% endblock %}
