@@ -78,3 +78,27 @@ class EmployeeUploadForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
             'file': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
         }
+
+
+
+# your_app/forms.py
+
+from django import forms
+from .models import Employee, ManagedLink
+
+class EmployeeLinksForm(forms.ModelForm):
+    """
+    A form for an Employee that displays the assigned_links
+    field as a list of checkboxes.
+    """
+    class Meta:
+        model = Employee
+        fields = ['assigned_links']
+        widgets = {
+            'assigned_links': forms.CheckboxSelectMultiple
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # We make the queryset ordered by description for a consistent layout
+        self.fields['assigned_links'].queryset = ManagedLink.objects.all().order_by('description')

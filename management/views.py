@@ -286,10 +286,6 @@ def employee_dashboard(request):
     earnings_data = {}
     if show_sensitive:
         earnings_data = employee.get_current_month_earnings()
-        
-    # --- For Debugging: Print the earnings data to your console ---
-    print(f"DEBUG: Earnings data for {employee.name}: {earnings_data}")
-    # --- End Debugging ---
 
     context = {
         'employee': employee,
@@ -326,155 +322,58 @@ def attendance_view(request):
     today = timezone.localtime(timezone.now())
     month = int(request.GET.get('month', today.month))
     year = int(request.GET.get('year', today.year))
+    
+    # --- Get the detailed daily summary from the model method ---
+    daily_summary, total_wage = employee.get_daily_attendance_summary(year, month)
 
-    # Get total days in the selected month
-    days_in_month = monthrange(year, month)[1]
-
-    # Calculate employee's daily working hours
+    # --- Logic for other sections (e.g., Today's sessions) ---
     if employee.working_start_time and employee.working_end_time:
-        # Convert time objects to datetime for calculation
         start_dt = datetime.combine(datetime.today().date(), employee.working_start_time)
         end_dt = datetime.combine(datetime.today().date(), employee.working_end_time)
-        
-        # Handle overnight shifts (if end time is before start time)
         if end_dt < start_dt:
             end_dt += timedelta(days=1)
-        
-        daily_working_seconds = (end_dt - start_dt).total_seconds()
-        daily_working_hours = daily_working_seconds / 3600
+        daily_working_hours = (end_dt - start_dt).total_seconds() / 3600
     else:
-        # Default to 8 hours if working times not set
-        daily_working_seconds = 8 * 3600
         daily_working_hours = 8.0
 
-    qs = AttendanceSession.objects.filter(
-        employee=employee,
-        login_time__year=year,
-        login_time__month=month
-    ).order_by('login_time')
-
-    # Apply working hours filter if present
-    if employee.working_start_time and employee.working_end_time:
-        qs = qs.filter(
-            login_time__time__gte=employee.working_start_time,
-            login_time__time__lte=employee.working_end_time
-        )
-
-    sessions_by_date = defaultdict(list)
-    for session in qs:
-        login_local = timezone.localtime(session.login_time)
-        logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
-        duration = session.duration()
-        total_seconds = duration.total_seconds() if duration else 0
-        hours = int(total_seconds // 3600)
-        minutes = int((total_seconds % 3600) // 60)
-        duration_str = f"{hours}h {minutes}m"
-        sessions_by_date[login_local.date()].append({
-            'id': session.uuid.hex[:6],
-            'login_time': login_local,
-            'logout_time': logout_local,
-            'duration_str': duration_str,
-            'logout_reason': session.logout_reason,
-        })
-
-    # Build a list of breaks with precomputed duration string
-    break_sessions_qs = BreakSession.objects.filter(
-        employee=employee,
-        start_time__year=year,
-        start_time__month=month
-    ).order_by('start_time')
-    
-    # Apply working hours filter to break sessions too
-    if employee.working_start_time and employee.working_end_time:
-        break_sessions_qs = break_sessions_qs.filter(
-            start_time__time__gte=employee.working_start_time,
-            start_time__time__lte=employee.working_end_time
-        )
-
-    break_list = []
-    for bs in break_sessions_qs:
-        if bs.end_time:
-            td = bs.end_time - bs.start_time
-            total_seconds = int(td.total_seconds())
-            h = total_seconds // 3600
-            m = (total_seconds % 3600) // 60
-            duration_str = f"{h}h {m}m"
-        else:
-            duration_str = "Ongoing"
-        break_list.append({
-            'id': bs.uuid.hex[:6],
-            'start_time': bs.start_time,
-            'end_time': bs.end_time,
-            'logout_reason': bs.logout_reason,
-            'approved': bs.approved,
-            'duration_str': duration_str,
-        })
-
-    # Salary calculation based on employee's actual working hours
-    attended_seconds = sum([s.duration().total_seconds() for s in qs])
-    
-    # Only count approved breaks within working hours
-    approved_break_seconds = sum([
-        (bs.end_time - bs.start_time).total_seconds()
-        for bs in break_sessions_qs.filter(approved=True, end_time__isnull=False)
-    ])
-    
-    total_work_seconds = attended_seconds + approved_break_seconds
-    
-    # Use employee's actual daily working hours × days in month
-    expected_seconds = days_in_month * daily_working_seconds
-    salary = float(employee.salary) * (total_work_seconds / expected_seconds) if expected_seconds else 0
-
-    months = [{'value': i, 'display': month_name[i]} for i in range(1, 13)]
-    current_year = today.year
-    years = [current_year - i for i in range(5)][::-1]
-    selected_month_name = month_name[month]
-
-    # Today's sessions - also apply working hours filter
     todays_sessions_qs = AttendanceSession.objects.filter(
         employee=employee, 
         login_time__date=today.date()
     ).order_by('login_time')
-    
-    # Apply working hours filter to today's sessions
-    if employee.working_start_time and employee.working_end_time:
-        todays_sessions_qs = todays_sessions_qs.filter(
-            login_time__time__gte=employee.working_start_time,
-            login_time__time__lte=employee.working_end_time
-        )
 
     todays_sessions = []
     for session in todays_sessions_qs:
-        login_local = timezone.localtime(session.login_time)
-        logout_local = timezone.localtime(session.logout_time) if session.logout_time else None
         duration = session.duration()
         total_seconds = duration.total_seconds() if duration else 0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)
-        duration_str = f"{hours}h {minutes}m"
         todays_sessions.append({
             'id': session.uuid.hex[:6],
-            'login_time': login_local,
-            'logout_time': logout_local,
-            'duration_str': duration_str,
+            'login_time': timezone.localtime(session.login_time),
+            'logout_time': timezone.localtime(session.logout_time) if session.logout_time else None,
+            'duration_str': f"{hours}h {minutes}m",
             'logout_reason': session.logout_reason,
         })
 
+    months = [{'value': i, 'display': month_name[i]} for i in range(1, 13)]
+    current_year = today.year
+    years = [current_year - i for i in range(5)][::-1]
+
     context = {
         'employee': employee,
-        'sessions_by_date': dict(sessions_by_date),
-        'break_sessions': break_list,
         'months': months,
         'years': years,
         'selected_month': month,
         'selected_year': year,
-        'selected_month_name': selected_month_name,
+        'selected_month_name': month_name[month],
         'today': today,
         'todays_sessions': todays_sessions,
-        'calculated_salary': salary,
-        'days_in_month': days_in_month,
-        'daily_working_hours': daily_working_hours,  # Now properly calculated
-        'expected_hours': days_in_month * daily_working_hours,  # Uses employee's actual hours
+        'daily_summary_records': daily_summary,
+        'total_monthly_wage': total_wage,
+        'calculated_salary': total_wage,
+        'days_in_month': monthrange(year, month)[1],
+        'daily_working_hours': daily_working_hours,
+        'expected_hours': monthrange(year, month)[1] * daily_working_hours,
     }
     return render(request, 'attendance.html', context)
 
@@ -740,15 +639,29 @@ def invoice_detail(request, pk):
         'total': total,
     })
 
+from .models import EmployeeLinkAssignment
 
-def links_view(request):
+# your_app/views.py
+
+def assigned_links_view(request):
     employee_id = request.session.get('employee_id')
-    if employee_id:
-        return render(request, 'links.html')
-    else:
-        return render(request, 'login.html')
-    
-# In your views.py file
+    if not employee_id:
+        return redirect('login')
+    try:
+        # The query is now much simpler
+        employee = Employee.objects.prefetch_related('assigned_links').get(pk=employee_id)
+    except Employee.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
+
+    context = {
+        'employee': employee,
+        # The links are now directly on the employee object
+        'assigned_links': employee.assigned_links.all(),
+    }
+    return render(request, 'links.html', context)
+
+
 
 from django.db.models import Q # Make sure to import Q for complex lookups
 

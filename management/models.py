@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.db.models import Sum, Q
-from datetime import datetime
+from datetime import datetime,time
 import uuid
 from django.conf import settings
 import os
@@ -13,6 +13,29 @@ class Department(models.Model):
     def __str__(self):
         return self.name
 
+
+class ManagedLink(models.Model):
+    """
+    Stores a link with a description, managed by an admin.
+    (This model remains the same)
+    """
+    description = models.CharField(
+        max_length=200, 
+        help_text="A short, descriptive name for the link (e.g., 'Company Policy Document')."
+    )
+    url = models.URLField(
+        max_length=500, 
+        help_text="The full URL of the link (e.g., 'https://example.com/policy.pdf')."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.description
+
+    class Meta:
+        ordering = ['description'] # Ordering by description is more user-friendly
+        verbose_name = "Managed Link"
+        verbose_name_plural = "Managed Links"
 
 from datetime import datetime, timedelta
 from calendar import monthrange
@@ -29,6 +52,11 @@ class Employee(models.Model):
     working_start_time = models.TimeField(null=True, blank=True)
     working_end_time = models.TimeField(null=True, blank=True)
     password = models.CharField(max_length=128, default="123")
+    assigned_links = models.ManyToManyField(
+        ManagedLink, 
+        blank=True, 
+        related_name="assigned_employees"
+    )
 
     def is_active(self):
         # Assuming you have an AttendanceSession model with a 'logout_time'
@@ -43,20 +71,158 @@ class Employee(models.Model):
         pf_deduction = self.pf or 0
         esi_deduction = self.esi or 0
         return self.salary - pf_deduction - esi_deduction
+    
+    # In models.py, inside the Employee class
+
+    def get_daily_attendance_summary(self, year, month):
+        """
+        Generates a day-by-day attendance summary with final, corrected logic
+        for login/logout times and exclusion of out-of-hours sessions.
+        """
+        from .models import AttendanceSession, BreakSession
+        from django.utils import timezone
+        from calendar import monthrange
+        from datetime import datetime, time, timedelta
+        from decimal import Decimal
+
+        days_in_month = monthrange(year, month)[1]
+        daily_records = []
+        total_monthly_wage = Decimal('0.00')
+
+        start_work_time = self.working_start_time or time(9, 0)
+        end_work_time = self.working_end_time or time(17, 0)
+        
+        start_dt_base = datetime.combine(datetime.today(), start_work_time)
+        end_dt_base = datetime.combine(datetime.today(), end_work_time)
+        if end_dt_base < start_dt_base:
+            end_dt_base += timedelta(days=1)
+        expected_daily_work_seconds = (end_dt_base - start_dt_base).total_seconds()
+        
+        base_daily_wage = self.salary / Decimal(days_in_month) if days_in_month > 0 else Decimal('0.00')
+
+        all_attendance_sessions = list(AttendanceSession.objects.filter(
+            employee=self, login_time__year=year, login_time__month=month
+        ).order_by('login_time'))
+        
+        all_break_sessions = list(BreakSession.objects.filter(
+            employee=self, start_time__year=year, start_time__month=month
+        ).order_by('start_time'))
+
+        for day in range(1, days_in_month + 1):
+            current_date = datetime(year, month, day).date()
+            work_start_datetime = timezone.make_aware(datetime.combine(current_date, start_work_time))
+            work_end_datetime = timezone.make_aware(datetime.combine(current_date, end_work_time))
+
+            # --- NEW: Rule 1 - Filter out logins that are after the workday ends ---
+            day_attendance = [
+                s for s in all_attendance_sessions 
+                if timezone.localtime(s.login_time).date() == current_date and s.login_time < work_end_datetime
+            ]
+
+            # --- NEW: Rule 2 - Filter out breaks that are completely outside work hours ---
+            day_breaks = []
+            for b in all_break_sessions:
+                if timezone.localtime(b.start_time).date() == current_date:
+                    # Check for any overlap with the work day
+                    break_end = b.end_time or work_end_datetime # Assume ongoing breaks end with the day
+                    if b.start_time < work_end_datetime and break_end > work_start_datetime:
+                        day_breaks.append(b)
+
+            login_time = None
+            logout_time = None
+            total_active_seconds = 0
+            
+            if day_attendance:
+                earliest_actual_login = min([s.login_time for s in day_attendance])
+                login_time = max(earliest_actual_login, work_start_datetime)
+
+                logouts = [s.logout_time for s in day_attendance if s.logout_time]
+                if logouts:
+                    latest_actual_logout = max(logouts)
+                    logout_time = min(latest_actual_logout, work_end_datetime)
+                else:
+                    logout_time = work_end_datetime
+
+                if login_time >= logout_time:
+                    total_active_seconds = 0
+                else:
+                    work_seconds = 0
+                    for s in day_attendance:
+                        if s.logout_time:
+                            overlap_start = max(s.login_time, login_time)
+                            overlap_end = min(s.logout_time, logout_time)
+                            if overlap_end > overlap_start:
+                                work_seconds += (overlap_end - overlap_start).total_seconds()
+
+                    approved_break_seconds = 0
+                    for b in day_breaks:
+                        if b.approved and b.end_time:
+                            overlap_start = max(b.start_time, login_time)
+                            overlap_end = min(b.end_time, logout_time)
+                            if overlap_end > overlap_start:
+                                approved_break_seconds += (overlap_end - overlap_start).total_seconds()
+
+                    total_active_seconds = work_seconds + approved_break_seconds
+
+            daily_wage = Decimal('0.00')
+            if expected_daily_work_seconds > 0:
+                work_ratio = Decimal(total_active_seconds) / Decimal(expected_daily_work_seconds)
+                daily_wage = base_daily_wage * work_ratio
+                daily_wage = max(Decimal('0.00'), daily_wage)
+
+            total_monthly_wage += daily_wage
+
+            # Formatting logic (remains the same)
+            break_details = []
+            for b in day_breaks:
+                duration_str = "Ongoing"
+                if b.end_time:
+                    td = b.end_time - b.start_time
+                    h, rem = divmod(td.total_seconds(), 3600)
+                    m, _ = divmod(rem, 60)
+                    duration_str = f"{int(h)}h {int(m)}m"
+                
+                break_details.append({
+                    'timings': f"{timezone.localtime(b.start_time).strftime('%H:%M')} - {timezone.localtime(b.end_time).strftime('%H:%M') if b.end_time else 'Active'}",
+                    'reason': b.logout_reason,
+                    'duration': duration_str,
+                    'approved': b.approved
+                })
+
+            h, rem = divmod(total_active_seconds, 3600)
+            m, _ = divmod(rem, 60)
+            total_duration_str = f"{int(h)}h {int(m)}m"
+
+            daily_records.append({
+                'sl_no': day,
+                'date': current_date,
+                'login_time': timezone.localtime(login_time) if login_time else None,
+                'logout_time': timezone.localtime(logout_time) if logout_time else None,
+                'break_sessions': break_details,
+                'total_duration': total_duration_str,
+                'daily_wage': round(daily_wage, 2),
+            })
+
+        return daily_records, round(total_monthly_wage, 2)
+
 
     def get_current_month_earnings(self):
         """
-        Calculates all earnings for the current month.
-        This version is corrected to properly sum direct commission amounts.
+        Calculates all earnings for the current month, now using the correct
+        attendance salary calculation.
         """
-        from .models import ApplicationAssignment, Worksheet, MonthlyDeduction # Local import to avoid circular dependency
-
+        from .models import ApplicationAssignment, Worksheet, MonthlyDeduction
+        
         now = timezone.now()
-        current_month = now.month
-        current_year = now.year
+        current_month, current_year = now.month, now.year
+
+        # --- THIS IS THE KEY CHANGE ---
+        # 1. Get the accurate attendance salary from our robust summary method.
+        # We only need the total wage, so we discard the daily records.
+        _, attendance_salary_from_summary = self.get_daily_attendance_summary(current_year, current_month)
 
         earnings = {
-            'attendance_salary': Decimal('0.00'),
+            'attendance_salary': attendance_salary_from_summary, # Use the accurate value here
             'application_commissions': Decimal('0.00'),
             'worksheet_commissions': Decimal('0.00'),
             'monthly_deductions_list': [],
@@ -64,51 +230,17 @@ class Employee(models.Model):
             'total_earnings': Decimal('0.00'),
         }
 
-       # --- 1. ATTENDANCE SALARY CALCULATION (Unchanged) ---
-        if self.working_start_time and self.working_end_time:
-            start_dt = datetime.combine(datetime.today(), self.working_start_time)
-            end_dt = datetime.combine(datetime.today(), self.working_end_time)
-            if end_dt < start_dt:
-                end_dt += timedelta(days=1)
-            daily_working_seconds = (end_dt - start_dt).total_seconds()
-        else:
-            daily_working_seconds = 8 * 3600 # 8 hours default
-
-        days_in_month = monthrange(current_year, current_month)[1]
-        expected_seconds = days_in_month * daily_working_seconds
-        
-        attendance_sessions_qs = self.attendance_sessions.filter(
-            login_time__year=current_year,
-            login_time__month=current_month
-        )
-        
-        attended_seconds = sum([s.duration().total_seconds() for s in attendance_sessions_qs if s.duration()])
-
-        break_sessions_qs = self.break_sessions.filter(
-            start_time__year=current_year,
-            start_time__month=current_month,
-            approved=True,
-            end_time__isnull=False
-        )
-        approved_break_seconds = sum([(bs.end_time - bs.start_time).total_seconds() for bs in break_sessions_qs])
-        
-        total_work_seconds = attended_seconds + approved_break_seconds
-
-        if expected_seconds > 0:
-            salary_ratio = Decimal(total_work_seconds) / Decimal(expected_seconds)
-            earnings['attendance_salary'] = self.salary * salary_ratio
-
-        # --- 2. APPLICATION COMMISSIONS (Corrected Logic) ---
-        application_commissions = self.applicationassignment_set.filter(
+        # 2. Calculate all other earnings as before
+        application_commissions = ApplicationAssignment.objects.filter(
+            employee=self,
             application__approved=True,
             application__date_created__year=current_year,
             application__date_created__month=current_month
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
         earnings['application_commissions'] = application_commissions
 
-        # --- 3. WORKSHEET COMMISSIONS (Assuming 5% commission) ---
         worksheet_commission = Decimal('0.00')
-        if hasattr(self, 'worksheet_set'): # Default related_name is 'modelname_set'
+        if hasattr(self, 'worksheet_set'):
             worksheet_sum = self.worksheet_set.filter(
                 date__year=current_year,
                 date__month=current_month,
@@ -117,14 +249,13 @@ class Employee(models.Model):
             worksheet_commission = worksheet_sum * Decimal('0.05')
         earnings['worksheet_commissions'] = worksheet_commission
 
-        # --- 4. DEDUCTIONS ---
-        deductions_qs = self.monthly_deductions.filter(month=current_month, year=current_year)
+        deductions_qs = MonthlyDeduction.objects.filter(employee=self, month=current_month, year=current_year)
         total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         earnings['monthly_deductions_list'] = deductions_qs
         earnings['deduction_amount'] = total_deduction_amount
 
-        # --- 5. FINAL TOTAL ---
+        # 3. Calculate final total
         total_before_deduction = (
             earnings['attendance_salary'] + 
             earnings['application_commissions'] + 
@@ -410,7 +541,7 @@ class UserNotificationStatus(models.Model):
     
 
 
-# models.py
+from django.utils.timezone import now
 
 class MonthlyDeduction(models.Model):
     """
@@ -422,6 +553,7 @@ class MonthlyDeduction(models.Model):
     year = models.PositiveSmallIntegerField()
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     notes = models.CharField(max_length=255, blank=True, help_text="Reason for the deduction (e.g., 'Late fees', 'Advance adjustment')")
+    date = models.DateField(default=now, null=True, blank=True, help_text="Creation date of the deduction record")
 
     class Meta:
         ordering = ['-year', '-month']
@@ -471,3 +603,23 @@ class EmployeeUpload(models.Model):
         service_name = self.service.name if self.service else "Uncategorized"
         return f"File from {self.employee.name} for {service_name}"
 
+
+
+
+class EmployeeLinkAssignment(models.Model):
+    """
+    Assigns a ManagedLink to a specific Employee.
+    """
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="link_assignments")
+    link = models.ForeignKey(ManagedLink, on_delete=models.CASCADE, related_name="employee_assignments")
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"'{self.link.description}' assigned to {self.employee.name}"
+
+    class Meta:
+        # Ensures that the same link cannot be assigned to the same employee more than once
+        unique_together = ('employee', 'link')
+        ordering = ['-assigned_at']
+        verbose_name = "Employee Link Assignment"
+        verbose_name_plural = "Employee Link Assignments"

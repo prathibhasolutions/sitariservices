@@ -211,7 +211,7 @@
         {% url 'create_invoice' as invoice_url %}
         <a class="nav-link mb-2 {% if request.path == invoice_url %}active{% endif %}" href="{{ invoice_url }}">Generate Invoice</a>
 
-        {% url 'links' as links_url %}
+        {% url 'assigned_links' as links_url %}
         <a class="nav-link mb-2 {% if request.path == links_url %}active{% endif %}" href="{{ links_url }}">Links</a>
 
         {% url 'change_password_request' as change_pass_url %}
