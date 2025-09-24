@@ -19,6 +19,8 @@ urlpatterns = [
      path('change-password/', views.change_password_request, name='change_password_request'),
      path('change-password/verify/', views.change_password_verify, name='change_password_verify'),
      path('upload-file/', views.upload_file_view, name='upload_file'),
+     
+
     
 ]
 

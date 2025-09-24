@@ -239,14 +239,16 @@ class Employee(models.Model):
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
         earnings['application_commissions'] = application_commissions
 
-        worksheet_commission = Decimal('0.00')
-        if hasattr(self, 'worksheet_set'):
-            worksheet_sum = self.worksheet_set.filter(
-                date__year=current_year,
-                date__month=current_month,
-                approved=True
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            worksheet_commission = worksheet_sum * Decimal('0.05')
+        # 3. CORRECTED: Calculate Worksheet Commissions
+    # Use the correct related_name 'worksheet_entries' and filter for approved worksheets.
+        worksheet_sum = self.worksheet_entries.filter(
+            date__year=current_year,
+            date__month=current_month,
+            
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        # Calculate 5% commission on the total approved amount
+        worksheet_commission = worksheet_sum * Decimal('0.05')
         earnings['worksheet_commissions'] = worksheet_commission
 
         deductions_qs = MonthlyDeduction.objects.filter(employee=self, month=current_month, year=current_year)
@@ -473,7 +475,6 @@ class Commission(models.Model):
         return f"Commission for {self.employee.name} - {self.month}/{self.year} : ₹{self.total_commission}"
 
 
-
 class Worksheet(models.Model):
     # Common fields
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='worksheet_entries')
@@ -623,3 +624,5 @@ class EmployeeLinkAssignment(models.Model):
         ordering = ['-assigned_at']
         verbose_name = "Employee Link Assignment"
         verbose_name_plural = "Employee Link Assignments"
+
+

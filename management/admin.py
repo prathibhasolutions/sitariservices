@@ -21,8 +21,6 @@ from .models import (
     ApplicationAssignment,
     Commission,
     Worksheet,
-    Invoice,
-    Particular,
     AllowedIP,
     Notification,
     UserNotificationStatus,
@@ -140,9 +138,10 @@ class WorksheetAdmin(admin.ModelAdmin):
         EmployeeFilter,
         ('date', DateRangeFilter),
         'approved',
+        'employee__department',  # Add this for department-wise filtering
     ]
     search_fields = ('employee__name', 'customer_name', 'customer_mobile', 'token_no', 'transaction_num')
-    
+
     def get_list_display(self, request):
         employee_id = request.GET.get('employee__employee_id__exact')
         if employee_id:
@@ -200,6 +199,7 @@ class WorksheetAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['query_string'] = request.GET.urlencode()
         return super().changelist_view(request, extra_context)
+
 
 # --- Your Other Custom Admins (Unchanged) ---
 @admin.register(AllowedIP)
