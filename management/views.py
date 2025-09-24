@@ -847,3 +847,64 @@ def upload_file_view(request):
     return redirect('employee_dashboard')
 
 
+
+from django.views.decorators.http import require_POST
+from django.utils.dateparse import parse_datetime
+from .models import TodoTask
+import json
+
+def todo_page_view(request):
+    """Renders the main page for managing to-do tasks."""
+    if not request.session.get("employee_id"):
+        return redirect('login') # Or your login URL
+    return render(request, 'todo_page.html')
+
+def get_employee_todos(request):
+    """API endpoint to fetch all upcoming tasks for the logged-in employee."""
+    employee_id = request.session.get("employee_id")
+    if not employee_id:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    
+    tasks = TodoTask.objects.filter(employee_id=employee_id).order_by('due_time')
+    data = {
+        "todos": [
+            {"id": task.id, "description": task.description, "due_time": task.due_time.isoformat()}
+            for task in tasks
+        ]
+    }
+    return JsonResponse(data)
+
+@require_POST
+def add_employee_todo(request):
+    """API endpoint to add a new to-do task."""
+    employee_id = request.session.get("employee_id")
+    if not employee_id:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+        
+    try:
+        data = json.loads(request.body)
+        description = data.get('description')
+        due_time_str = data.get('due_time')
+
+        if not description or not due_time_str:
+            return JsonResponse({"error": "Description and due time are required."}, status=400)
+        
+        due_time = parse_datetime(due_time_str)
+        if not due_time:
+            return JsonResponse({"error": "Invalid date format."}, status=400)
+
+        TodoTask.objects.create(employee_id=employee_id, description=description, due_time=due_time)
+        return JsonResponse({"status": "success"}, status=201)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
+@require_POST
+def delete_employee_todo(request, task_id):
+    """API endpoint to delete a to-do task."""
+    employee_id = request.session.get("employee_id")
+    if not employee_id:
+        return JsonResponse({"error": "Unauthorized"}, status=401)
+    
+    task = get_object_or_404(TodoTask, id=task_id, employee_id=employee_id)
+    task.delete()
+    return JsonResponse({"status": "success"})

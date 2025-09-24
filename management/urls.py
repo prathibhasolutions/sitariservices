@@ -19,6 +19,10 @@ urlpatterns = [
      path('change-password/', views.change_password_request, name='change_password_request'),
      path('change-password/verify/', views.change_password_verify, name='change_password_verify'),
      path('upload-file/', views.upload_file_view, name='upload_file'),
+     path('todos/', views.todo_page_view, name='todo_page'),
+    path('api/todos/get/', views.get_employee_todos, name='todos_get'),
+    path('api/todos/add/', views.add_employee_todo, name='todos_add'),
+    path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
      
 
     

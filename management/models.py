@@ -626,3 +626,11 @@ class EmployeeLinkAssignment(models.Model):
         verbose_name_plural = "Employee Link Assignments"
 
 
+class TodoTask(models.Model):
+    employee = models.ForeignKey("Employee", on_delete=models.CASCADE, related_name="personal_todos")
+    description = models.CharField(max_length=255)
+    due_time = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.description
