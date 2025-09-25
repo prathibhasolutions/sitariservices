@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px;
+        }
+        .application-card {
+            border: 2px solid #333;
+            padding: 15px;
+            margin-bottom: 20px;
+            page-break-inside: avoid; /* Prevents a card from splitting across pages */
+        }
+        .application-card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+        .application-card ul {
+            padding-left: 20px;
+            margin-top: 5px;
+        }
+        .application-card p, .application-card div {
+            margin: 8px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: .35em .65em;
+            font-size: 75%;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: .25rem;
+        }
+        .badge-success { color: #fff; background-color: #28a745; }
+        .badge-warning { color: #212529; background-color: #ffc107; }
+        @media print {
+            .no-print { display: none; }
+            body { margin: 0; }
+            .application-card { border: 1px solid #aaa; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom: 20px;">
+        <h1> {{ title }}</h1>
+        <button onclick="window.print()">Print This Report</button>
+        <hr>
+    </div>
+    
+    {# Loop through each application and render it as a detailed card #}
+    {% for app in applications %}
+        <div class="application-card">
+            <h3>{{ app.application_name }} (ID: {{ app.id }})</h3>
+            
+            <p><strong>Customer Name:</strong> {{ app.customer_name }}</p>
+            <p><strong>Customer Mobile:</strong> {{ app.customer_mobile_number }}</p>
+            <p><strong>Created On:</strong> {{ app.date_created|date:"l, d F Y" }}</p>
+
+            <div>
+                <strong>Assigned Employees & Share:</strong>
+                <ul>
+                    {% for assignment in app.applicationassignment_set.all %}
+                        <li>{{ assignment.employee.name }} - ₹{{ assignment.commission_amount|floatformat:2 }}</li>
+                    {% empty %}
+                        <li>No employees assigned.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <p><strong>Expected Completion Date:</strong> 
+                {{ app.expected_date_of_completion|date:"d M Y"|default:"Not set" }}
+            </p>
+
+            {% if app.date_extensions.exists %}
+                <div>
+                    <strong>Date Extension History:</strong>
+                    <ul>
+                        {% for extension in app.date_extensions.all %}
+                            <li>
+                                From <strong>{{ extension.previous_date|date:"d M Y"|default:"(Original)" }}</strong>
+                                to <strong>{{ extension.new_date|date:"d M Y" }}</strong>
+                                by {{ extension.extended_by.name }} on {{ extension.timestamp|date:"d M Y" }}.
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <p><strong>Total Commission:</strong> ₹{{ app.total_commission|floatformat:2 }}</p>
+            
+            <p><strong>Status:</strong> 
+                <span class="badge {% if app.approved %}badge-success{% else %}badge-warning{% endif %}">
+                    {{ app.approved|yesno:"Approved,Pending Approval" }}
+                </span>
+            </p>
+        </div>
+    {% empty %}
+        <p>No applications match the current filter criteria.</p>
+    {% endfor %}
+
+</body>
+</html>

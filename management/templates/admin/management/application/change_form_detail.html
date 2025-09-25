@@ -1,18 +1,26 @@
-{% extends "admin/base_site.html" %}
-{% load static %}
+{% extends "admin/change_form.html" %}
+{% load static i18n admin_urls %}
 
-{% block content %}
-<div class="container my-4">
-    {# This is the content from your application_detail.html #}
+{# 
+This template correctly injects your custom details *after* the main editable form
+by using the 'after_field_sets' block provided by Django's admin.
+#}
+
+{% block after_field_sets %}
+    {# This line ensures that anything the parent template would have shown here still appears #}
+    {{ block.super }}
+
+    <br>
+    {# This is your custom detail view, now placed correctly within the template structure #}
     <div class="card shadow-sm">
         <div class="card-header bg-dark text-white">
-            <h4>Application Details: {{ application.application_name }}</h4>
+            <h4>Application Details: {{ original.application_name }}</h4>
         </div>
         <div class="card-body">
             <div class="row">
                 <!-- Left Column: Application Details -->
                 <div class="col-md-6">
-                    <p><strong>Application ID:</strong> {{ application.id }}</p>
+                    <p><strong>Application ID:</strong> {{ original.id }}</p>
                     <div><strong>Assigned Employees & Share:</strong>
                         <ul class="list-group mt-2">
                             {% for assignment in assignments %}
@@ -20,16 +28,18 @@
                                 {{ assignment.employee.name }}
                                 <span class="badge badge-info badge-pill">₹{{ assignment.commission_amount|floatformat:2 }}</span>
                             </li>
+                            {% empty %}
+                            <li class="list-group-item">No employees assigned.</li>
                             {% endfor %}
                         </ul>
                     </div><br>
-                    <p><strong>Customer Name:</strong> {{ application.customer_name }}</p>
-                    <p><strong>Customer Mobile:</strong> {{ application.customer_mobile_number }}</p>
-                    <p><strong>Created On:</strong> {{ application.date_created|date:"l, d F Y" }}</p>
+                    <p><strong>Customer Name:</strong> {{ original.customer_name }}</p>
+                    <p><strong>Customer Mobile:</strong> {{ original.customer_mobile_number }}</p>
+                    <p><strong>Created On:</strong> {{ original.date_created|date:"l, d F Y" }}</p>
                     
                     <p><strong>Expected Completion Date:</strong> 
-                        {% if application.expected_date_of_completion %}
-                            {{ application.expected_date_of_completion|date:"d M Y" }}
+                        {% if original.expected_date_of_completion %}
+                            {{ original.expected_date_of_completion|date:"d M Y" }}
                         {% else %}
                             Not set
                         {% endif %}
@@ -52,10 +62,10 @@
                         </div>
                     {% endif %}
 
-                    <p><strong>Total Commission:</strong> ₹{{ application.total_commission|floatformat:2 }}</p>
+                    <p><strong>Total Commission:</strong> ₹{{ original.total_commission|floatformat:2 }}</p>
                     <p><strong>Status:</strong> 
-                        <span class="badge {% if application.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
-                            {{ application.approved|yesno:"Approved,Pending Approval" }}
+                        <span class="badge {% if original.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
+                            {{ original.approved|yesno:"Approved,Pending Approval" }}
                         </span>
                     </p>
                 </div>
@@ -79,6 +89,8 @@
                                         </a>
                                     {% endif %}
                                 </div>
+                            {% empty %}
+                                <p>No chat messages yet.</p>
                             {% endfor %}
                         </div>
                         <div class="card-footer">
@@ -92,10 +104,6 @@
             </div>
         </div>
     </div>
-
-    <div class="mt-4">
-        <!-- Link back to the admin application list -->
-        <a href="{% url 'admin:management_application_changelist' %}" class="btn btn-outline-secondary">&larr; Back to Applications List</a>
-    </div>
 </div>
 {% endblock %}
+

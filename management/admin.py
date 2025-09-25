@@ -282,13 +282,37 @@ class ApplicationAssignmentInline(admin.TabularInline):
     extra = 1
     autocomplete_fields = ['employee']
 
+
+class AssignedEmployeeFilter(AutocompleteFilter):
+    title = 'Assigned Employee'  # Title for the filter sidebar
+    field_name = 'assigned_employees' # The ManyToManyField on your Application model
+
+
+from django.contrib import admin
+from django.shortcuts import get_object_or_404, render
+from .models import Application, ApplicationAssignment # Make sure to import your models
+
+# Assuming ApplicationAssignmentInline is defined elsewhere
+# from .inlines import ApplicationAssignmentInline 
+
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
     inlines = [ApplicationAssignmentInline]
     list_display = ('application_name', 'customer_name', 'total_commission', 'date_created', 'approved')
-    list_filter = ('approved', 'date_created')
+    
+    # 1. MODIFICATION: Update list_filter
+    list_filter = (
+        AssignedEmployeeFilter,  # Use the new filter here
+        ('date_created', DateRangeFilter), # Add the date range filter
+        'approved',
+    )
+
     search_fields = ('application_name', 'customer_name')
     actions = ['approve_applications']
+    
+    # 2. MODIFICATION: Override the changelist template to add the print button
+    change_list_template = 'admin/management/application/change_list.html'
+    
     change_form_template = 'admin/management/application/change_form_detail.html'
 
     def approve_applications(self, request, queryset):
@@ -296,25 +320,42 @@ class ApplicationAdmin(admin.ModelAdmin):
         self.message_user(request, "Selected applications have been approved.")
     approve_applications.short_description = "Approve selected applications"
 
+    # 3. ADDITION: Add get_urls and print_view methods for printing
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('print/', self.admin_site.admin_view(self.print_view), name='application-print'),
+        ]
+        return custom_urls + urls
+
+    def print_view(self, request):
+        # This view uses the current filters from the admin URL to get the right queryset
+        cl = self.get_changelist_instance(request)
+        queryset = cl.get_queryset(request)
+        
+        context = {
+            'title': ' Application Report',
+            'applications': queryset,
+            'site_header': self.admin_site.site_header,
+        }
+        return render(request, 'admin/management/application/print_template.html', context)
+
+    # Your change_view method remains unchanged
     def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
         application = get_object_or_404(Application, pk=object_id)
         assignments = application.applicationassignment_set.all().select_related('employee')
         extension_history = application.date_extensions.all().order_by('-timestamp')
         chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
         is_shared = application.assigned_employees.count() > 1
         is_chat_active = is_shared and not application.approved
-        context = {
-            **self.admin_site.each_context(request),
-            'title': f"Details for {application.application_name}",
-            'opts': self.model._meta,
-            'original': application,
-            'application': application,
-            'assignments': assignments,
-            'is_chat_active': is_chat_active,
-            'chat_messages': chat_messages,
-            'extension_history': extension_history
-        }
-        return render(request, self.change_form_template, context)
+        extra_context['assignments'] = assignments
+        extra_context['extension_history'] = extension_history
+        extra_context['chat_messages'] = chat_messages
+        extra_context['is_chat_active'] = is_chat_active
+        return super().change_view(
+            request, object_id, form_url, extra_context=extra_context,
+        )
 
     
 # --- Register All Other Models with Default Admin ---

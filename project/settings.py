@@ -20,7 +20,10 @@ ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.
 
 # Application definition
 INSTALLED_APPS = [
+    'dal',
+    'dal_select2',
     'admin_auto_filters',
+    'daterangefilter',
     'rangefilter',
     'django.contrib.admin',
     'django.contrib.auth',

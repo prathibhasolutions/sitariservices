@@ -2,7 +2,7 @@
 {% load i18n %}
 
 {# 
-This template overrides the `result_list` block to inject a custom-styled
+This template overrides the `result_list` block to inject a custom-styled 
 button just before the main admin table is rendered.
 #}
 
@@ -11,11 +11,12 @@ button just before the main admin table is rendered.
     <style>
         .print-button-container {
             padding: 10px 0;
-            text-align: right; /* Aligns the button to the right, just above the table */
+            text-align: right; /* Aligns the button to the right */
+            clear: both; /* Ensures it doesn't wrap around other elements */
         }
         .print-button {
             display: inline-block;
-            background-color: #007bff; /* A nice blue color */
+            background-color: #007bff; /* A prominent blue color */
             color: white !important;   /* Force white text */
             padding: 8px 15px;
             border-radius: 4px;
@@ -29,10 +30,10 @@ button just before the main admin table is rendered.
         }
     </style>
 
-    {# 2. Add the styled button, using the `query_string` from your admin view #}
+    {# 2. Add the styled button in its own container #}
     <div class="print-button-container">
-        <a href="print/?{{ query_string }}" class="print-button" target="_blank">
-            Print Report
+        <a href="print/?{{ request.GET.urlencode }}" class="print-button" target="_blank">
+            Print Filtered List
         </a>
     </div>
 
