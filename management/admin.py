@@ -15,6 +15,7 @@ from datetime import datetime
 # Import all your models
 from .models import (
     Employee,
+    MonthlyBonus,
     Department,
     BreakSession,
     Application,
@@ -44,25 +45,57 @@ class ManagedLinkAdmin(admin.ModelAdmin):
     ordering = ('description',)
 
 # --- UNIFIED EmployeeAdmin CLASS ---
+# In your management/admin.py file
+
+# In your management/admin.py file
+
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    # --- 1. General Settings ---
+    # --- 1. General Settings (Unchanged) ---
     search_fields = ['name', 'mobile_number']
     list_display = ['employee_id', 'name', 'mobile_number', 'department', 'display_status']
     list_filter = ['department']
     
-    # --- 2. Custom Template Paths ---
+    # --- 2. Custom Template for Attendance Report Button (Unchanged) ---
     change_list_template = "admin/employee_changelist.html"
-    change_form_template = 'admin/employee_links_change_form.html'
+    
+    # --- 3. CORRECTED Fieldsets to manage all fields ---
+    # This now includes 'assigned_links', removing the need for a custom form.
+    fieldsets = (
+        ('Personal Information', {
+            'fields': ('name', 'mobile_number', 'department', 'joining_date')
+        }),
+        ('Salary & Compensation', {
+            'fields': ('salary', 'pf', 'esi')
+        }),
+        ('Working Hours', {
+            'fields': ('working_start_time', 'working_end_time')
+        }),
+        ('Advances', {
+            'fields': ('advances',),
+            'description': 'Enter the total outstanding advance amount for this employee.'
+        }),
+        # --- The assigned_links field is now handled here ---
+        ('Assigned Links', {
+            'fields': ('assigned_links',),
+        }),
+        ('Security', {
+            'fields': ('password',),
+            'classes': ('collapse',),
+        }),
+    )
 
+    # --- 4. User-friendly widget for ManyToMany field ---
+    # This makes selecting links much easier.
+    filter_horizontal = ('assigned_links',)
+
+    # --- 5. Your existing custom methods (Unchanged) ---
     def display_status(self, obj):
         if obj.is_active():
             return format_html('<span style="color: green;">&#128994; Active</span>')
         return format_html('<span style="color: red;">&#128308; Inactive</span>')
-    
     display_status.short_description = 'Status'
 
-    # --- 3. Custom URL for Attendance Report ---
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -74,12 +107,10 @@ class EmployeeAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    # --- 4. View for Attendance Report Page ---
     def attendance_report_view(self, request):
         employee_id = request.GET.get('employee_id')
         month_str = request.GET.get('month')
         employee, daily_summary, total_wage = None, [], 0
-        
         if employee_id and month_str:
             try:
                 employee = Employee.objects.get(pk=employee_id)
@@ -87,7 +118,6 @@ class EmployeeAdmin(admin.ModelAdmin):
                 daily_summary, total_wage = employee.get_daily_attendance_summary(year, month)
             except (Employee.DoesNotExist, ValueError):
                 pass
-
         context = {
             'title': 'Monthly Attendance Report',
             'all_employees': Employee.objects.all(),
@@ -98,33 +128,22 @@ class EmployeeAdmin(admin.ModelAdmin):
         }
         return render(request, 'admin/attendance_report.html', context)
     
-    # --- 5. View for Employee List Page (to add the report button) ---
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context['report_url'] = 'attendance-report/'
         return super().changelist_view(request, extra_context=extra_context)
     
-    # --- 6. View for Employee Edit Page (to add the link assignment form) ---
-    def change_view(self, request, object_id, form_url='', extra_context=None):
-        employee = get_object_or_404(Employee, pk=object_id)
+    # --- The custom change_view and change_form_template have been REMOVED ---
+    # They are no longer needed and were the source of the problem.
 
-        if request.method == 'POST':
-            form = EmployeeLinksForm(request.POST, instance=employee)
-            if form.is_valid():
-                form.save()
-                self.message_user(request, "Successfully updated assigned links.")
-                return HttpResponseRedirect(request.path)
-        else:
-            form = EmployeeLinksForm(instance=employee)
 
-        extra_context = extra_context or {}
-        # This is the context variable for the link assignment form
-        extra_context['link_form'] = form 
-        
-        # Call the parent view to render the page
-        return super().change_view(
-            request, object_id, form_url, extra_context=extra_context,
-        )
+# --- Don't forget to register the MonthlyBonus admin ---
+@admin.register(MonthlyBonus)
+class MonthlyBonusAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'year', 'month', 'meetings_bonus', 'trainings_bonus', 'performance_bonus')
+    list_filter = ('year', 'month', 'employee')
+    search_fields = ('employee__name',)
+    autocomplete_fields = ['employee'] # Makes selecting an employee easy
 
 
 # --- Your Custom WorksheetAdmin (Unchanged) ---
