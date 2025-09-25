@@ -1,125 +1,232 @@
 {% extends "masteremployee.html" %}
 {% load static %}
+{% load humanize %}
 
 
 {% block content %}
-<main class="col-md-9 ml-sm-auto col-lg-10 px-4 py-4">
+<main class="container-fluid ml-sm-auto col-lg-12 px-4 py-4">
+    {% for message in messages %}
+    <div class="mt-3 alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
     <h2>Welcome, {{ employee.name }}!</h2>
-    <div class="card mt-3">
-        <div class="card-body">
-            <h5 class="card-title mb-4">Your Profile</h5>
-            <div class="table-responsive">
-                <table class="table table-bordered table-striped mb-0">
-                    <tbody>
-                        <tr>
-                            <th scope="row">Employee Name</th>
-                            <td>{{ employee.name }}</td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Mobile Number</th>
-                            <td>{{ employee.mobile_number }}</td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Department</th>
-                            <td>
-                                {% if employee.department %}
-                                    {{ employee.department.name }}
-                                {% else %}
-                                    <span class="text-muted">Not set</span>
-                                {% endif %}
-                            </td>
-                        </tr>
 
-                        <!-- Working Hours Row -->
-                        <tr>
-                            <th scope="row">Working Hours</th>
-                            <td>
-                                {% if employee.working_start_time and employee.working_end_time %}
-                                    {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }}
-                                {% else %}
-                                    <span class="text-muted">Not set</span>
-                                {% endif %}
-                            </td>
-                        </tr>
 
-                        <tr>
-                            <th scope="row">Salary</th>
-                            <td>
-                                {% if show_sensitive %}
-                                    ₹{{ employee.salary }}
-                                {% else %}
-                                    {% if otp_sent and not otp_verified %}
-                                        <form method="post" class="form-inline">
-                                            {% csrf_token %}
-                                            <input type="text" name="otp" class="form-control form-control-sm mr-2" placeholder="Enter OTP" required>
-                                            <button type="submit" name="verify_otp" class="btn btn-sm btn-primary">Verify OTP</button>
-                                        </form>
-                                    {% else %}
-                                        <form method="post" class="form-inline">
-                                            {% csrf_token %}
-                                            <button type="submit" name="send_otp" class="btn btn-sm btn-primary">Unlock with OTP</button>
-                                        </form>
-                                    {% endif %}
-                                {% endif %}
-                            </td>
-                        </tr>
-
-                        <!-- Commission Row -->
-                        <tr>
-                            <th scope="row">Commission (Current Month)</th>
-                            <td>
-                                {% if show_sensitive %}
-                                    ₹{{ current_month_commission|default:"0.00" }}
-                                {% else %}
-                                    <span class="text-muted">Locked</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <th scope="row">PF</th>
-                            <td>
-                                {% if show_sensitive %}
-                                    {% if employee.pf %}
-                                        ₹{{ employee.pf }}
-                                    {% else %}
-                                        <span class="text-muted">Not set</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-muted">Locked</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row">ESI</th>
-                            <td>
-                                {% if show_sensitive %}
-                                    {% if employee.esi %}
-                                        ₹{{ employee.esi }}
-                                    {% else %}
-                                        <span class="text-muted">Not set</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-muted">Locked</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Joining Date</th>
-                            <td>{{ employee.joining_date }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                {% if messages %}
-                    <div class="mt-3">
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-                        {% endfor %}
+    <div class="row mt-3">
+        <!-- Left Column: Your Profile -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Your Profile</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped mb-0">
+                            <tbody>
+                                {# --- Your existing profile details (unchanged) --- #}
+                                <tr>
+                                    <th scope="row" style="width: 40%;">Employee Name</th>
+                                    <td>{{ employee.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Mobile Number</th>
+                                    <td>{{ employee.mobile_number }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Department</th>
+                                    <td>{{ employee.department.name|default_if_none:"Not set" }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Working Hours</th>
+                                    <td>
+                                        {% if employee.working_start_time and employee.working_end_time %}
+                                            {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }}
+                                        {% else %}
+                                            <span class="text-muted">Not set</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Joining Date</th>
+                                    <td>{{ employee.joining_date|date:"d M Y" }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Gross Salary</th>
+                                    <td>
+                                        {% if show_sensitive %}
+                                            ₹{{ employee.salary|floatformat:0|intcomma }}
+                                        {% else %}
+                                            {% if otp_sent and not otp_verified %}
+                                                <form method="post" class="form-inline">
+                                                    {% csrf_token %}
+                                                    <input type="text" name="otp" class="form-control form-control-sm mr-2" placeholder="Enter OTP" required>
+                                                    <button type="submit" name="verify_otp" class="btn btn-sm btn-primary">Verify</button>
+                                                </form>
+                                            {% else %}
+                                                <form method="post" class="form-inline">
+                                                    {% csrf_token %}
+                                                    <button type="submit" name="send_otp" class="btn btn-sm btn-info">Unlock with OTP</button>
+                                                </form>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">PF Deduction</th>
+                                    <td>{% if show_sensitive %}₹{{ employee.pf|default:"0.00"|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">ESI Deduction</th>
+                                    <td>{% if show_sensitive %}₹{{ employee.esi|default:"0.00"|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <th scope="row">Net Salary</th>
+                                    <td><strong>{% if show_sensitive %}₹{{ employee.net_salary|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Current Month Earnings -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-4">Current Month Earnings <small class="text-muted">({{ "now"|date:"F Y" }})</small></h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <tbody>
+                                {# --- Existing Earnings (unchanged) --- #}
+                                <tr>
+                                    <th scope="row" style="width: 50%;">Attendance-Based Salary</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.attendance_salary|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Application Commissions</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Worksheet Commissions (5%)</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+
+                                <!-- === ADDED SECTION for Monthly Extras === -->
+                                <tr class="table-success">
+                                    <th scope="row">Meetings Bonus</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.meetings_bonus|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <th scope="row">Trainings Bonus</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.trainings_bonus|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <th scope="row">Performance Bonus</th>
+                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.performance_bonus|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                                </tr>
+                                <!-- === END OF ADDED SECTION === -->
+                                
+                                {# --- Existing Deductions Block (unchanged) --- #}
+                                {% if show_sensitive %}
+                                    <tr class="table-danger">
+                                        <th scope="row">Remarks (Deductions)</th>
+                                        <td>
+                                            {% if current_month_earnings.monthly_deductions_list %}
+                                                <ol style="margin-bottom: 0; padding-left: 20px;">
+                                                {% for deduction in current_month_earnings.monthly_deductions_list %}
+                                                    <li class="mb-2">
+                                                        <strong>- ₹{{ deduction.amount|floatformat:0|intcomma }}</strong>
+                                                        {% if deduction.notes %}<br><small class="font-weight-normal">({{ deduction.notes }})</small>{% endif %}
+                                                        {% if deduction.date %}<br><small class="font-weight-normal">({{ deduction.date }})</small>{% endif %}
+                                                    </li>
+                                                {% endfor %}
+                                                </ol>
+                                            {% else %}
+                                                - ₹0
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr class="table-danger">
+                                        <th scope="row">Remarks (Deductions)</th>
+                                        <td><span class="text-muted">Locked</span></td>
+                                    </tr>
+                                {% endif %}
+
+                                {# --- Existing Total Earnings Row (unchanged) --- #}
+                                <tr class="table-info">
+                                    <th scope="row">Total This Month</th>
+                                    <td><strong>{% if show_sensitive %}₹{{ current_month_earnings.total_earnings|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="mt-3">
+                            <small class="text-muted">This is an estimated earning for the current, ongoing month. Final amounts may vary.</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</main>
 
+    <!-- === CORRECTED: Bottom Row for Advances and Meetings (side-by-side) === -->
+    <div class="row mt-4">
+        <!-- Left Column: Advances -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Advances</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width: 40%;">Total Outstanding Advance</th>
+                                    <td><strong>{% if show_sensitive %}₹{{ employee.advances|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <small class="text-muted mt-2 d-block">This amount is separate from monthly earnings and is carried over until repaid.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Right Column: Meetings Attended -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Meetings Attended This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Topic</th>
+                                    <th>Bonus Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for attendance in attended_meetings %}
+                                        <tr>
+                                            <td>{{ attendance.meeting.date|date:"d M Y" }}</td>
+                                            <td>{{ attendance.meeting.topic }}</td>
+                                            <td>₹{{ attendance.meeting.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="3" class="text-muted text-center">No meetings attended this month.</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-muted text-center">Locked</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
 {% endblock %}

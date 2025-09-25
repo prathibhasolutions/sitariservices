@@ -1,0 +1,122 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Personal Task Reminder</h2>
+
+    <div class="row">
+        <!-- Left Column: Form to Add a New Task -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Add a New Task</h5>
+                    <form id="addTaskForm">
+                        <div class="form-group">
+                            <label for="taskDescription">Task Description</label>
+                            <input type="text" class="form-control" id="taskDescription" placeholder="Enter what you need to do" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="taskDueTime">Reminder Time</label>
+                            <input type="datetime-local" class="form-control" id="taskDueTime" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Add Task</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: List of Existing Tasks -->
+        <div class="col-md-6">
+            <h4 class="mb-3">Your Upcoming Reminders</h4>
+            <ul id="taskList" class="list-group" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Tasks will be loaded here dynamically -->
+                <li class="list-group-item">Loading tasks...</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const taskForm = document.getElementById('addTaskForm');
+        const taskList = document.getElementById('taskList');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+        // Function to fetch and display tasks
+        async function loadTasks() {
+            try {
+                const response = await fetch("{% url 'todos_get' %}");
+                const data = await response.json();
+                
+                taskList.innerHTML = ''; // Clear current list
+
+                if (data.todos.length === 0) {
+                    taskList.innerHTML = '<li class="list-group-item text-muted">You have no tasks scheduled.</li>';
+                } else {
+                    data.todos.forEach(task => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                        
+                        const taskDate = new Date(task.due_time);
+                        
+                        li.innerHTML = `
+                            <div>
+                                <strong>${task.description}</strong>
+                                <br>
+                                <small>Due: ${taskDate.toLocaleString()}</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${task.id}">Remove</button>
+                        `;
+                        taskList.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to load tasks:", error);
+                taskList.innerHTML = '<li class="list-group-item text-danger">Could not load tasks at this time.</li>';
+            }
+        }
+
+        // Handle form submission to add a new task
+        taskForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const description = document.getElementById('taskDescription').value;
+            const dueTime = document.getElementById('taskDueTime').value;
+
+            try {
+                await fetch("{% url 'todos_add' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ description, due_time: dueTime })
+                });
+                taskForm.reset();
+                loadTasks(); // Refresh the list
+            } catch (error) {
+                console.error("Failed to add task:", error);
+            }
+        });
+
+        // Handle task deletion
+        taskList.addEventListener('click', async function(event) {
+            if (event.target.classList.contains('delete-btn')) {
+                const taskId = event.target.getAttribute('data-id');
+                try {
+                    await fetch(`/api/todos/delete/${taskId}/`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    });
+                    loadTasks(); // Refresh the list
+                } catch (error) {
+                    console.error("Failed to delete task:", error);
+                }
+            }
+        });
+
+        // Initial load of tasks
+        loadTasks();
+    });
+</script>
+
+{% endblock %}

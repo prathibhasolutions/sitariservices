@@ -13,19 +13,25 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 
 # Set debug to False for production
-DEBUG = False
+DEBUG = True
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['13.126.140.26', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
+ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
 
 # Application definition
 INSTALLED_APPS = [
+    'dal',
+    'dal_select2',
+    'admin_auto_filters',
+    'daterangefilter',
+    'rangefilter',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'management',
     'widget_tweaks',
 ]
@@ -38,7 +44,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'management.ip_restriction.RestrictIPMiddleware',
+    'management.ip_restriction.RestrictIPMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
@@ -46,13 +52,14 @@ ROOT_URLCONF = 'project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'management.context_processors.notifications_context', 
             ],
         },
     },
@@ -114,3 +121,7 @@ X_FRAME_OPTIONS = 'DENY'
 # Session security
 SESSION_COOKIE_SECURE = False  # Set to True after SSL setup
 CSRF_COOKIE_SECURE = False     # Set to True after SSL setup
+
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

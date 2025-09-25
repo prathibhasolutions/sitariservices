@@ -1,0 +1,109 @@
+{% extends "admin/change_form.html" %}
+{% load static i18n admin_urls %}
+
+{# 
+This template correctly injects your custom details *after* the main editable form
+by using the 'after_field_sets' block provided by Django's admin.
+#}
+
+{% block after_field_sets %}
+    {# This line ensures that anything the parent template would have shown here still appears #}
+    {{ block.super }}
+
+    <br>
+    {# This is your custom detail view, now placed correctly within the template structure #}
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h4>Application Details: {{ original.application_name }}</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Left Column: Application Details -->
+                <div class="col-md-6">
+                    <p><strong>Application ID:</strong> {{ original.id }}</p>
+                    <div><strong>Assigned Employees & Share:</strong>
+                        <ul class="list-group mt-2">
+                            {% for assignment in assignments %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ assignment.employee.name }}
+                                <span class="badge badge-info badge-pill">₹{{ assignment.commission_amount|floatformat:2 }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item">No employees assigned.</li>
+                            {% endfor %}
+                        </ul>
+                    </div><br>
+                    <p><strong>Customer Name:</strong> {{ original.customer_name }}</p>
+                    <p><strong>Customer Mobile:</strong> {{ original.customer_mobile_number }}</p>
+                    <p><strong>Created On:</strong> {{ original.date_created|date:"l, d F Y" }}</p>
+                    
+                    <p><strong>Expected Completion Date:</strong> 
+                        {% if original.expected_date_of_completion %}
+                            {{ original.expected_date_of_completion|date:"d M Y" }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </p>
+
+                    <!-- Extension History -->
+                    {% if extension_history %}
+                        <div class="mt-3">
+                            <strong>Date Extension History:</strong>
+                            <ul class="list-unstyled mt-2 small">
+                                {% for extension in extension_history %}
+                                    <li class="mb-1">
+                                        <i class="fas fa-history text-muted"></i>
+                                        From <strong>{{ extension.previous_date|date:"d M Y"|default:"(Original)" }}</strong>
+                                        to <strong>{{ extension.new_date|date:"d M Y" }}</strong>
+                                        by {{ extension.extended_by.name }} on {{ extension.timestamp|date:"d M Y" }}.
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <p><strong>Total Commission:</strong> ₹{{ original.total_commission|floatformat:2 }}</p>
+                    <p><strong>Status:</strong> 
+                        <span class="badge {% if original.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
+                            {{ original.approved|yesno:"Approved,Pending Approval" }}
+                        </span>
+                    </p>
+                </div>
+
+                <!-- Right Column: Chat Box Section -->
+                <div class="col-md-6">
+                    {% if is_chat_active %}
+                    <div class="card h-100">
+                        <div class="card-header bg-secondary text-white">
+                            <h5>Collaboration Chat</h5>
+                        </div>
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="chat-box">
+                            {% for msg in chat_messages %}
+                                <div class="mb-3 p-2 rounded border">
+                                    <strong>{{ msg.employee.name }}</strong> 
+                                    <small class="text-muted">({{ msg.timestamp|date:"d M, H:i" }})</small>
+                                    {% if msg.message %}<p class="mb-1 mt-1">{{ msg.message|linebreaksbr }}</p>{% endif %}
+                                    {% if msg.file %}
+                                        <a href="{{ msg.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                            Download: {{ msg.file.name|cut:"chat_files/" }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% empty %}
+                                <p>No chat messages yet.</p>
+                            {% endfor %}
+                        </div>
+                        <div class="card-footer">
+                            <p class="text-muted small">Chat is read-only in the admin panel.</p>
+                        </div>
+                    </div>
+                    {% else %}
+                        <div class="alert alert-info mt-4">Chat is not active for this application.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

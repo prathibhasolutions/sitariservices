@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{# This block adds our custom print button #}
+{% block object-tools-items %}
+  {{ block.super }}
+  <li>
+    <a href="print/?{{ query_string }}" class="addlink" target="_blank">
+      Print Report
+    </a>
+  </li>
+{% endblock %}

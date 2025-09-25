@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Print Attendance Report</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <style>
+        body { font-family: sans-serif; }
+        @media print { .no-print { display: none; } }
+        .report-header { margin-bottom: 1.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 1rem; }
+    </style>
+</head>
+<body onload="window.print();">
+    <div class="container-fluid mt-4">
+        <h3 class="text-center">Attendance Report</h3>
+
+        <!-- NEW: Report Header to display filters -->
+        <div class="report-header mt-4">
+            {% if employee %}
+                <p class="mb-1"><strong>Employee:</strong> {{ employee.name }}</p>
+            {% endif %}
+            
+            {# This block reads the date filters from the URL #}
+            {% with start_date=request.GET.login_time__gte end_date=request.GET.login_time__lte %}
+                {% if start_date or end_date %}
+                    <p class="mb-1"><strong>Date Range:</strong> 
+                        {% if start_date %}From {{ start_date }}{% endif %}
+                        {% if start_date and end_date %} to {% endif %}
+                        {% if end_date %}{{ end_date }}{% endif %}
+                    </p>
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <table class="table table-bordered table-sm">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Session ID</th>
+                    <th>Employee</th>
+                    <th>Login Time</th>
+                    <th>Logout Time</th>
+                    <th>Duration</th>
+                    <th>Logout Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in queryset %}
+                <tr>
+                    <td>{{ session.id }}</td>
+                    <td>{{ session.employee.name }}</td>
+                    <td>{{ session.login_time|date:"d M Y, H:i" }}</td>
+                    <td>
+                        {% if session.logout_time %}
+                            {{ session.logout_time|date:"d M Y, H:i" }}
+                        {% else %}
+                            <span class="text-warning">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {# --- FIX: Use the 'timesince' filter for correct duration --- #}
+                        {% if session.logout_time %}
+                            {{ session.logout_time|timesince:session.login_time }}
+                        {% else %}
+                            <span class="text-warning">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ session.logout_reason|default:"-" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center">No attendance sessions found for this filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        
+        <div class="mt-4 text-right">
+            <h4>
+                Calculated Salary for this Period: 
+                <strong>&#8377;{{ calculated_salary|floatformat:2 }}</strong>
+            </h4>
+        </div>
+        
+    </div>
+</body>
+</html>

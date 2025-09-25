@@ -1,0 +1,96 @@
+{% extends "masteremployee.html" %}
+
+{% block content %}
+<div class="container mt-4 notification-container">
+    <h2 class="mb-4">Your Notifications</h2>
+    <div class="list-group">
+        {% for status in notifications %}
+            <!-- Added notification-card and a conditional class -->
+            <div class="card notification-card {% if not status.is_read %}notification-unread{% else %}notification-read{% endif %}">
+                <div class="card-body px-4 py-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="font-weight-bold text-dark small">
+                            {% if not status.is_read %}
+                                <span class="badge bg-warning text-dark me-2">New</span>
+                            {% endif %}
+                            <span>{{ status.notification.created_at|timesince }} ago</span>
+                        </div>
+                        <div>
+                            {% if not status.is_read %}
+                                <a href="{% url 'mark_notification_as_read' status.pk %}" 
+                                   class="btn btn-success btn-sm text-white fw-semibold shadow-sm">
+                                    Mark as Read
+                                </a>
+                            {% else %}
+                                <span class="text-success fw-bold">
+                                    <i class="fas fa-check-circle me-1"></i>Read
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-body mb-1 fs-5">
+                        {{ status.notification.description }}
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="card mb-3 shadow-sm border-0 bg-light">
+                <div class="card-body text-center text-muted">
+                    You have no notifications.
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+<style>/* --- Enhanced Notification Page Styles --- */
+
+/* Overall container for better spacing */
+.notification-container {
+    max-width: 900px;
+    margin: auto;
+}
+
+/* Card base styles */
+.notification-card {
+    border: none;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+/* --- Styling for UNREAD Notifications --- */
+.notification-unread {
+    /* A modern left border to highlight */
+    border-left: 5px solid #ffc107 !important; 
+    background-color: #fff; /* Keep background clean */
+    box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+}
+
+/* --- Styling for READ Notifications --- */
+.notification-read {
+    background-color: #f8f9fa; /* A subtle gray to make it recede */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+/* Improve the "New" badge */
+.badge.bg-warning {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.4em 0.7em;
+}
+
+/* Improve the "Mark as Read" button */
+.btn-success.btn-sm {
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.25rem 0.75rem;
+    box-shadow: 0 2px 5px rgba(25, 135, 84, 0.3);
+}
+
+/* Make the "Read" checkmark icon more prominent */
+.text-success .fa-check-circle {
+    font-size: 1.1em;
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
