@@ -2,13 +2,20 @@
 {% load static %}
 
 {% block object-tools-items %}
-  {# Keep the default admin buttons (like "Add employee") #}
+  {# This keeps the default admin buttons (like "Add employee") #}
   {{ block.super }}
   
-  {# Add our custom button #}
+  {# This is your existing button for the Attendance Report #}
   <li>
     <a href="attendance-report/" class="addlink">
       Attendance Report
+    </a>
+  </li>
+
+  {# === ADD THIS NEW BUTTON for the Salary Report === #}
+  <li>
+    <a href="salary-report/" class="addlink" style="background-color: #007bff; color: white;">
+      Salary Report
     </a>
   </li>
 {% endblock %}

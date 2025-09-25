@@ -1,0 +1,125 @@
+{% extends "admin/base_site.html" %}
+{% load static humanize %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Employee Salary Report</h1>
+
+    <!-- Filter Form -->
+    <form method="get" id="changelist-search" class="mb-4">
+        <div class="d-flex align-items-center">
+            <div class="form-group mr-3">
+                <label for="employee-select" class="mr-2">Select Employee:</label>
+                <select name="employee" id="employee-select" class="form-control" onchange="this.form.submit()">
+                    <option value="">---------</option>
+                    {% for emp in all_employees %}
+                        <option value="{{ emp.pk }}" {% if selected_employee.pk == emp.pk %}selected{% endif %}>
+                            {{ emp.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group mr-3">
+                <label for="month-select" class="mr-2">Select Month:</label>
+                <input type="month" id="month-select" name="month" value="{{ selected_month_str }}" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">View Report</button>
+        </div>
+    </form>
+
+    {% if selected_employee %}
+        <!-- Display the salary report using the same layout as the employee dashboard -->
+        <div class="row mt-3">
+            <!-- Left Column: Profile -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Profile: {{ selected_employee.name }}</h5>
+                        <!-- Reusing the exact profile table from employee_dashboard.html -->
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped mb-0">
+                                <tbody>
+                                    <tr><th scope="row" style="width: 40%;">Employee Name</th><td>{{ selected_employee.name }}</td></tr>
+                                    <tr><th scope="row">Mobile Number</th><td>{{ selected_employee.mobile_number }}</td></tr>
+                                    <tr><th scope="row">Department</th><td>{{ selected_employee.department.name|default_if_none:"Not set" }}</td></tr>
+                                    <tr><th scope="row">Joining Date</th><td>{{ selected_employee.joining_date|date:"d M Y" }}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Earnings -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Earnings for {{ selected_month_str|date:"F Y" }}</h5>
+                        <!-- Reusing the exact earnings table -->
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <tbody>
+                                    <tr><th scope="row" style="width: 50%;">Attendance-Based Salary</th><td>₹{{ current_month_earnings.attendance_salary|floatformat:0|intcomma }}</td></tr>
+                                    <tr><th scope="row">Application Commissions</th><td>₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}</td></tr>
+                                    <tr><th scope="row">Worksheet Commissions (5%)</th><td>₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-success"><th scope="row">Meetings Bonus</th><td>₹{{ current_month_earnings.meetings_bonus|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-success"><th scope="row">Trainings Bonus</th><td>₹{{ current_month_earnings.trainings_bonus|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-success"><th scope="row">Performance Bonus</th><td>₹{{ current_month_earnings.performance_bonus|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-danger"><th scope="row">Total Deductions</th><td>- ₹{{ current_month_earnings.deduction_amount|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-info"><th scope="row">Total This Month</th><td><strong>₹{{ current_month_earnings.total_earnings|floatformat:0|intcomma }}</strong></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Advances and Meetings -->
+        <div class="row mt-4">
+            <!-- Left Column: Advances -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Advances</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <tbody>
+                                    <tr><th scope="row" style="width: 40%;">Total Outstanding Advance</th><td><strong>₹{{ selected_employee.advances|floatformat:0|intcomma }}</strong></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Right Column: Meetings Attended -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Meetings Attended in {{ selected_month_str|date:"F Y" }}</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <thead><tr><th>Date</th><th>Topic</th><th>Bonus Earned</th></tr></thead>
+                                <tbody>
+                                    {% for attendance in attended_meetings %}
+                                        <tr>
+                                            <td>{{ attendance.meeting.date|date:"d M Y" }}</td>
+                                            <td>{{ attendance.meeting.topic }}</td>
+                                            <td>₹{{ attendance.meeting.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-center text-muted">No meetings attended this month.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <p>Please select an employee and a month to view their salary report.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -213,24 +213,25 @@ class Employee(models.Model):
         return daily_records, round(total_monthly_wage, 2)
 
 
-    def get_current_month_earnings(self):
+    def get_current_month_earnings(self, year=None, month=None):
         """
-        Calculates all earnings and deductions for the current month.
-        This includes attendance salary, commissions from applications and worksheets,
-        monthly bonuses, and any deductions.
+        Calculates all earnings and deductions for a given month/year, or for the
+        current month if year/month are not provided. Compatible for both dashboard
+        and admin report use.
         """
         from .models import ApplicationAssignment, Worksheet, MonthlyDeduction, MonthlyBonus
         from django.db.models import Sum
         from django.utils import timezone
         from decimal import Decimal
 
-        now = timezone.now()
-        current_year = now.year
-        current_month = now.month
+        # Defaults to current month if arguments are missing (DASHBOARD expects this)
+        if year is None or month is None:
+            now = timezone.now()
+            year = now.year
+            month = now.month
 
         # 1. Get the accurate attendance-based salary
-        # This calls your other robust method to get the salary based on hours worked.
-        _, attendance_salary_from_summary = self.get_daily_attendance_summary(current_year, current_month)
+        _, attendance_salary_from_summary = self.get_daily_attendance_summary(year, month)
 
         # 2. Initialize the dictionary to hold all financial data
         earnings = {
@@ -245,52 +246,49 @@ class Employee(models.Model):
             'total_earnings': Decimal('0.00'),
         }
 
-        # 3. Calculate Application Commissions (Existing Functionality)
+        # 3. Calculate Application Commissions
         application_commissions = ApplicationAssignment.objects.filter(
             employee=self,
             application__approved=True,
-            application__date_created__year=current_year,
-            application__date_created__month=current_month
+            application__date_created__year=year,
+            application__date_created__month=month
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
         earnings['application_commissions'] = application_commissions
 
-        # 4. Calculate Worksheet Commissions (Existing Functionality)
+        # 4. Calculate Worksheet Commissions
         worksheet_sum = self.worksheet_entries.filter(
-            date__year=current_year,
-            date__month=current_month,
-            approved=True  # Assuming you only commission approved worksheets
+            date__year=year,
+            date__month=month,
+            approved=True
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        worksheet_commission = worksheet_sum * Decimal('0.05')
-        earnings['worksheet_commissions'] = worksheet_commission
+        earnings['worksheet_commissions'] = worksheet_sum * Decimal('0.05')
 
         # 5. Fetch Monthly Bonuses from the new model
         try:
-            bonus_obj = self.monthly_bonuses.get(year=current_year, month=current_month)
+            bonus_obj = self.monthly_bonuses.get(year=year, month=month)
             earnings['meetings_bonus'] = bonus_obj.meetings_bonus
             earnings['trainings_bonus'] = bonus_obj.trainings_bonus
             earnings['performance_bonus'] = bonus_obj.performance_bonus
         except MonthlyBonus.DoesNotExist:
-            # It's okay if no bonus entry exists for the month. Defaults will be 0.
             pass
 
-        # 6. Calculate Deductions (Existing Functionality)
-        deductions_qs = MonthlyDeduction.objects.filter(employee=self, month=current_month, year=current_year)
+        # 6. Calculate Deductions
+        deductions_qs = MonthlyDeduction.objects.filter(employee=self, year=year, month=month)
         total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
+
         earnings['monthly_deductions_list'] = deductions_qs
         earnings['deduction_amount'] = total_deduction_amount
 
         # 7. Calculate Final Total Earnings
         total_before_deduction = (
-            earnings['attendance_salary'] + 
-            earnings['application_commissions'] + 
+            earnings['attendance_salary'] +
+            earnings['application_commissions'] +
             earnings['worksheet_commissions'] +
             earnings['meetings_bonus'] +
             earnings['trainings_bonus'] +
             earnings['performance_bonus']
         )
-        
+
         earnings['total_earnings'] = total_before_deduction - earnings['deduction_amount']
 
         return earnings

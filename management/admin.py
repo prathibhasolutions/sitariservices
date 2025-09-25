@@ -58,11 +58,10 @@ class EmployeeAdmin(admin.ModelAdmin):
     list_display = ['employee_id', 'name', 'mobile_number', 'department', 'display_status']
     list_filter = ['department']
     
-    # --- 2. Custom Template for Attendance Report Button (Unchanged) ---
+    # --- 2. Custom Template for Buttons (Unchanged) ---
     change_list_template = "admin/employee_changelist.html"
     
-    # --- 3. CORRECTED Fieldsets to manage all fields ---
-    # This now includes 'assigned_links', removing the need for a custom form.
+    # --- 3. Fieldsets for Employee Edit Page (Unchanged) ---
     fieldsets = (
         ('Personal Information', {
             'fields': ('name', 'mobile_number', 'department', 'joining_date')
@@ -77,7 +76,6 @@ class EmployeeAdmin(admin.ModelAdmin):
             'fields': ('advances',),
             'description': 'Enter the total outstanding advance amount for this employee.'
         }),
-        # --- The assigned_links field is now handled here ---
         ('Assigned Links', {
             'fields': ('assigned_links',),
         }),
@@ -87,28 +85,36 @@ class EmployeeAdmin(admin.ModelAdmin):
         }),
     )
 
-    # --- 4. User-friendly widget for ManyToMany field ---
-    # This makes selecting links much easier.
+    # --- 4. User-friendly widget (Unchanged) ---
     filter_horizontal = ('assigned_links',)
 
-    # --- 5. Your existing custom methods (Unchanged) ---
+    # --- 5. Custom Methods (Unchanged) ---
     def display_status(self, obj):
         if obj.is_active():
             return format_html('<span style="color: green;">&#128994; Active</span>')
         return format_html('<span style="color: red;">&#128308; Inactive</span>')
     display_status.short_description = 'Status'
 
+    # --- 6. MODIFIED: Add the new Salary Report URL ---
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
+            # Your existing attendance report URL
             path(
                 'attendance-report/',
                 self.admin_site.admin_view(self.attendance_report_view),
                 name='employee-attendance-report'
             ),
+            # --- ADD THIS NEW URL ---
+            path(
+                'salary-report/',
+                self.admin_site.admin_view(self.salary_report_view),
+                name='employee-salary-report'
+            ),
         ]
         return custom_urls + urls
 
+    # --- 7. Existing Attendance Report View (Unchanged) ---
     def attendance_report_view(self, request):
         employee_id = request.GET.get('employee_id')
         month_str = request.GET.get('month')
@@ -121,6 +127,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             except (Employee.DoesNotExist, ValueError):
                 pass
         context = {
+            **self.admin_site.each_context(request),
             'title': 'Monthly Attendance Report',
             'all_employees': Employee.objects.all(),
             'selected_employee': employee,
@@ -129,15 +136,61 @@ class EmployeeAdmin(admin.ModelAdmin):
             'total_monthly_wage': total_wage,
         }
         return render(request, 'admin/attendance_report.html', context)
-    
+
+    # --- 8. ADD THIS ENTIRE NEW VIEW for the Salary Report ---
+    def salary_report_view(self, request):
+        employee_id = request.GET.get('employee')
+        month_str = request.GET.get('month') # Expects "YYYY-MM"
+
+        selected_employee = None
+        earnings_data = {}
+        attended_meetings = []
+        all_employees = Employee.objects.all().order_by('name')
+
+        if month_str:
+            try:
+                dt = datetime.strptime(month_str, "%Y-%m")
+                year, month = dt.year, dt.month
+            except ValueError:
+                now = timezone.now()
+                year, month = now.year, now.month
+        else:
+            now = timezone.now()
+            year, month = now.year, now.month
+        
+        if employee_id:
+            try:
+                selected_employee = Employee.objects.get(pk=employee_id)
+                # This calls the updated method that accepts year and month
+                earnings_data = selected_employee.get_current_month_earnings(year, month)
+                
+                attended_meetings = MeetingAttendance.objects.filter(
+                    employee=selected_employee,
+                    attended=True,
+                    meeting__date__year=year,
+                    meeting__date__month=month
+                ).order_by('-meeting__date')
+            except Employee.DoesNotExist:
+                pass
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Employee Salary Report',
+            'all_employees': all_employees,
+            'selected_employee': selected_employee,
+            'selected_month_str': f"{year}-{month:02d}",
+            'current_month_earnings': earnings_data,
+            'attended_meetings': attended_meetings,
+        }
+        return render(request, 'admin/salary_report.html', context)
+
+    # --- 9. Existing changelist_view (Unchanged) ---
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context['report_url'] = 'attendance-report/'
         return super().changelist_view(request, extra_context=extra_context)
     
-    # --- The custom change_view and change_form_template have been REMOVED ---
-    # They are no longer needed and were the source of the problem.
-
+    
 
 # --- Don't forget to register the MonthlyBonus admin ---
 @admin.register(MonthlyBonus)
