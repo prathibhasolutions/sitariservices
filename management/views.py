@@ -243,6 +243,13 @@ def calculate_employee_monthly_commission(employee, year, month):
 from .models import Employee, ApplicationAssignment 
 from .forms import EmployeeUploadForm
 
+# Make sure these models are imported at the top of your views.py
+from .models import Employee, MeetingAttendance
+from .forms import EmployeeUploadForm
+from django.utils import timezone
+from django.shortcuts import render, redirect
+from django.contrib import messages
+
 def employee_dashboard(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
@@ -254,7 +261,7 @@ def employee_dashboard(request):
         request.session.flush()
         return redirect('login')
 
-    # --- OTP and Session Management ---
+    # --- OTP and Session Management (Unchanged) ---
     otp_verified = request.session.get('otp_verified', False)
     show_sensitive = otp_verified
     otp_sent = request.session.get('otp_sent_flag', False)
@@ -282,11 +289,21 @@ def employee_dashboard(request):
                 request.session['otp_sent_flag'] = True # Keep the form visible
             return redirect('employee_dashboard')
 
-    # --- Data for Template ---
+    # --- Data for Template (Unchanged) ---
     earnings_data = {}
     if show_sensitive:
         earnings_data = employee.get_current_month_earnings()
 
+    # --- ADDITION: Fetch meetings attended this month ---
+    now = timezone.now()
+    attended_meetings = MeetingAttendance.objects.filter(
+        employee=employee,
+        attended=True,
+        meeting__date__year=now.year,
+        meeting__date__month=now.month
+    ).select_related('meeting').order_by('-meeting__date')
+
+    # --- Update the context to include the new meeting data ---
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
@@ -294,13 +311,13 @@ def employee_dashboard(request):
         'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
         'upload_form': EmployeeUploadForm(),
+        'attended_meetings': attended_meetings,  # Pass the new data to the template
     }
 
-    # --- Session Cleanup for next visit to the page ---
+    # --- Session Cleanup (Unchanged) ---
     if 'otp_verified' in request.session:
         del request.session['otp_verified']
     if 'otp_sent_flag' in request.session:
-        # We only delete otp_sent_flag if OTP was successfully verified
         if not 'emp_otp' in request.session:
              del request.session['otp_sent_flag']
 

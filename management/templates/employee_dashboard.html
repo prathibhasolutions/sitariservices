@@ -167,10 +167,11 @@
         </div>
     </div>
 
-    <!-- === ADDED CARD for Advances === -->
+    <!-- === CORRECTED: Bottom Row for Advances and Meetings (side-by-side) === -->
     <div class="row mt-4">
-        <div class="col-lg-6">
-            <div class="card shadow-sm">
+        <!-- Left Column: Advances -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <h5 class="card-title">Advances</h5>
                     <div class="table-responsive">
@@ -187,8 +188,45 @@
                 </div>
             </div>
         </div>
+        <!-- Right Column: Meetings Attended -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Meetings Attended This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Topic</th>
+                                    <th>Bonus Earned</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for attendance in attended_meetings %}
+                                        <tr>
+                                            <td>{{ attendance.meeting.date|date:"d M Y" }}</td>
+                                            <td>{{ attendance.meeting.topic }}</td>
+                                            <td>₹{{ attendance.meeting.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="3" class="text-muted text-center">No meetings attended this month.</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-muted text-center">Locked</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <!-- === END OF ADDED CARD === -->
 
 </main>
 {% endblock %}

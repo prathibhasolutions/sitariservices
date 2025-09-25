@@ -15,6 +15,8 @@ from datetime import datetime
 # Import all your models
 from .models import (
     Employee,
+    Meeting, 
+    MeetingAttendance,
     MonthlyBonus,
     Department,
     BreakSession,
@@ -376,7 +378,65 @@ class ApplicationAdmin(admin.ModelAdmin):
             request, object_id, form_url, extra_context=extra_context,
         )
 
-    
+from decimal import Decimal
+
+class MeetingAttendanceInline(admin.TabularInline):
+    model = MeetingAttendance
+    extra = 1  # Start with one empty slot for adding an employee
+    autocomplete_fields = ['employee'] # Makes selecting employees easy
+
+@admin.register(Meeting)
+class MeetingAdmin(admin.ModelAdmin):
+    list_display = ('date', 'topic', 'amount')
+    list_filter = ('date',)
+    search_fields = ('topic',)
+    inlines = [MeetingAttendanceInline]
+
+    def save_formset(self, request, form, formset, change):
+        """
+        This is the core logic. It runs after you save the meeting attendance.
+        It automatically finds or creates the MonthlyBonus record for each employee
+        and updates their meetings_bonus.
+        """
+        super().save_formset(request, form, formset, change)
+
+        for f in formset.forms:
+            if f.cleaned_data:
+                # Get the meeting instance and the amount
+                meeting = f.cleaned_data['meeting']
+                meeting_amount = meeting.amount
+                
+                # Get the employee and the date of the meeting
+                employee = f.cleaned_data['employee']
+                year = meeting.date.year
+                month = meeting.date.month
+
+                # Find or create the MonthlyBonus record for that employee for that month
+                bonus_obj, created = MonthlyBonus.objects.get_or_create(
+                    employee=employee,
+                    year=year,
+                    month=month
+                )
+
+                # Recalculate the total meeting bonus for that month
+                total_bonus = Decimal('0.00')
+                attended_meetings = MeetingAttendance.objects.filter(
+                    employee=employee, 
+                    attended=True,
+                    meeting__date__year=year,
+                    meeting__date__month=month
+                )
+                
+                for attendance in attended_meetings:
+                    total_bonus += attendance.meeting.amount
+                
+                # Update the bonus object with the new total and save it
+                bonus_obj.meetings_bonus = total_bonus
+                bonus_obj.save()
+        
+        self.message_user(request, "Meeting attendance saved and monthly bonuses have been updated.")
+
+
 # --- Register All Other Models with Default Admin ---
 admin.site.register(Department)
 admin.site.register(BreakSession)

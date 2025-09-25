@@ -680,3 +680,37 @@ class MonthlyBonus(models.Model):
 
     def __str__(self):
         return f"Bonuses for {self.employee.name} - {self.month}/{self.year}"
+    
+
+# --- ADD THIS NEW MODEL for Meetings ---
+class Meeting(models.Model):
+    date = models.DateField(default=timezone.now)
+    topic = models.CharField(max_length=255, help_text="e.g., Weekly Sync, Project Kick-off")
+    amount = models.DecimalField(
+        "Bonus Amount",
+        max_digits=10, 
+        decimal_places=2,
+        help_text="Amount to be paid to each employee who attends."
+    )
+    attendees = models.ManyToManyField(
+        Employee,
+        through='MeetingAttendance',  # This specifies the intermediate model
+        related_name='meetings_attended'
+    )
+
+    def __str__(self):
+        return f"Meeting on {self.date} - {self.topic}"
+
+# --- ADD THIS NEW 'THROUGH' MODEL for Attendance Tracking ---
+class MeetingAttendance(models.Model):
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    attended = models.BooleanField(default=False)
+
+    class Meta:
+        # Ensures an employee can't be listed twice for the same meeting
+        unique_together = ('meeting', 'employee')
+
+    def __str__(self):
+        status = "Attended" if self.attended else "Absent"
+        return f"{self.employee.name} - {self.meeting.topic} ({status})"
