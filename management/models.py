@@ -712,3 +712,4 @@ class MeetingAttendance(models.Model):
     def __str__(self):
         status = "Attended" if self.attended else "Absent"
         return f"{self.employee.name} - {self.meeting.topic} ({status})"
+

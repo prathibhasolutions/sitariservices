@@ -490,6 +490,7 @@ class MeetingAdmin(admin.ModelAdmin):
         self.message_user(request, "Meeting attendance saved and monthly bonuses have been updated.")
 
 
+
 # --- Register All Other Models with Default Admin ---
 admin.site.register(Department)
 admin.site.register(BreakSession)
