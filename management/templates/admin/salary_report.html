@@ -1,9 +1,55 @@
 {% extends "admin/base_site.html" %}
 {% load static humanize %}
 
+{% block extrahead %}
+  {# This block adds custom CSS specifically for printing #}
+  {{ block.super }}
+  <style>
+    @media print {
+      /* Hides elements that should not be on the printed paper */
+      #header, #nav-sidebar, #changelist-search, footer, .object-tools a, .btn {
+        display: none !important;
+      }
+      
+      /* Ensures the main content takes up the full page */
+      #content-main {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+      }
+      
+      /* Removes shadows and adds a simple border to cards for a cleaner look */
+      .card {
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+        page-break-inside: avoid; /* Prevents cards from being split across pages */
+      }
+      
+      /* Standardizes table appearance for printing */
+      table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+      }
+      th, td {
+        border: 1px solid #ccc !important;
+        padding: 8px !important;
+        font-size: 10pt !important;
+      }
+      
+      h1, h3, h5 {
+        color: #000 !important;
+      }
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
 <div id="content-main">
-    <h1>Employee Salary Report</h1>
+    
+    {# Clear header for the report #}
+    {% if selected_employee %}
+        <h3>Report for: {{ selected_employee.name }} | Month: {{ selected_month_str }}</h3>
+    {% endif %}
 
     <!-- Filter Form -->
     <form method="get" id="changelist-search" class="mb-4">
@@ -24,38 +70,39 @@
                 <input type="month" id="month-select" name="month" value="{{ selected_month_str }}" class="form-control">
             </div>
             <button type="submit" class="btn btn-primary">View Report</button>
+            
+            {% if selected_employee %}
+                <button type="button" onclick="window.print();" class="btn btn-secondary ml-3">Print Report</button>
+            {% endif %}
         </div>
     </form>
 
     {% if selected_employee %}
-        <!-- Display the salary report using the same layout as the employee dashboard -->
         <div class="row mt-3">
-            <!-- Left Column: Profile -->
             <div class="col-lg-6 mb-4">
                 <div class="card h-100 shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title mb-4">Profile: {{ selected_employee.name }}</h5>
-                        <!-- Reusing the exact profile table from employee_dashboard.html -->
+                        <h5 class="card-title mb-4">Profile Details</h5>
                         <div class="table-responsive">
                             <table class="table table-bordered table-striped mb-0">
                                 <tbody>
                                     <tr><th scope="row" style="width: 40%;">Employee Name</th><td>{{ selected_employee.name }}</td></tr>
                                     <tr><th scope="row">Mobile Number</th><td>{{ selected_employee.mobile_number }}</td></tr>
                                     <tr><th scope="row">Department</th><td>{{ selected_employee.department.name|default_if_none:"Not set" }}</td></tr>
-                                    <tr><th scope="row">Joining Date</th><td>{{ selected_employee.joining_date|date:"d M Y" }}</td></tr>
+                                    
+                                    {# === THIS IS THE ONLY LINE THAT WAS CHANGED === #}
+                                    <tr><th scope="row">Salary Month</th><td>{{ selected_month_str}}</td></tr>
+                                    
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Right Column: Earnings -->
             <div class="col-lg-6 mb-4">
                 <div class="card h-100 shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title mb-4">Earnings for {{ selected_month_str|date:"F Y" }}</h5>
-                        <!-- Reusing the exact earnings table -->
+                        <h5 class="card-title mb-4">Earnings Breakdown</h5>
                         <div class="table-responsive">
                             <table class="table table-bordered mb-0">
                                 <tbody>
@@ -74,10 +121,7 @@
                 </div>
             </div>
         </div>
-
-        <!-- Bottom Row: Advances and Meetings -->
         <div class="row mt-4">
-            <!-- Left Column: Advances -->
             <div class="col-lg-6 mb-4">
                 <div class="card h-100 shadow-sm">
                     <div class="card-body">
@@ -92,23 +136,22 @@
                     </div>
                 </div>
             </div>
-            <!-- Right Column: Meetings Attended -->
             <div class="col-lg-6 mb-4">
                 <div class="card h-100 shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Meetings Attended in {{ selected_month_str|date:"F Y" }}</h5>
+                        <h5 class="card-title">Meetings Attended</h5>
                         <div class="table-responsive">
                             <table class="table table-bordered mb-0">
                                 <thead><tr><th>Date</th><th>Topic</th><th>Bonus Earned</th></tr></thead>
                                 <tbody>
                                     {% for attendance in attended_meetings %}
-                                        <tr>
-                                            <td>{{ attendance.meeting.date|date:"d M Y" }}</td>
-                                            <td>{{ attendance.meeting.topic }}</td>
-                                            <td>₹{{ attendance.meeting.amount|floatformat:0|intcomma }}</td>
-                                        </tr>
+                                    <tr>
+                                        <td>{{ attendance.meeting.date|date:"d M Y" }}</td>
+                                        <td>{{ attendance.meeting.topic }}</td>
+                                        <td>₹{{ attendance.meeting.amount|floatformat:0|intcomma }}</td>
+                                    </tr>
                                     {% empty %}
-                                        <tr><td colspan="3" class="text-center text-muted">No meetings attended this month.</td></tr>
+                                    <tr><td colspan="3" class="text-center text-muted">No meetings attended this month.</td></tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
@@ -117,7 +160,6 @@
                 </div>
             </div>
         </div>
-
     {% else %}
         <p>Please select an employee and a month to view their salary report.</p>
     {% endif %}

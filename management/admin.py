@@ -115,30 +115,79 @@ class EmployeeAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     # --- 7. Existing Attendance Report View (Unchanged) ---
+    # Make sure you have this import at the top of your admin.py file
+# Make sure you have this import at the top of your admin.py file
+    from datetime import datetime
+
+    # ... inside your EmployeeAdmin class
+
     def attendance_report_view(self, request):
         employee_id = request.GET.get('employee_id')
         month_str = request.GET.get('month')
         employee, daily_summary, total_wage = None, [], 0
+        working_day_count = 0  # Initialize the counter
+
         if employee_id and month_str:
             try:
                 employee = Employee.objects.get(pk=employee_id)
                 year, month = map(int, month_str.split('-'))
-                daily_summary, total_wage = employee.get_daily_attendance_summary(year, month)
+                
+                # This method returns a list of DICTIONARIES
+                daily_summary_dicts, total_wage = employee.get_daily_attendance_summary(year, month)
+
+                # --- START: FINAL Corrected Logic ---
+                
+                # Use a default start time if not set for the employee
+                employee_start_time = employee.working_start_time or datetime.strptime("23:59", "%H:%M").time()
+
+                processed_summary = []
+                for record_dict in daily_summary_dicts:
+                    # Get the login time from the dictionary
+                    login_datetime = record_dict.get('login_time')
+                    
+                    # Initialize the remark
+                    record_dict['remark'] = ''
+                    
+                    # Check for late login only if a login time exists
+                    if login_datetime:
+                        # --- THE FIX: Extract just the .time() component for comparison ---
+                        login_time_only = login_datetime.time()
+                        if login_time_only > employee_start_time:
+                            record_dict['remark'] = 'Late Login'
+                    
+                    # Increment the counter if both login and logout times exist
+                    if record_dict.get('login_time') and record_dict.get('logout_time'):
+                        working_day_count += 1
+                    
+                    processed_summary.append(record_dict)
+                
+                # Use the newly processed list for the context
+                daily_summary = processed_summary
+                
+                # --- END: Corrected Logic ---
+                        
             except (Employee.DoesNotExist, ValueError):
                 pass
+                
         context = {
             **self.admin_site.each_context(request),
             'title': 'Monthly Attendance Report',
             'all_employees': Employee.objects.all(),
             'selected_employee': employee,
             'selected_month_str': month_str,
-            'daily_summary_records': daily_summary,
+            'daily_summary_records': daily_summary, # This now contains the 'remark' key
             'total_monthly_wage': total_wage,
+            'working_day_count': working_day_count,
         }
         return render(request, 'admin/attendance_report.html', context)
 
-    # --- 8. ADD THIS ENTIRE NEW VIEW for the Salary Report ---
+
+  
+
     def salary_report_view(self, request):
+         # --- DEBUGGING: Print the raw GET parameters from the URL ---
+        print(f"--- DEBUG: Received employee_id = {request.GET.get('employee')} ---")
+        print(f"--- DEBUG: Received month_str = {request.GET.get('month')} ---")
         employee_id = request.GET.get('employee')
         month_str = request.GET.get('month') # Expects "YYYY-MM"
 
@@ -158,12 +207,14 @@ class EmployeeAdmin(admin.ModelAdmin):
             now = timezone.now()
             year, month = now.year, now.month
         
+        # --- CORRECTION: Create a proper date object for the template ---
+        from datetime import date
+        selected_date_object = date(year, month, 1)
+        
         if employee_id:
             try:
                 selected_employee = Employee.objects.get(pk=employee_id)
-                # This calls the updated method that accepts year and month
                 earnings_data = selected_employee.get_current_month_earnings(year, month)
-                
                 attended_meetings = MeetingAttendance.objects.filter(
                     employee=selected_employee,
                     attended=True,
@@ -178,11 +229,15 @@ class EmployeeAdmin(admin.ModelAdmin):
             'title': 'Employee Salary Report',
             'all_employees': all_employees,
             'selected_employee': selected_employee,
-            'selected_month_str': f"{year}-{month:02d}",
+            'selected_month_str': f"{year}-{month:02d}", # Keep this string for the input field
+            'selected_date': selected_date_object,       # --- ADD THIS for displaying the date ---
             'current_month_earnings': earnings_data,
             'attended_meetings': attended_meetings,
         }
+        print(f"--- DEBUG: Context['selected_employee'] = {context.get('selected_employee')} ---")
+        print(f"--- DEBUG: Context['selected_date'] = {context.get('selected_date')} ---")
         return render(request, 'admin/salary_report.html', context)
+
 
     # --- 9. Existing changelist_view (Unchanged) ---
     def changelist_view(self, request, extra_context=None):
