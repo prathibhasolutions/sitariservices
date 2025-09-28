@@ -537,44 +537,6 @@ setInterval(function() {
 <!-- ============================================================================ -->
 <!-- ======================= END OF BRUTE-FORCE REMINDER ====================== -->
 <!-- ============================================================================ -->
-<!-- In your main employee-facing template -->
-
-<!-- In your main employee-facing template (e.g., employee_dashboard.html) -->
-
-<script>
-    function triggerAutoLogoutCheck() {
-        console.log("--> [JS] Pinging server for auto-logout check...");
-
-        fetch("{% url 'auto_logout_check' %}", {
-            method: 'GET', // Explicitly set the method
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest' // Standard header for AJAX requests
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                // If the server responded with an error (e.g., 404, 500)
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log("<-- [JS] Auto-logout check complete. Server response:", data);
-        })
-        .catch(error => {
-            console.error("!!! [JS] Error during auto-logout check:", error);
-        });
-    }
-
-    // Run the check immediately on page load for testing
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("Page loaded. Performing initial auto-logout check.");
-        triggerAutoLogoutCheck();
-    });
-
-    // Then, run it every 5 minutes
-    setInterval(triggerAutoLogoutCheck, 30000); 
-</script>
 
 
 

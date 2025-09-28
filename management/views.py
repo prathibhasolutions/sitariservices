@@ -107,64 +107,6 @@ def login_with_otp(request):
 
 
 
-from django.http import JsonResponse
-from django.utils import timezone
-from datetime import datetime
-import pytz # Make sure pytz is installed: pip install pytz
-from .models import Employee, AttendanceSession, BreakSession
-
-def auto_logout_check(request):
-    """
-    This view is called by JavaScript to find ALL active sessions that should be
-    closed based on each employee's individual working_end_time, using correct
-    time zone comparisons.
-    """
-    
-    # 1. Define your local time zone and get the current local time
-    local_tz = pytz.timezone("Asia/Kolkata")
-    now_local = timezone.now().astimezone(local_tz)
-
-    print(f"\n--- Running auto_logout_check at: {now_local.strftime('%Y-%m-%d %H:%M:%S %Z')} ---")
-
-    # 2. Directly query for sessions that need to be closed.
-    # This single query finds all active sessions where the employee's shift has ended.
-    sessions_to_logout = AttendanceSession.objects.filter(
-        logout_time__isnull=True,
-        session_closed=False,
-        employee__working_end_time__lte=now_local.time() # Filter based on employee's end time
-    )
-    
-    logout_count = sessions_to_logout.count()
-    print(f"Found {logout_count} session(s) that need to be auto-logged out.")
-
-    # 3. Loop through ONLY the sessions that matched and close them.
-    for session in sessions_to_logout:
-        employee = session.employee
-        
-        # Combine today's local date with the employee's end time to create the exact logout moment.
-        end_of_day_aware = local_tz.localize(
-            datetime.combine(now_local.date(), employee.working_end_time)
-        )
-        
-        print(f"--> Logging out {employee.name}. Shift ended at {employee.working_end_time.strftime('%H:%M:%S')}")
-        
-        # Log them out at their exact shift end time
-        session.logout_time = end_of_day_aware 
-        session.logout_reason = "End of Day (Auto)"
-        session.session_closed = True
-        session.save()
-
-        # Create the corresponding break session
-        BreakSession.objects.create(
-            employee=employee,
-            start_time=end_of_day_aware,
-            logout_reason="Inactive - After Hours",
-        )
-
-    print(f"--- Finished auto_logout_check. Logged out {logout_count} user(s). ---\n")
-    return JsonResponse({'status': 'ok', 'logged_out_count': logout_count})
-
-
 def change_password_request(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
