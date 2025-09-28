@@ -508,15 +508,12 @@ class Worksheet(models.Model):
     payment = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     department_name = models.CharField(max_length=50, editable=False)
-    
-    # NEW: Approval status field
     approved = models.BooleanField(default=False)
 
     # Department-Specific Fields (all optional)
     token_no = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=150, blank=True, null=True)
     customer_mobile = models.CharField(max_length=15, blank=True, null=True)
-
     service = models.CharField(max_length=200, blank=True, null=True)
     certificate_number = models.CharField(max_length=100, blank=True, null=True)
     transaction_num = models.CharField("Transaction Number", max_length=100, blank=True, null=True)
@@ -525,6 +522,9 @@ class Worksheet(models.Model):
     application_no = models.CharField("Application No.", max_length=100, blank=True, null=True)
     status = models.CharField(max_length=100, blank=True, null=True)
     particulars = models.CharField(max_length=255, blank=True, null=True)
+    
+    # NEW field for 'Notary and Bonds'
+    bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
 
     class Meta:
         ordering = ['-date']
@@ -713,3 +713,33 @@ class MeetingAttendance(models.Model):
         status = "Attended" if self.attended else "Absent"
         return f"{self.employee.name} - {self.meeting.topic} ({status})"
 
+# --- NEW MODEL FOR RESOURCE REPAIR CHECKLIST ---
+class ResourceRepairReport(models.Model):
+    """Stores the daily resource condition report submitted by an employee."""
+    STATUS_CHOICES = [
+        ('OK', 'OK'),
+        ('Repair', 'Needs Repair')
+    ]
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='repair_reports')
+    date = models.DateField(default=timezone.now)
+    
+    monitor_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    cpu_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    keyboard_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    mouse_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    cables_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    printer_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    bike_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    
+    remarks = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-date', 'employee']
+        # This constraint ensures an employee can only submit one report per day
+        constraints = [
+            models.UniqueConstraint(fields=['employee', 'date'], name='unique_daily_report_per_employee')
+        ]
+
+    def __str__(self):
+        return f"Repair Report for {self.employee.name} on {self.date}"

@@ -14,6 +14,7 @@ ParticularFormSet = inlineformset_factory(
 )
 
 
+from django import forms
 from .models import Worksheet
 
 class MeesevaWorksheetForm(forms.ModelForm):
@@ -31,30 +32,57 @@ class BhuBharathiWorksheetForm(forms.ModelForm):
         model = Worksheet
         fields = ['token_no', 'customer_name',  'login_mobile_no', 'application_no', 'status','payment',  'amount']
 
-class XeroxWorksheetForm(forms.ModelForm):
+# RENAMED from XeroxWorksheetForm
+class FormsWorksheetForm(forms.ModelForm):
     class Meta:
         model = Worksheet
         fields = ['particulars', 'amount']
 
+# NEW form for the new 'Xerox' department (without 'particulars')
+class XeroxWorksheetForm(forms.ModelForm):
+    class Meta:
+        model = Worksheet
+        fields = ['amount']
 
-# In your forms.py file
+# NEW form for 'Notary and Bonds' department
+class NotaryAndBondsWorksheetForm(forms.ModelForm):
+    class Meta:
+        model = Worksheet
+        fields = ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount']
 
-from django import forms
-from .models import Worksheet
-
-# ... (your other forms like MeesevaWorksheetForm are here) ...
-
-# NEW: Create a form specifically for editing the certificate number
+# Form specifically for editing the certificate number
 class WorksheetEntryEditForm(forms.ModelForm):
     class Meta:
         model = Worksheet
-        # This is the key: only include the fields you want to be editable
         fields = ['certificate_number']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Optional: Add Bootstrap class for styling
         self.fields['certificate_number'].widget.attrs.update({'class': 'form-control'})
+
+
+from django import forms
+from .models import Worksheet, ResourceRepairReport
+
+
+# --- NEW FORM FOR RESOURCE REPAIR CHECKLIST ---
+class ResourceRepairForm(forms.ModelForm):
+    class Meta:
+        model = ResourceRepairReport
+        fields = [
+            'monitor_status', 'cpu_status', 'keyboard_status', 'mouse_status',
+            'cables_status', 'printer_status', 'bike_status', 'remarks'
+        ]
+        widgets = {
+            'monitor_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'cpu_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'keyboard_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'mouse_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'cables_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'printer_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'bike_status': forms.RadioSelect(attrs={'class': 'form-check-inline'}),
+            'remarks': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Any additional details...'}),
+        }
 
 
 

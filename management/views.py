@@ -693,7 +693,17 @@ def assigned_links_view(request):
 
 
 
-from django.db.models import Q # Make sure to import Q for complex lookups
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.db.models import Sum, Q
+from django.utils import timezone
+from .models import Employee, Worksheet, Department, ResourceRepairReport
+from .forms import (
+    MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, 
+    FormsWorksheetForm, XeroxWorksheetForm, NotaryAndBondsWorksheetForm, 
+    WorksheetEntryEditForm, ResourceRepairForm
+)
+
 
 @require_employee
 def worksheet_view(request, employee):
@@ -702,53 +712,81 @@ def worksheet_view(request, employee):
         messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
         return redirect('employee_dashboard')
 
+    # --- Logic for the primary Worksheet Form ---
     form_map = {
         'Mee Seva': MeesevaWorksheetForm,
         'Online Hub': MeesevaWorksheetForm,
         'Aadhaar': AadharWorksheetForm,
         'Bhu Bharathi': BhuBharathiWorksheetForm,
-        'xerox': XeroxWorksheetForm,
+        'Forms': FormsWorksheetForm,       # RENAMED from 'xerox'
+        'Xerox': XeroxWorksheetForm,       # NEW 'Xerox' department
+        'Notary and Bonds': NotaryAndBondsWorksheetForm, # NEW 'Notary and Bonds' department
     }
     WorksheetForm = form_map.get(department.name)
+    worksheet_form = WorksheetForm() # Initialize for GET request
 
-    if not WorksheetForm:
-        messages.error(request, f"No worksheet available for the '{department.name}' department.")
-        return redirect('employee_dashboard')
-
-    if request.method == 'POST':
-        form = WorksheetForm(request.POST)
-        if form.is_valid():
-            worksheet_entry = form.save(commit=False)
-            worksheet_entry.employee = employee
-            worksheet_entry.department_name = department.name
-            worksheet_entry.save()
-            messages.success(request, "Worksheet entry added successfully.")
-            return redirect('worksheet')
-        else:
-            messages.error(request, "Please correct the errors below.")
-    else:
-        form = WorksheetForm()
-
+    # --- Logic for the new Resource Repair Form ---
     today = timezone.now().date()
+    repair_form = None
+    # Check if a report for the current employee and date already exists
+    todays_repair_report = ResourceRepairReport.objects.filter(employee=employee, date=today).first()
     
-    # --- Today's Entries with DUAL totals ---
+    # Only create a form instance if a report for today doesn't exist yet
+    if not todays_repair_report:
+        repair_form = ResourceRepairForm()
+
+    # --- Combined Form Handling on POST request ---
+    if request.method == 'POST':
+        # Use a hidden input to determine which form was submitted
+        form_type = request.POST.get('form_type')
+
+        # Handle the Worksheet Entry submission
+        if form_type == 'worksheet_entry' and WorksheetForm:
+            worksheet_form = WorksheetForm(request.POST)
+            if worksheet_form.is_valid():
+                entry = worksheet_form.save(commit=False)
+                entry.employee = employee
+                entry.department_name = department.name
+                entry.save()
+                messages.success(request, "Worksheet entry added successfully.")
+                return redirect('worksheet')
+            else:
+                messages.error(request, "Please correct the errors in the worksheet entry.")
+
+        # Handle the Resource Repair Report submission
+        elif form_type == 'repair_report':
+            # Double-check to prevent submitting again if the page was reloaded
+            if todays_repair_report:
+                 messages.error(request, "You have already submitted the repair report for today.")
+            else:
+                repair_form = ResourceRepairForm(request.POST)
+                if repair_form.is_valid():
+                    report = repair_form.save(commit=False)
+                    report.employee = employee
+                    report.date = today
+                    report.save()
+                    messages.success(request, "Resource repair report submitted successfully.")
+                    return redirect('worksheet')
+                else:
+                    # If form is invalid, it will be re-rendered with errors below
+                    messages.error(request, "Please correct the errors in the repair report.")
+    
+    # --- Data Fetching for Template Context ---
+    # Today's worksheet entries and totals
     todays_entries = Worksheet.objects.filter(employee=employee, date=today)
     todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
-    # NEW: Calculate total for the 'payment' column
     todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
-
-    # --- Historical Entries with NEW mobile filter ---
+    
+    # Historical worksheet entries with filtering
     all_entries = Worksheet.objects.filter(employee=employee)
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
-    mobile_filter = request.GET.get('mobile_number') # Get the mobile number from the URL
+    mobile_filter = request.GET.get('mobile_number')
 
     if start_date_str and end_date_str:
         all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
     
-    # NEW: Apply the mobile number filter
     if mobile_filter:
-        # Use Q objects to search in either customer_mobile OR login_mobile_no
         all_entries = all_entries.filter(
             Q(customer_mobile__icontains=mobile_filter) | 
             Q(login_mobile_no__icontains=mobile_filter)
@@ -756,12 +794,14 @@ def worksheet_view(request, employee):
     
     context = {
         'employee': employee,
-        'form': form,
+        'form': worksheet_form, # The main worksheet entry form
+        'repair_form': repair_form, # The repair form (is None if already submitted)
         'department': department,
         'todays_entries': todays_entries,
-        'todays_total_amount': todays_total_amount, # Changed name for clarity
-        'todays_total_payment': todays_total_payment, # Pass new total to template
-        'all_entries': all_entries.order_by('-date'), # Ensure consistent ordering
+        'todays_total_amount': todays_total_amount,
+        'todays_total_payment': todays_total_payment,
+        'todays_repair_report': todays_repair_report, # The submitted report object (is None if not submitted)
+        'all_entries': all_entries.order_by('-date'),
         'today': today,
     }
     return render(request, 'worksheet.html', context)
@@ -775,9 +815,7 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         messages.error(request, "This entry is approved and cannot be edited.")
         return redirect('worksheet')
 
-    # NEW: Use a separate, restricted form for editing
     if request.method == 'POST':
-        # Pass the instance to the restricted form
         form = WorksheetEntryEditForm(request.POST, instance=entry)
         if form.is_valid():
             form.save()
@@ -787,7 +825,6 @@ def worksheet_entry_edit_view(request, employee, entry_id):
             context = {'form': form, 'entry_id': entry_id}
             return render(request, 'partials/worksheet_edit_form.html', context)
     else:
-        # Show the restricted form on GET request
         form = WorksheetEntryEditForm(instance=entry)
 
     context = {
@@ -795,6 +832,7 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         'entry_id': entry_id
     }
     return render(request, 'partials/worksheet_edit_form.html', context)
+
 
 
 

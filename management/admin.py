@@ -256,7 +256,14 @@ class MonthlyBonusAdmin(admin.ModelAdmin):
     autocomplete_fields = ['employee'] # Makes selecting an employee easy
 
 
-# --- Your Custom WorksheetAdmin (Unchanged) ---
+from django.contrib import admin
+from django.urls import path
+from django.shortcuts import render
+from django.db.models import Sum
+from .models import Worksheet, Employee
+from rangefilter.filters import DateRangeFilter
+from admin_auto_filters.filters import AutocompleteFilter
+
 class EmployeeFilter(AutocompleteFilter):
     title = 'Employee'
     field_name = 'employee'
@@ -267,7 +274,7 @@ class WorksheetAdmin(admin.ModelAdmin):
         EmployeeFilter,
         ('date', DateRangeFilter),
         'approved',
-        'employee__department',  # Add this for department-wise filtering
+        'employee__department',
     ]
     search_fields = ('employee__name', 'customer_name', 'customer_mobile', 'token_no', 'transaction_num')
 
@@ -284,8 +291,12 @@ class WorksheetAdmin(admin.ModelAdmin):
                     return base_cols + ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount', 'approved']
                 elif dept_name == "Bhu Bharathi":
                     return base_cols + ['token_no', 'customer_name', 'login_mobile_no', 'application_no', 'status', 'payment', 'amount', 'approved']
-                elif dept_name == "xerox":
+                elif dept_name == "Forms": # RENAMED
                     return base_cols + ['particulars', 'amount', 'approved']
+                elif dept_name == "Xerox": # NEW
+                    return base_cols + ['amount', 'approved']
+                elif dept_name == "Notary and Bonds": # NEW
+                    return base_cols + ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount', 'approved']
             except (Employee.DoesNotExist, AttributeError):
                 pass
         return ['employee', 'date', 'department_name', 'amount', 'approved']
@@ -306,6 +317,7 @@ class WorksheetAdmin(admin.ModelAdmin):
         )
         first_entry = queryset.first()
         department = first_entry.employee.department if first_entry and first_entry.employee else None
+        
         employee_id = request.GET.get('employee__employee_id__exact')
         employee = None
         if employee_id:
@@ -315,6 +327,7 @@ class WorksheetAdmin(admin.ModelAdmin):
                 employee = None
         elif first_entry:
             employee = first_entry.employee
+            
         context = {
             'queryset': queryset,
             'department': department,
@@ -328,6 +341,37 @@ class WorksheetAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['query_string'] = request.GET.urlencode()
         return super().changelist_view(request, extra_context)
+
+from django.contrib import admin
+# ... (other imports)
+from .models import Worksheet, Employee, ResourceRepairReport # Import new model
+
+# ... (WorksheetAdmin class is unchanged) ...
+
+# --- NEW ADMIN INTERFACE FOR REPAIR REPORTS ---
+@admin.register(ResourceRepairReport)
+class ResourceRepairReportAdmin(admin.ModelAdmin):
+    list_display = (
+        'employee', 'date', 'monitor_status', 'cpu_status', 'keyboard_status', 
+        'mouse_status', 'cables_status', 'printer_status', 'bike_status'
+    )
+    list_filter = (
+        ('date', DateRangeFilter), 
+        'employee',
+        'monitor_status', 
+        'cpu_status', 
+        'keyboard_status', 
+        'mouse_status', 
+        'cables_status', 
+        'printer_status', 
+        'bike_status'
+    )
+    search_fields = ('employee__name', 'remarks')
+    list_per_page = 25
+
+    # Make the list display more readable
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('employee')
 
 
 # --- Your Other Custom Admins (Unchanged) ---
