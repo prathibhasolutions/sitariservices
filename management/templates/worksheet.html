@@ -26,6 +26,7 @@
         <div class="card-body">
             <form method="post">
                 {% csrf_token %}
+                 <input type="hidden" name="form_type" value="worksheet_entry">
                 <div class="form-row align-items-end">
                     {% for field in form %}
                         <div class="col">
