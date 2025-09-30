@@ -1,0 +1,15 @@
+/* static/css/jazzmin_custom.css */
+
+/* --- Custom styles for Jazzmin --- */
+
+/* Style for the logo on the login page */
+.login-logo img {
+    max-width: 120px !important;  /* Adjust this value for the login logo size */
+    height: auto !important;
+}
+
+/* Style for the logo in the dashboard navbar */
+.brand-image {
+    max-height: 40px !important; /* Adjust this value for the navbar logo size */
+    width: auto !important;
+}

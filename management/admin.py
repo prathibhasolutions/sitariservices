@@ -593,6 +593,6 @@ class MeetingAdmin(admin.ModelAdmin):
 # --- Register All Other Models with Default Admin ---
 admin.site.register(Department)
 admin.site.register(BreakSession)
-admin.site.register(Commission)
+
 admin.site.register(Notification)
 admin.site.register(UserNotificationStatus)
