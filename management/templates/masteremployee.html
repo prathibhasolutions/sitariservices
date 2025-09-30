@@ -255,7 +255,7 @@
     </form>
   </div>
 </div>
-<!--
+
 <script>
 let idleSeconds = 0;
 let isActive = true;
@@ -311,7 +311,7 @@ function performAutoLogout() {
     console.log('Performing auto-logout due to inactivity');
 
     const formData = new FormData();
-    formData.append('logout_reason', 'Auto-logout: Employee idle for more than 5min');
+    formData.append('logout_reason', 'Auto-logout: Employee idle for 1hr');
 
     fetch('/logout/', {
         method: 'POST',
@@ -344,11 +344,11 @@ setInterval(function () {
             console.log(`User idle for ${idleSeconds} seconds`);
         }
 
-        if (idleSeconds === 290) {
-            console.log('Warning: Auto-logout in 10 seconds due to inactivity');
+        if (idleSeconds === 3000) {
+            console.log('Warning: Auto-logout in 10 minutes due to inactivity');
         }
 
-        if (idleSeconds >= 3000) {
+        if (idleSeconds >= 3600) {
             isActive = false;
             performAutoLogout();
         }
@@ -376,7 +376,7 @@ setInterval(function() {
         },
     });
 }, 5000); // Ping every 30 seconds
-</script>-->
+</script>
 
 
 <!-- File Upload Modal -->
