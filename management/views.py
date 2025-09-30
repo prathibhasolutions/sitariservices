@@ -262,6 +262,7 @@ from .forms import EmployeeUploadForm
 from django.utils import timezone
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from .forms import EmployeeProfilePictureForm
 
 def employee_dashboard(request):
     employee_id = request.session.get('employee_id')
@@ -273,6 +274,15 @@ def employee_dashboard(request):
     except Employee.DoesNotExist:
         request.session.flush()
         return redirect('login')
+    
+    if request.method == 'POST' and 'upload_profile_pic' in request.POST:
+        form = EmployeeProfilePictureForm(request.POST, request.FILES, instance=employee)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Profile picture updated successfully')
+            return redirect('employee_dashboard')
+    else:
+        form = EmployeeProfilePictureForm(instance=employee)
 
     # --- OTP and Session Management (Unchanged) ---
     otp_verified = request.session.get('otp_verified', False)
@@ -324,7 +334,8 @@ def employee_dashboard(request):
         'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
         'upload_form': EmployeeUploadForm(),
-        'attended_meetings': attended_meetings,  # Pass the new data to the template
+        'attended_meetings': attended_meetings,
+        'upload_profile_form' : form  # Pass the new data to the template
     }
 
     # --- Session Cleanup (Unchanged) ---

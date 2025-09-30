@@ -43,6 +43,11 @@ from calendar import monthrange
 class Employee(models.Model):
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
+    profile_picture = models.ImageField(
+        upload_to='profile_pictures/', 
+        default='default_profile.jpg', 
+        blank=True, null=True
+    )
     mobile_number = models.CharField(max_length=15, unique=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     pf = models.DecimalField("Provident Fund (PF)", max_digits=10, decimal_places=2, null=True, blank=True)
@@ -226,7 +231,7 @@ class Employee(models.Model):
 
         # Defaults to current month if arguments are missing (DASHBOARD expects this)
         if year is None or month is None:
-            now = timezone.now()
+            now = timezone.localtime(timezone.now())
             year = now.year
             month = now.month
 

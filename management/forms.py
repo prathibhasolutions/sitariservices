@@ -130,3 +130,35 @@ class EmployeeLinksForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # We make the queryset ordered by description for a consistent layout
         self.fields['assigned_links'].queryset = ManagedLink.objects.all().order_by('description')
+
+
+# your_app/forms.py
+
+from django import forms
+from .models import Employee
+
+class EmployeeProfilePictureForm(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = ['profile_picture']
+        widgets = {
+            # Use the simple FileInput and add the Bootstrap 'form-control' class
+            'profile_picture': forms.FileInput(attrs={'class': 'form-control'}),
+        }
+        # We can hide the default label since we'll add our own in the template
+        labels = {
+            'profile_picture': '',
+        }
+
+
+from django import forms
+from .models import Employee
+
+class EmployeeAdminForm(forms.ModelForm):
+    class Meta:
+        model = Employee
+        fields = '__all__'  # Include all fields
+        widgets = {
+            # THIS IS THE KEY: Replace the default widget with a simple one
+            'profile_picture': forms.FileInput,
+        }

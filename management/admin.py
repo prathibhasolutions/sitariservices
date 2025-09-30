@@ -22,7 +22,6 @@ from .models import (
     BreakSession,
     Application,
     ApplicationAssignment,
-    Commission,
     Worksheet,
     AllowedIP,
     Notification,
@@ -32,9 +31,7 @@ from .models import (
     EmployeeUpload,
 )
 
-# Import the filters
-from admin_auto_filters.filters import AutocompleteFilter
-from rangefilter.filters import DateRangeFilter
+
 
 
 from .forms import EmployeeLinksForm
@@ -51,20 +48,32 @@ class ManagedLinkAdmin(admin.ModelAdmin):
 
 # In your management/admin.py file
 
+from django.templatetags.static import static # Import the static tag function
+from .forms import EmployeeAdminForm
+
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    # --- 1. General Settings (Unchanged) ---
+    form = EmployeeAdminForm
+    # --- 1. Display and Search Settings ---
+    list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
-    list_display = ['employee_id', 'name', 'mobile_number', 'department', 'display_status']
     list_filter = ['department']
-    
-    # --- 2. Custom Template for Buttons (Unchanged) ---
     change_list_template = "admin/employee_changelist.html"
     
-    # --- 3. Fieldsets for Employee Edit Page (Unchanged) ---
+    # --- 2. THIS IS THE FIX: Fieldset and Readonly Field Configuration ---
+    # We define a readonly field to show the image preview.
+    readonly_fields = ('profile_pic_preview',)
+
     fieldsets = (
         ('Personal Information', {
-            'fields': ('name', 'mobile_number', 'department', 'joining_date')
+            'fields': (
+                # Display the preview and the upload button on the same line
+                ('profile_pic_preview', 'profile_picture'), 
+                'name', 
+                'mobile_number', 
+                'department', 
+                'joining_date'
+            )
         }),
         ('Salary & Compensation', {
             'fields': ('salary', 'pf', 'esi')
@@ -85,8 +94,34 @@ class EmployeeAdmin(admin.ModelAdmin):
         }),
     )
 
-    # --- 4. User-friendly widget (Unchanged) ---
     filter_horizontal = ('assigned_links',)
+
+    # --- 3. Custom Methods for Display ---
+
+    @admin.display(description='')
+    def profile_pic_preview(self, obj):
+        """Creates a preview of the current profile picture."""
+        if obj.profile_picture and hasattr(obj.profile_picture, 'url'):
+            return format_html(
+                '<img src="{}" style="max-width: 150px; max-height: 150px; border-radius: 8px;" />',
+                obj.profile_picture.url
+            )
+        return "(No Image)"
+
+    @admin.display(description='Picture')
+    def profile_pic_thumbnail(self, obj):
+        """Creates a small thumbnail for the list view."""
+        if obj.profile_picture and hasattr(obj.profile_picture, 'url'):
+            return format_html(
+                '<img src="{}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />',
+                obj.profile_picture.url
+            )
+        default_image_url = static('images/default_profile.png')
+        return format_html(
+            '<img src="{}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />',
+            default_image_url
+        )
+    
 
     # --- 5. Custom Methods (Unchanged) ---
     def display_status(self, obj):
@@ -182,8 +217,6 @@ class EmployeeAdmin(admin.ModelAdmin):
         return render(request, 'admin/attendance_report.html', context)
 
 
-  
-
     def salary_report_view(self, request):
          # --- DEBUGGING: Print the raw GET parameters from the URL ---
         print(f"--- DEBUG: Received employee_id = {request.GET.get('employee')} ---")
@@ -261,25 +294,40 @@ from django.urls import path
 from django.shortcuts import render
 from django.db.models import Sum
 from .models import Worksheet, Employee
-from rangefilter.filters import DateRangeFilter
-from admin_auto_filters.filters import AutocompleteFilter
 
-class EmployeeFilter(AutocompleteFilter):
-    title = 'Employee'
-    field_name = 'employee'
 
 @admin.register(Worksheet)
 class WorksheetAdmin(admin.ModelAdmin):
+    """
+    Consolidated and corrected admin class for the Worksheet model.
+    This version uses only native Django and Jazzmin features.
+    """
+    
+    # --- THIS IS THE CORRECT, NATIVE WAY ---
     list_filter = [
-        EmployeeFilter,
-        ('date', DateRangeFilter),
+        # For the Foreign Key autocomplete filter, just use the field name
+        'employee',
+        
+        # For the date filter, use Django's built-in DateFieldListFilter
+        ('date', admin.DateFieldListFilter),
+        
+        # Standard filters
         'approved',
         'employee__department',
     ]
+
+    # --- THIS IS THE KEY TO THE AUTOCOMPLETE WIDGET ---
+    # This tells the admin to use an autocomplete search box for the 'employee' ForeignKey field.
+    # It replaces the need for the `EmployeeFilter` class.
+    autocomplete_fields = ['employee']
+
+    # Add 'employee__name' to make the autocomplete filter searchable
     search_fields = ('employee__name', 'customer_name', 'customer_mobile', 'token_no', 'transaction_num')
 
+    # --- Your existing custom methods remain unchanged ---
+    
     def get_list_display(self, request):
-        employee_id = request.GET.get('employee__employee_id__exact')
+        employee_id = request.GET.get('employee__id__exact')  # Correct lookup for FK
         if employee_id:
             try:
                 employee = Employee.objects.get(pk=employee_id)
@@ -291,15 +339,15 @@ class WorksheetAdmin(admin.ModelAdmin):
                     return base_cols + ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount', 'approved']
                 elif dept_name == "Bhu Bharathi":
                     return base_cols + ['token_no', 'customer_name', 'login_mobile_no', 'application_no', 'status', 'payment', 'amount', 'approved']
-                elif dept_name == "Forms": # RENAMED
+                elif dept_name == "Forms":
                     return base_cols + ['particulars', 'amount', 'approved']
-                elif dept_name == "Xerox": # NEW
+                elif dept_name == "Xerox":
                     return base_cols + ['amount', 'approved']
-                elif dept_name == "Notary and Bonds": # NEW
+                elif dept_name == "Notary and Bonds":
                     return base_cols + ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount', 'approved']
             except (Employee.DoesNotExist, AttributeError):
                 pass
-        return ['employee', 'date', 'department_name', 'amount', 'approved']
+        return ['employee', 'date', 'employee__department__name', 'amount', 'approved']
 
     def get_urls(self):
         urls = super().get_urls()
@@ -318,7 +366,7 @@ class WorksheetAdmin(admin.ModelAdmin):
         first_entry = queryset.first()
         department = first_entry.employee.department if first_entry and first_entry.employee else None
         
-        employee_id = request.GET.get('employee__employee_id__exact')
+        employee_id = request.GET.get('employee__id__exact') # Correct lookup
         employee = None
         if employee_id:
             try:
@@ -341,6 +389,7 @@ class WorksheetAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         extra_context['query_string'] = request.GET.urlencode()
         return super().changelist_view(request, extra_context)
+    
 
 from django.contrib import admin
 # ... (other imports)
@@ -348,16 +397,24 @@ from .models import Worksheet, Employee, ResourceRepairReport # Import new model
 
 # ... (WorksheetAdmin class is unchanged) ...
 
-# --- NEW ADMIN INTERFACE FOR REPAIR REPORTS ---
+# your_app/admin.py
+
 @admin.register(ResourceRepairReport)
 class ResourceRepairReportAdmin(admin.ModelAdmin):
     list_display = (
         'employee', 'date', 'monitor_status', 'cpu_status', 'keyboard_status', 
         'mouse_status', 'cables_status', 'printer_status', 'bike_status'
     )
+    
+    # --- THIS IS THE CORRECT, NATIVE WAY ---
     list_filter = (
-        ('date', DateRangeFilter), 
+        # Use Django's built-in date filter
+        ('date', admin.DateFieldListFilter), 
+        
+        # Use the native filter for the 'employee' foreign key
         'employee',
+        
+        # The rest of your filters are fine
         'monitor_status', 
         'cpu_status', 
         'keyboard_status', 
@@ -366,10 +423,14 @@ class ResourceRepairReportAdmin(admin.ModelAdmin):
         'printer_status', 
         'bike_status'
     )
+
+    # --- THIS IS THE KEY TO THE AUTOCOMPLETE WIDGET ---
+    # This tells the admin to use an autocomplete search box for the 'employee' filter.
+    autocomplete_fields = ['employee']
+
     search_fields = ('employee__name', 'remarks')
     list_per_page = 25
 
-    # Make the list display more readable
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('employee')
 
@@ -456,11 +517,6 @@ class ApplicationAssignmentInline(admin.TabularInline):
     autocomplete_fields = ['employee']
 
 
-class AssignedEmployeeFilter(AutocompleteFilter):
-    title = 'Assigned Employee'  # Title for the filter sidebar
-    field_name = 'assigned_employees' # The ManyToManyField on your Application model
-
-
 from django.contrib import admin
 from django.shortcuts import get_object_or_404, render
 from .models import Application, ApplicationAssignment # Make sure to import your models
@@ -470,30 +526,47 @@ from .models import Application, ApplicationAssignment # Make sure to import you
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
+    """
+    Consolidated and corrected admin class for the Application model.
+    This version uses only native Django and Jazzmin features.
+    """
+    
     inlines = [ApplicationAssignmentInline]
     list_display = ('application_name', 'customer_name', 'total_commission', 'date_created', 'approved')
     
-    # 1. MODIFICATION: Update list_filter
+    # --- THIS IS THE CORRECT, NATIVE WAY ---
     list_filter = (
-        AssignedEmployeeFilter,  # Use the new filter here
-        ('date_created', DateRangeFilter), # Add the date range filter
+        # For the ManyToMany autocomplete filter, just use the field name
+        'assigned_employees',  
+        
+        # For a date filter, use Django's built-in DateFieldListFilter
+        ('date_created', admin.DateFieldListFilter), 
+        
+        # Standard boolean filter
         'approved',
     )
 
-    search_fields = ('application_name', 'customer_name')
+    # --- THIS IS THE KEY TO THE AUTOCOMPLETE WIDGET ---
+    # This tells the admin to use an autocomplete search box for this M2M field in filters.
+    # It replaces the need for the `AssignedEmployeeFilter` class entirely.
+    autocomplete_fields = ['assigned_employees']
+
+    # Add 'assigned_employees__name' to make the autocomplete filter searchable by employee name
+    search_fields = ('application_name', 'customer_name', 'assigned_employees__name')
+    
     actions = ['approve_applications']
     
-    # 2. MODIFICATION: Override the changelist template to add the print button
+    # You can keep your template override for the print button
     change_list_template = 'admin/management/application/change_list.html'
-    
     change_form_template = 'admin/management/application/change_form_detail.html'
+
+    # --- Custom Methods (Unchanged) ---
 
     def approve_applications(self, request, queryset):
         queryset.update(approved=True)
         self.message_user(request, "Selected applications have been approved.")
     approve_applications.short_description = "Approve selected applications"
 
-    # 3. ADDITION: Add get_urls and print_view methods for printing
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -502,18 +575,15 @@ class ApplicationAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def print_view(self, request):
-        # This view uses the current filters from the admin URL to get the right queryset
         cl = self.get_changelist_instance(request)
         queryset = cl.get_queryset(request)
-        
         context = {
-            'title': ' Application Report',
+            'title': 'Application Report',
             'applications': queryset,
             'site_header': self.admin_site.site_header,
         }
         return render(request, 'admin/management/application/print_template.html', context)
 
-    # Your change_view method remains unchanged
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         application = get_object_or_404(Application, pk=object_id)
@@ -522,10 +592,12 @@ class ApplicationAdmin(admin.ModelAdmin):
         chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
         is_shared = application.assigned_employees.count() > 1
         is_chat_active = is_shared and not application.approved
+        
         extra_context['assignments'] = assignments
         extra_context['extension_history'] = extension_history
         extra_context['chat_messages'] = chat_messages
         extra_context['is_chat_active'] = is_chat_active
+        
         return super().change_view(
             request, object_id, form_url, extra_context=extra_context,
         )
@@ -589,10 +661,119 @@ class MeetingAdmin(admin.ModelAdmin):
         self.message_user(request, "Meeting attendance saved and monthly bonuses have been updated.")
 
 
+# your_app/admin.py
+
+from django.contrib import admin
+from django.utils.html import format_html
+
+# ... other imports and admin classes ...
+
+# your_app/admin.py
+
+from django.contrib import admin
+from django.utils.html import format_html
+
+# ... other imports and admin classes ...
+
+@admin.register(BreakSession)
+class BreakSessionAdmin(admin.ModelAdmin):
+    """
+    Custom admin interface for the BreakSession model with a bulk approval action.
+    """
+    
+    # --- 1. Display and Filter Settings (Unchanged) ---
+    list_display = ('get_employee_name', 'start_time', 'end_time', 'get_approved_status')
+    list_filter = ('employee', ('start_time', admin.DateFieldListFilter), 'approved')
+    autocomplete_fields = ['employee']
+    search_fields = ['employee__name']
+    
+    # --- 2. ADD THIS: Register the custom action ---
+    actions = ['approve_selected_breaks']
+
+    # --- 3. ADD THIS: Define the custom action method ---
+    @admin.action(description='Approve selected break sessions')
+    def approve_selected_breaks(self, request, queryset):
+        """
+        This action finds all selected BreakSession objects and sets their
+        'approved' field to True.
+        """
+        # Perform the bulk update
+        rows_updated = queryset.update(approved=True)
+        
+        # Display a success message to the admin user
+        self.message_user(request, f'{rows_updated} break session(s) were successfully approved.')
+
+    # --- 4. Helper methods for display (Unchanged) ---
+    @admin.display(description='Employee Name', ordering='employee__name')
+    def get_employee_name(self, obj):
+        return obj.employee.name
+
+    @admin.display(description='Approved Status', ordering='approved', boolean=True)
+    def get_approved_status(self, obj):
+        return obj.approved
+
 
 # --- Register All Other Models with Default Admin ---
 admin.site.register(Department)
-admin.site.register(BreakSession)
+# your_app/admin.py
 
-admin.site.register(Notification)
-admin.site.register(UserNotificationStatus)
+from django.contrib import admin
+from .models import Notification, UserNotificationStatus, Employee # Ensure models are imported
+
+# --- 1. Define the Inline for the 'through' model ---
+# This class tells the admin how to display the recipient list within a Notification.
+
+class UserNotificationStatusInline(admin.TabularInline):
+    """
+    Displays the relationship between Notifications and Employees,
+    allowing you to add recipients directly.
+    """
+    model = UserNotificationStatus
+    extra = 1  # Start with one empty slot for adding an employee.
+    
+    # Use an autocomplete widget for a better user experience when selecting employees.
+    autocomplete_fields = ['employee']
+    
+    # Make the 'is_read' field visible but not editable here.
+    readonly_fields = ('is_read',)
+    
+    # We set can_delete to False because you typically wouldn't delete a recipient's
+    # status, just the notification itself.
+    can_delete = False
+
+
+# --- 2. Define the Main Admin for the Notification model ---
+# This class uses the inline defined above.
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """
+    Custom admin for creating notifications and managing their recipients.
+    """
+    inlines = [UserNotificationStatusInline]
+    list_display = ('description_preview', 'created_at', 'recipient_count')
+    search_fields = ('description',)
+    ordering = ('-created_at',)
+    
+    # By default, ManyToMany fields aren't shown in the add/change form when
+    # a 'through' model is used. The inline handles this, but we can add
+    # an empty fieldset to make the layout cleaner if needed.
+    fieldsets = (
+        (None, {
+            'fields': ('description',)
+        }),
+    )
+
+    # --- Custom methods for a more informative list display ---
+
+    @admin.display(description='Description')
+    def description_preview(self, obj):
+        """Shows the first 50 characters of the notification."""
+        return obj.description[:50]
+
+    @admin.display(description='Recipients')
+    def recipient_count(self, obj):
+        """Shows how many employees have received the notification."""
+        return obj.recipients.count()
+
+

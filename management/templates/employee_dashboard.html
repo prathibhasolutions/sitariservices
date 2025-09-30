@@ -17,9 +17,50 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <h5 class="card-title mb-4">Your Profile</h5>
+
+    <hr class="my-4 w-100" style="max-width: 400px;">
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
                             <tbody>
+                               <tr>
+    <th scope="row" style="width: 40%; vertical-align: middle;">Profile Pic</th>
+    <td>
+        <!-- Image display -->
+        {% if employee.profile_picture and employee.profile_picture.url != '/media/default_profile.png' %}
+            <img src="{{ employee.profile_picture.url }}" alt="Profile Picture" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+        {% else %}
+            <img src="{% static 'images/default_profile.png' %}" alt="Default Profile" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+        {% endif %}
+        
+        <!-- Modal Trigger Button (ensure data-bs- attributes are correct) -->
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" data-bs-toggle="modal" data-bs-target="#uploadProfilePicModal">
+            Change
+        </button>
+
+        <!-- The Modal Structure (hidden by default) -->
+        <div class="modal fade" id="uploadProfilePicModal" tabindex="-1" aria-labelledby="uploadProfilePicModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="uploadProfilePicModalLabel">Update Profile Picture</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Form inside the modal -->
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                {{ upload_profile_form.profile_picture }}
+                            </div>
+                            <button type="submit" name="upload_profile_pic" class="btn btn-primary w-100">Upload</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </td>
+</tr>
+    {# === END OF NEW ROW === #}
                                 {# --- Your existing profile details (unchanged) --- #}
                                 <tr>
                                     <th scope="row" style="width: 40%;">Employee Name</th>
