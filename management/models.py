@@ -7,6 +7,8 @@ from django.conf import settings
 import os
 from django.db.models import Sum, F, ExpressionWrapper, fields
 import calendar
+from calendar import monthrange
+from collections import defaultdict
 
 class Department(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -218,18 +220,22 @@ class Employee(models.Model):
         return daily_records, round(total_monthly_wage, 2)
 
 
+# In models.py, replace the existing get_current_month_earnings method with this one
+
+
+
     def get_current_month_earnings(self, year=None, month=None):
         """
         Calculates all earnings and deductions for a given month/year, or for the
-        current month if year/month are not provided. Compatible for both dashboard
-        and admin report use.
+        current month if year/month are not provided. 
+        Includes special commission logic for the 'Xerox' department.
         """
         from .models import ApplicationAssignment, Worksheet, MonthlyDeduction, MonthlyBonus
         from django.db.models import Sum
         from django.utils import timezone
         from decimal import Decimal
 
-        # Defaults to current month if arguments are missing (DASHBOARD expects this)
+        # Defaults to current month if arguments are missing
         if year is None or month is None:
             now = timezone.localtime(timezone.now())
             year = now.year
@@ -251,7 +257,7 @@ class Employee(models.Model):
             'total_earnings': Decimal('0.00'),
         }
 
-        # 3. Calculate Application Commissions
+        # 3. Calculate Application Commissions (Unchanged)
         application_commissions = ApplicationAssignment.objects.filter(
             employee=self,
             application__approved=True,
@@ -260,15 +266,43 @@ class Employee(models.Model):
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
         earnings['application_commissions'] = application_commissions
 
-        # 4. Calculate Worksheet Commissions
-        worksheet_sum = self.worksheet_entries.filter(
+        # --- START: MODIFIED Worksheet Commission Logic ---
+
+        # 4. Calculate Worksheet Commissions with new rules
+        total_worksheet_commission = Decimal('0.00')
+        
+        # Get all approved worksheets for the month
+        monthly_worksheets = self.worksheet_entries.filter(
             date__year=year,
             date__month=month,
             approved=True
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        earnings['worksheet_commissions'] = worksheet_sum * Decimal('0.05')
+        ).order_by('date')
 
-        # 5. Fetch Monthly Bonuses from the new model
+        # Check if the employee belongs to the 'Xerox' department
+        is_xerox_dept = self.department and self.department.name == 'Xerox'
+
+        if is_xerox_dept:
+            # --- Logic for Xerox Department (Daily Calculation) ---
+            daily_totals = defaultdict(Decimal)
+            for entry in monthly_worksheets:
+                daily_totals[entry.date] += entry.amount
+            
+            for day, total_amount in daily_totals.items():
+                if total_amount > 1000:
+                    # Commission is 10% on the amount exceeding 1000
+                    commissionable_amount = total_amount - 1000
+                    total_worksheet_commission += commissionable_amount * Decimal('0.10')
+                    
+        else:
+            # --- Existing Logic for ALL OTHER Departments (Monthly Calculation) ---
+            total_monthly_amount = monthly_worksheets.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            total_worksheet_commission = total_monthly_amount * Decimal('0.05')
+
+        earnings['worksheet_commissions'] = total_worksheet_commission
+
+        # --- END: MODIFIED Worksheet Commission Logic ---
+
+        # 5. Fetch Monthly Bonuses (Unchanged)
         try:
             bonus_obj = self.monthly_bonuses.get(year=year, month=month)
             earnings['meetings_bonus'] = bonus_obj.meetings_bonus
@@ -277,14 +311,14 @@ class Employee(models.Model):
         except MonthlyBonus.DoesNotExist:
             pass
 
-        # 6. Calculate Deductions
+        # 6. Calculate Deductions (Unchanged)
         deductions_qs = MonthlyDeduction.objects.filter(employee=self, year=year, month=month)
         total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
         earnings['monthly_deductions_list'] = deductions_qs
         earnings['deduction_amount'] = total_deduction_amount
 
-        # 7. Calculate Final Total Earnings
+        # 7. Calculate Final Total Earnings (Unchanged)
         total_before_deduction = (
             earnings['attendance_salary'] +
             earnings['application_commissions'] +
@@ -297,6 +331,7 @@ class Employee(models.Model):
         earnings['total_earnings'] = total_before_deduction - earnings['deduction_amount']
 
         return earnings
+
 
 
 

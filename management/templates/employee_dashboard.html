@@ -146,9 +146,15 @@
                                     <td>{% if show_sensitive %}₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
                                 </tr>
                                 <tr>
-                                    <th scope="row">Worksheet Commissions (5%)</th>
-                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
-                                </tr>
+                            <th scope="row">
+                                {% if employee.department.name == 'Xerox' %}
+                                    Worksheet Commissions (Daily >₹1000: 10%)
+                                {% else %}
+                                    Worksheet Commissions (5%)
+                                {% endif %}
+                            </th>
+                            <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                        </tr>
 
                                 <!-- === ADDED SECTION for Monthly Extras === -->
                                 <tr class="table-success">

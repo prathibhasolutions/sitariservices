@@ -108,7 +108,16 @@
                                 <tbody>
                                     <tr><th scope="row" style="width: 50%;">Attendance-Based Salary</th><td>₹{{ current_month_earnings.attendance_salary|floatformat:0|intcomma }}</td></tr>
                                     <tr><th scope="row">Application Commissions</th><td>₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}</td></tr>
-                                    <tr><th scope="row">Worksheet Commissions (5%)</th><td>₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}</td></tr>
+                                     <tr>
+                            <th scope="row">
+                                {% if selected_employee.department.name == 'Xerox' %}
+                                    Worksheet Commissions (Daily >₹1000: 10%)
+                                {% else %}
+                                    Worksheet Commissions (5%)
+                                {% endif %}
+                            </th>
+                            <td>₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}</td>
+                        </tr>
                                     <tr class="table-success"><th scope="row">Meetings Bonus</th><td>₹{{ current_month_earnings.meetings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Trainings Bonus</th><td>₹{{ current_month_earnings.trainings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Performance Bonus</th><td>₹{{ current_month_earnings.performance_bonus|floatformat:0|intcomma }}</td></tr>
