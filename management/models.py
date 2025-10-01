@@ -88,10 +88,12 @@ class Employee(models.Model):
     
     # In models.py, inside the Employee class
 
+# In models.py, inside the Employee class
+
     def get_daily_attendance_summary(self, year, month):
         """
-        Generates a day-by-day attendance summary with final, corrected logic
-        for login/logout times and exclusion of out-of-hours sessions.
+        Generates a day-by-day attendance summary with updated logic for daily wage calculation,
+        basing it on total working hours minus 2.
         """
         from .models import AttendanceSession, BreakSession
         from django.utils import timezone
@@ -110,8 +112,22 @@ class Employee(models.Model):
         end_dt_base = datetime.combine(datetime.today(), end_work_time)
         if end_dt_base < start_dt_base:
             end_dt_base += timedelta(days=1)
-        expected_daily_work_seconds = (end_dt_base - start_dt_base).total_seconds()
         
+        # --- START OF MODIFICATION ---
+        
+        # 1. Calculate the total scheduled work seconds for a full day.
+        scheduled_work_seconds = (end_dt_base - start_dt_base).total_seconds()
+        
+        # 2. Subtract 2 hours (7200 seconds) to get the new target for a full day's wage.
+        wage_target_seconds = scheduled_work_seconds - (2 * 3600)
+        
+        # 3. Add a safeguard: If the shift is 2 hours or less, use the original duration
+        #    to prevent division by zero or negative targets.
+        if wage_target_seconds <= 0:
+            wage_target_seconds = scheduled_work_seconds
+
+        # --- END OF MODIFICATION ---
+            
         base_daily_wage = self.salary / Decimal(days_in_month) if days_in_month > 0 else Decimal('0.00')
 
         all_attendance_sessions = list(AttendanceSession.objects.filter(
@@ -127,18 +143,15 @@ class Employee(models.Model):
             work_start_datetime = timezone.make_aware(datetime.combine(current_date, start_work_time))
             work_end_datetime = timezone.make_aware(datetime.combine(current_date, end_work_time))
 
-            # --- NEW: Rule 1 - Filter out logins that are after the workday ends ---
             day_attendance = [
                 s for s in all_attendance_sessions 
                 if timezone.localtime(s.login_time).date() == current_date and s.login_time < work_end_datetime
             ]
 
-            # --- NEW: Rule 2 - Filter out breaks that are completely outside work hours ---
             day_breaks = []
             for b in all_break_sessions:
                 if timezone.localtime(b.start_time).date() == current_date:
-                    # Check for any overlap with the work day
-                    break_end = b.end_time or work_end_datetime # Assume ongoing breaks end with the day
+                    break_end = b.end_time or work_end_datetime
                     if b.start_time < work_end_datetime and break_end > work_start_datetime:
                         day_breaks.append(b)
 
@@ -178,11 +191,15 @@ class Employee(models.Model):
 
                     total_active_seconds = work_seconds + approved_break_seconds
 
+            # --- MODIFIED: Use the new wage_target_seconds for the calculation ---
             daily_wage = Decimal('0.00')
-            if expected_daily_work_seconds > 0:
-                work_ratio = Decimal(total_active_seconds) / Decimal(expected_daily_work_seconds)
+            if wage_target_seconds > 0:
+                # Calculate the work ratio against the adjusted target time
+                work_ratio = Decimal(total_active_seconds) / Decimal(wage_target_seconds)
+                # Employee can earn more than 100% of their daily wage if they work longer
+                # than the adjusted target time. The wage is not capped.
                 daily_wage = base_daily_wage * work_ratio
-                daily_wage = max(Decimal('0.00'), daily_wage)
+                daily_wage = max(Decimal('0.00'), daily_wage) # Ensure wage is not negative
 
             total_monthly_wage += daily_wage
 
@@ -218,6 +235,7 @@ class Employee(models.Model):
             })
 
         return daily_records, round(total_monthly_wage, 2)
+
 
 
 # In models.py, replace the existing get_current_month_earnings method with this one

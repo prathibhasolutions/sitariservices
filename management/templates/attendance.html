@@ -161,7 +161,7 @@
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <h5>Total Calculated Salary: ₹{{ total_monthly_wage|floatformat:2 }}</h5>
-            <small>(Based on daily work duration within working hours for {{ selected_month_name }})</small>
+            <small>(Based on daily work duration within working hours for {{ selected_month_name }} with 2 hours break)</small>
             <div class="mt-2">
                 <small class="text-muted">
                     Working Hours: {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }} 
