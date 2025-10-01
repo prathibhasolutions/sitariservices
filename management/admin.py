@@ -17,7 +17,6 @@ from .models import (
     Employee,
     Meeting, 
     MeetingAttendance,
-    MonthlyBonus,
     Department,
     BreakSession,
     Application,
@@ -50,6 +49,7 @@ class ManagedLinkAdmin(admin.ModelAdmin):
 
 from django.templatetags.static import static # Import the static tag function
 from .forms import EmployeeAdminForm
+from datetime import datetime, date
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
@@ -217,16 +217,18 @@ class EmployeeAdmin(admin.ModelAdmin):
         return render(request, 'admin/attendance_report.html', context)
 
 
+ # --- 3. MODIFIED Salary Report View ---
     def salary_report_view(self, request):
-         # --- DEBUGGING: Print the raw GET parameters from the URL ---
-        print(f"--- DEBUG: Received employee_id = {request.GET.get('employee')} ---")
-        print(f"--- DEBUG: Received month_str = {request.GET.get('month')} ---")
         employee_id = request.GET.get('employee')
-        month_str = request.GET.get('month') # Expects "YYYY-MM"
+        month_str = request.GET.get('month')
 
         selected_employee = None
         earnings_data = {}
         attended_meetings = []
+        # --- ADDED: Initialize lists for new bonuses ---
+        attended_trainings = []
+        performance_bonuses = []
+        
         all_employees = Employee.objects.all().order_by('name')
 
         if month_str:
@@ -240,20 +242,27 @@ class EmployeeAdmin(admin.ModelAdmin):
             now = timezone.now()
             year, month = now.year, now.month
         
-        # --- CORRECTION: Create a proper date object for the template ---
-        from datetime import date
         selected_date_object = date(year, month, 1)
         
         if employee_id:
             try:
                 selected_employee = Employee.objects.get(pk=employee_id)
                 earnings_data = selected_employee.get_current_month_earnings(year, month)
+                
                 attended_meetings = MeetingAttendance.objects.filter(
-                    employee=selected_employee,
-                    attended=True,
-                    meeting__date__year=year,
-                    meeting__date__month=month
+                    employee=selected_employee, attended=True,
+                    meeting__date__year=year, meeting__date__month=month
                 ).order_by('-meeting__date')
+
+                # --- ADDED: Fetch the new bonus data ---
+                attended_trainings = TrainingBonus.objects.filter(
+                    employee=selected_employee, date__year=year, date__month=month
+                ).order_by('-date')
+
+                performance_bonuses = PerformanceBonus.objects.filter(
+                    employee=selected_employee, date__year=year, date__month=month
+                ).order_by('-date')
+
             except Employee.DoesNotExist:
                 pass
 
@@ -262,14 +271,16 @@ class EmployeeAdmin(admin.ModelAdmin):
             'title': 'Employee Salary Report',
             'all_employees': all_employees,
             'selected_employee': selected_employee,
-            'selected_month_str': f"{year}-{month:02d}", # Keep this string for the input field
-            'selected_date': selected_date_object,       # --- ADD THIS for displaying the date ---
+            'selected_month_str': f"{year}-{month:02d}",
+            'selected_date': selected_date_object,
             'current_month_earnings': earnings_data,
             'attended_meetings': attended_meetings,
+            # --- ADDED: Pass the new bonus lists to the template ---
+            'attended_trainings': attended_trainings,
+            'performance_bonuses': performance_bonuses,
         }
-        print(f"--- DEBUG: Context['selected_employee'] = {context.get('selected_employee')} ---")
-        print(f"--- DEBUG: Context['selected_date'] = {context.get('selected_date')} ---")
         return render(request, 'admin/salary_report.html', context)
+
 
 
     # --- 9. Existing changelist_view (Unchanged) ---
@@ -279,14 +290,6 @@ class EmployeeAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
     
     
-
-# --- Don't forget to register the MonthlyBonus admin ---
-@admin.register(MonthlyBonus)
-class MonthlyBonusAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'year', 'month', 'meetings_bonus', 'trainings_bonus', 'performance_bonus')
-    list_filter = ('year', 'month', 'employee')
-    search_fields = ('employee__name',)
-    autocomplete_fields = ['employee'] # Makes selecting an employee easy
 
 
 from django.contrib import admin
@@ -604,10 +607,17 @@ class ApplicationAdmin(admin.ModelAdmin):
 
 from decimal import Decimal
 
+# In admin.py
+
+from django.contrib import admin
+from .models import Meeting, MeetingAttendance
+
+# This inline class is required for the MeetingAdmin
 class MeetingAttendanceInline(admin.TabularInline):
     model = MeetingAttendance
-    extra = 1  # Start with one empty slot for adding an employee
-    autocomplete_fields = ['employee'] # Makes selecting employees easy
+    extra = 1 # Shows one extra empty row for adding attendees
+    autocomplete_fields = ['employee'] # Recommended for easier employee selection
+
 
 @admin.register(Meeting)
 class MeetingAdmin(admin.ModelAdmin):
@@ -616,52 +626,18 @@ class MeetingAdmin(admin.ModelAdmin):
     search_fields = ('topic',)
     inlines = [MeetingAttendanceInline]
 
+    # The complex save_formset logic is no longer needed.
+    # The parent save_formset method handles saving the attendance records,
+    # which is all that's required now.
+    #
+    # You can optionally add a simple override just to show a message.
     def save_formset(self, request, form, formset, change):
-        """
-        This is the core logic. It runs after you save the meeting attendance.
-        It automatically finds or creates the MonthlyBonus record for each employee
-        and updates their meetings_bonus.
-        """
         super().save_formset(request, form, formset, change)
+        self.message_user(
+            request,
+            "Meeting attendance has been saved. Employee bonuses are calculated automatically."
+        )
 
-        for f in formset.forms:
-            if f.cleaned_data:
-                # Get the meeting instance and the amount
-                meeting = f.cleaned_data['meeting']
-                meeting_amount = meeting.amount
-                
-                # Get the employee and the date of the meeting
-                employee = f.cleaned_data['employee']
-                year = meeting.date.year
-                month = meeting.date.month
-
-                # Find or create the MonthlyBonus record for that employee for that month
-                bonus_obj, created = MonthlyBonus.objects.get_or_create(
-                    employee=employee,
-                    year=year,
-                    month=month
-                )
-
-                # Recalculate the total meeting bonus for that month
-                total_bonus = Decimal('0.00')
-                attended_meetings = MeetingAttendance.objects.filter(
-                    employee=employee, 
-                    attended=True,
-                    meeting__date__year=year,
-                    meeting__date__month=month
-                )
-                
-                for attendance in attended_meetings:
-                    total_bonus += attendance.meeting.amount
-                
-                # Update the bonus object with the new total and save it
-                bonus_obj.meetings_bonus = total_bonus
-                bonus_obj.save()
-        
-        self.message_user(request, "Meeting attendance saved and monthly bonuses have been updated.")
-
-
-# your_app/admin.py
 
 from django.contrib import admin
 from django.utils.html import format_html
@@ -777,3 +753,21 @@ class NotificationAdmin(admin.ModelAdmin):
         return obj.recipients.count()
 
 
+# admin.py
+
+from django.contrib import admin
+from .models import TrainingBonus, PerformanceBonus # and your other models
+
+@admin.register(TrainingBonus)
+class TrainingBonusAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'date', 'reason', 'amount')
+    list_filter = ('employee', 'date')
+    search_fields = ('reason', 'employee__name')
+    date_hierarchy = 'date'
+
+@admin.register(PerformanceBonus)
+class PerformanceBonusAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'date', 'reason', 'amount')
+    list_filter = ('employee', 'date')
+    search_fields = ('reason', 'employee__name')
+    date_hierarchy = 'date'

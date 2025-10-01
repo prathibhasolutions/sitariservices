@@ -263,8 +263,10 @@ from django.utils import timezone
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import EmployeeProfilePictureForm
+from .models import Employee, MeetingAttendance, TrainingBonus, PerformanceBonus
 
 def employee_dashboard(request):
+    # 1. Authenticate Employee (Unchanged)
     employee_id = request.session.get('employee_id')
     if not employee_id:
         return redirect('login')
@@ -275,6 +277,7 @@ def employee_dashboard(request):
         request.session.flush()
         return redirect('login')
     
+    # 2. Handle Profile Picture Upload (Unchanged)
     if request.method == 'POST' and 'upload_profile_pic' in request.POST:
         form = EmployeeProfilePictureForm(request.POST, request.FILES, instance=employee)
         if form.is_valid():
@@ -282,16 +285,18 @@ def employee_dashboard(request):
             messages.success(request, 'Profile picture updated successfully')
             return redirect('employee_dashboard')
     else:
+        # This is for the GET request, initializes the form
         form = EmployeeProfilePictureForm(instance=employee)
 
-    # --- OTP and Session Management (Unchanged) ---
+    # 3. Handle OTP and Session Logic for Sensitive Data (Unchanged)
     otp_verified = request.session.get('otp_verified', False)
     show_sensitive = otp_verified
     otp_sent = request.session.get('otp_sent_flag', False)
 
     if request.method == 'POST':
+        # OTP Sending Logic (Unchanged)
         if 'send_otp' in request.POST:
-            from .utils import generate_otp, send_otp_whatsapp
+            from .utils import generate_otp, send_otp_whatsapp # Assuming you have this utility
             otp = generate_otp()
             request.session['emp_otp'] = otp
             send_otp_whatsapp(employee.mobile_number, otp)
@@ -299,6 +304,7 @@ def employee_dashboard(request):
             messages.success(request, f"OTP sent to {employee.mobile_number}")
             return redirect('employee_dashboard')
 
+        # OTP Verification Logic (Unchanged)
         elif 'verify_otp' in request.POST:
             entered_otp = request.POST.get('otp')
             expected_otp = request.session.get('emp_otp')
@@ -309,16 +315,18 @@ def employee_dashboard(request):
                     del request.session['emp_otp']
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
-                request.session['otp_sent_flag'] = True # Keep the form visible
+                request.session['otp_sent_flag'] = True # Keep OTP form visible
             return redirect('employee_dashboard')
 
-    # --- Data for Template (Unchanged) ---
+    # 4. Fetch Data for the Template
+    # Fetches earnings totals using the updated get_current_month_earnings method
     earnings_data = {}
     if show_sensitive:
         earnings_data = employee.get_current_month_earnings()
 
-    # --- ADDITION: Fetch meetings attended this month ---
+    # --- UPDATED DATA FETCHING FOR BONUS LISTS ---
     now = timezone.now()
+    # Fetch meetings attended (Unchanged)
     attended_meetings = MeetingAttendance.objects.filter(
         employee=employee,
         attended=True,
@@ -326,27 +334,39 @@ def employee_dashboard(request):
         meeting__date__month=now.month
     ).select_related('meeting').order_by('-meeting__date')
 
-    # --- Update the context to include the new meeting data ---
+    # Fetch individual training bonuses for the month (NEW)
+    attended_trainings = TrainingBonus.objects.filter(
+        employee=employee, date__year=now.year, date__month=now.month
+    ).order_by('-date')
+    
+    # Fetch individual performance bonuses for the month (NEW)
+    performance_bonuses = PerformanceBonus.objects.filter(
+        employee=employee, date__year=now.year, date__month=now.month
+    ).order_by('-date')
+
+    # 5. Build the Context Dictionary (Now includes new bonus lists)
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
-        'upload_form': EmployeeUploadForm(),
+        'upload_profile_form': form,
         'attended_meetings': attended_meetings,
-        'upload_profile_form' : form  # Pass the new data to the template
+        'attended_trainings': attended_trainings,      # NEW
+        'performance_bonuses': performance_bonuses,    # NEW
+        'upload_form': EmployeeUploadForm(), # This was in your original code
     }
 
-    # --- Session Cleanup (Unchanged) ---
+    # 6. Perform Session Cleanup (Unchanged)
     if 'otp_verified' in request.session:
         del request.session['otp_verified']
     if 'otp_sent_flag' in request.session:
-        if not 'emp_otp' in request.session:
-             del request.session['otp_sent_flag']
+        if 'emp_otp' not in request.session:
+            del request.session['otp_sent_flag']
 
+    # 7. Render the Template
     return render(request, 'employee_dashboard.html', context)
-
 
 
 def attendance_view(request):

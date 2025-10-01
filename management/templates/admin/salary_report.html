@@ -2,56 +2,81 @@
 {% load static humanize %}
 
 {% block extrahead %}
-  {# This block adds custom CSS specifically for printing #}
+  {# This block adds custom CSS for printing #}
   {{ block.super }}
   <style>
     @media print {
-      /* Hides elements that should not be on the printed paper */
+      /* --- 1. Set Page Layout to Portrait --- */
+      @page {
+        size: A4 portrait; /* Ensure portrait orientation */
+        margin: 0.6in 0.4in; /* Margins for portrait mode */
+      }
+
+      body {
+        font-size: 9.5pt; /* Slightly smaller base font */
+      }
+
+      /* --- 2. Force Side-by-Side Columns with Flexbox --- */
+      .row {
+        display: flex;
+        flex-wrap: nowrap; /* Prevent columns from stacking */
+        width: 100%;
+      }
+      .col-lg-6 {
+        width: 50% !important; /* Each column is half the page width */
+        flex: 0 0 50%;
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+      }
+      
+      /* --- 3. Hide Unnecessary Elements --- */
       #header, #nav-sidebar, #changelist-search, footer, .object-tools a, .btn {
         display: none !important;
       }
-      
-      /* Ensures the main content takes up the full page */
+
+      /* --- 4. Compact Styling for Cards and Tables --- */
       #content-main {
-        width: 100%;
-        padding: 0;
-        margin: 0;
-      }
-      
-      /* Removes shadows and adds a simple border to cards for a cleaner look */
-      .card {
-        box-shadow: none !important;
-        border: 1px solid #dee2e6 !important;
-        page-break-inside: avoid; /* Prevents cards from being split across pages */
-      }
-      
-      /* Standardizes table appearance for printing */
-      table {
         width: 100% !important;
-        border-collapse: collapse !important;
+        padding: 0 !important;
+        margin: 0 !important;
       }
-      th, td {
+      .card {
+        page-break-inside: avoid; /* Don't split cards across pages */
         border: 1px solid #ccc !important;
-        padding: 8px !important;
-        font-size: 10pt !important;
+        box-shadow: none !important;
+        margin-bottom: 12px;
       }
-      
-      h1, h3, h5 {
+      .card-body {
+        padding: 6px !important; /* Tighter padding */
+      }
+      h3, h5 {
         color: #000 !important;
+        font-size: 10pt;
+        margin-bottom: 6px;
+      }
+      h3 { font-size: 13pt; }
+
+      th, td {
+        padding: 4px !important; /* Tighter cell padding */
+        font-size: 8.5pt !important;
+      }
+      th {
+        font-weight: bold;
       }
     }
   </style>
 {% endblock %}
 
+
 {% block content %}
 <div id="content-main">
     
-    {# Clear header for the report #}
+    {# Report Header #}
     {% if selected_employee %}
-        <h3>Report for: {{ selected_employee.name }} | Month: {{ selected_month_str }}</h3>
+        <h3>Report for: {{ selected_employee.name }} | Month: {{ selected_date|date:"F Y" }}</h3>
     {% endif %}
 
-    <!-- Filter Form -->
+    <!-- Filter Form (Hidden in Print) -->
     <form method="get" id="changelist-search" class="mb-4">
         <div class="d-flex align-items-center">
             <div class="form-group mr-3">
@@ -70,7 +95,6 @@
                 <input type="month" id="month-select" name="month" value="{{ selected_month_str }}" class="form-control">
             </div>
             <button type="submit" class="btn btn-primary">View Report</button>
-            
             {% if selected_employee %}
                 <button type="button" onclick="window.print();" class="btn btn-secondary ml-3">Print Report</button>
             {% endif %}
@@ -78,9 +102,10 @@
     </form>
 
     {% if selected_employee %}
+        <!-- Top Row: Profile and Earnings -->
         <div class="row mt-3">
             <div class="col-lg-6 mb-4">
-                <div class="card h-100 shadow-sm">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title mb-4">Profile Details</h5>
                         <div class="table-responsive">
@@ -89,10 +114,7 @@
                                     <tr><th scope="row" style="width: 40%;">Employee Name</th><td>{{ selected_employee.name }}</td></tr>
                                     <tr><th scope="row">Mobile Number</th><td>{{ selected_employee.mobile_number }}</td></tr>
                                     <tr><th scope="row">Department</th><td>{{ selected_employee.department.name|default_if_none:"Not set" }}</td></tr>
-                                    
-                                    {# === THIS IS THE ONLY LINE THAT WAS CHANGED === #}
-                                    <tr><th scope="row">Salary Month</th><td>{{ selected_month_str}}</td></tr>
-                                    
+                                    <tr><th scope="row">Salary Month</th><td>{{ selected_date|date:"F Y" }}</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -100,7 +122,7 @@
                 </div>
             </div>
             <div class="col-lg-6 mb-4">
-                <div class="card h-100 shadow-sm">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title mb-4">Earnings Breakdown</h5>
                         <div class="table-responsive">
@@ -108,16 +130,16 @@
                                 <tbody>
                                     <tr><th scope="row" style="width: 50%;">Attendance-Based Salary</th><td>₹{{ current_month_earnings.attendance_salary|floatformat:0|intcomma }}</td></tr>
                                     <tr><th scope="row">Application Commissions</th><td>₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}</td></tr>
-                                     <tr>
-                            <th scope="row">
-                                {% if selected_employee.department.name == 'Xerox' %}
-                                    Worksheet Commissions (Daily >₹1000: 10%)
-                                {% else %}
-                                    Worksheet Commissions (5%)
-                                {% endif %}
-                            </th>
-                            <td>₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}</td>
-                        </tr>
+                                    <tr>
+                                        <th scope="row">
+                                            {% if selected_employee.department.name == 'Xerox' %}
+                                                Worksheet Commissions (Daily >₹1000: 10%)
+                                            {% else %}
+                                                Worksheet Commissions (5%)
+                                            {% endif %}
+                                        </th>
+                                        <td>₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}</td>
+                                    </tr>
                                     <tr class="table-success"><th scope="row">Meetings Bonus</th><td>₹{{ current_month_earnings.meetings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Trainings Bonus</th><td>₹{{ current_month_earnings.trainings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Performance Bonus</th><td>₹{{ current_month_earnings.performance_bonus|floatformat:0|intcomma }}</td></tr>
@@ -130,9 +152,11 @@
                 </div>
             </div>
         </div>
+
+        <!-- Second Row: Advances and Meetings -->
         <div class="row mt-4">
             <div class="col-lg-6 mb-4">
-                <div class="card h-100 shadow-sm">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">Advances</h5>
                         <div class="table-responsive">
@@ -146,7 +170,7 @@
                 </div>
             </div>
             <div class="col-lg-6 mb-4">
-                <div class="card h-100 shadow-sm">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">Meetings Attended</h5>
                         <div class="table-responsive">
@@ -161,6 +185,56 @@
                                     </tr>
                                     {% empty %}
                                     <tr><td colspan="3" class="text-center text-muted">No meetings attended this month.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Third Row: Trainings and Performance Bonuses -->
+        <div class="row mt-4">
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Trainings This Month</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                                <tbody>
+                                    {% for training in attended_trainings %}
+                                        <tr>
+                                            <td>{{ training.date|date:"d M Y" }}</td>
+                                            <td>{{ training.reason }}</td>
+                                            <td>₹{{ training.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No trainings this month.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Performance Bonuses This Month</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                                <tbody>
+                                    {% for bonus in performance_bonuses %}
+                                        <tr>
+                                            <td>{{ bonus.date|date:"d M Y" }}</td>
+                                            <td>{{ bonus.reason }}</td>
+                                            <td>₹{{ bonus.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No performance bonuses this month.</td></tr>
                                     {% endfor %}
                                 </tbody>
                             </table>

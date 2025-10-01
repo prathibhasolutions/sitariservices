@@ -224,113 +224,108 @@ class Employee(models.Model):
 
 
 
+# In models.py, inside the Employee class
+
     def get_current_month_earnings(self, year=None, month=None):
         """
-        Calculates all earnings and deductions for a given month/year, or for the
-        current month if year/month are not provided. 
-        Includes special commission logic for the 'Xerox' department.
+        Calculates all earnings and deductions for a given month/year.
+        This updated version uses the new event-based models for all bonuses.
         """
-        from .models import ApplicationAssignment, Worksheet, MonthlyDeduction, MonthlyBonus
+        # Import necessary models inside the function to avoid circular imports
+        from .models import (
+            ApplicationAssignment, Worksheet, MonthlyDeduction, 
+            TrainingBonus, PerformanceBonus, MeetingAttendance
+        )
         from django.db.models import Sum
         from django.utils import timezone
         from decimal import Decimal
+        from collections import defaultdict
 
-        # Defaults to current month if arguments are missing
+        # Default to the current month if no year or month is provided
         if year is None or month is None:
             now = timezone.localtime(timezone.now())
             year = now.year
             month = now.month
 
         # 1. Get the accurate attendance-based salary
-        _, attendance_salary_from_summary = self.get_daily_attendance_summary(year, month)
+        # This assumes your get_daily_attendance_summary function exists and returns the salary
+        _, attendance_salary = self.get_daily_attendance_summary(year, month)
 
-        # 2. Initialize the dictionary to hold all financial data
-        earnings = {
-            'attendance_salary': attendance_salary_from_summary,
-            'application_commissions': Decimal('0.00'),
-            'worksheet_commissions': Decimal('0.00'),
-            'meetings_bonus': Decimal('0.00'),
-            'trainings_bonus': Decimal('0.00'),
-            'performance_bonus': Decimal('0.00'),
-            'monthly_deductions_list': [],
-            'deduction_amount': Decimal('0.00'),
-            'total_earnings': Decimal('0.00'),
-        }
-
-        # 3. Calculate Application Commissions (Unchanged)
+        # 2. Calculate Application Commissions (Logic remains the same)
         application_commissions = ApplicationAssignment.objects.filter(
             employee=self,
             application__approved=True,
             application__date_created__year=year,
             application__date_created__month=month
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
-        earnings['application_commissions'] = application_commissions
 
-        # --- START: MODIFIED Worksheet Commission Logic ---
-
-        # 4. Calculate Worksheet Commissions with new rules
+        # 3. Calculate Worksheet Commissions (Logic remains the same)
         total_worksheet_commission = Decimal('0.00')
-        
-        # Get all approved worksheets for the month
         monthly_worksheets = self.worksheet_entries.filter(
             date__year=year,
             date__month=month,
             approved=True
-        ).order_by('date')
-
-        # Check if the employee belongs to the 'Xerox' department
+        )
+        
         is_xerox_dept = self.department and self.department.name == 'Xerox'
-
         if is_xerox_dept:
-            # --- Logic for Xerox Department (Daily Calculation) ---
             daily_totals = defaultdict(Decimal)
             for entry in monthly_worksheets:
                 daily_totals[entry.date] += entry.amount
             
-            for day, total_amount in daily_totals.items():
+            for total_amount in daily_totals.values():
                 if total_amount > 1000:
-                    # Commission is 10% on the amount exceeding 1000
-                    commissionable_amount = total_amount - 1000
-                    total_worksheet_commission += commissionable_amount * Decimal('0.10')
-                    
+                    total_worksheet_commission += (total_amount - 1000) * Decimal('0.10')
         else:
-            # --- Existing Logic for ALL OTHER Departments (Monthly Calculation) ---
             total_monthly_amount = monthly_worksheets.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             total_worksheet_commission = total_monthly_amount * Decimal('0.05')
 
-        earnings['worksheet_commissions'] = total_worksheet_commission
+        # --- UPDATED BONUS CALCULATION LOGIC ---
+        # 4. Calculate total bonuses by summing amounts from the new event-based models
 
-        # --- END: MODIFIED Worksheet Commission Logic ---
+        # Sum of bonuses from all meetings attended this month
+        meetings_bonus = MeetingAttendance.objects.filter(
+            employee=self, attended=True, meeting__date__year=year, meeting__date__month=month
+        ).aggregate(total=Sum('meeting__amount'))['total'] or Decimal('0.00')
+        
+        # Sum of bonuses from all training sessions this month
+        trainings_bonus = self.training_bonuses.filter(
+            date__year=year, date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-        # 5. Fetch Monthly Bonuses (Unchanged)
-        try:
-            bonus_obj = self.monthly_bonuses.get(year=year, month=month)
-            earnings['meetings_bonus'] = bonus_obj.meetings_bonus
-            earnings['trainings_bonus'] = bonus_obj.trainings_bonus
-            earnings['performance_bonus'] = bonus_obj.performance_bonus
-        except MonthlyBonus.DoesNotExist:
-            pass
+        # Sum of all performance incentives this month
+        performance_bonus = self.performance_bonuses.filter(
+            date__year=year, date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-        # 6. Calculate Deductions (Unchanged)
+        # 5. Calculate Deductions (Logic remains the same)
         deductions_qs = MonthlyDeduction.objects.filter(employee=self, year=year, month=month)
         total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-        earnings['monthly_deductions_list'] = deductions_qs
-        earnings['deduction_amount'] = total_deduction_amount
-
-        # 7. Calculate Final Total Earnings (Unchanged)
+        # 6. Calculate Final Total Earnings
         total_before_deduction = (
-            earnings['attendance_salary'] +
-            earnings['application_commissions'] +
-            earnings['worksheet_commissions'] +
-            earnings['meetings_bonus'] +
-            earnings['trainings_bonus'] +
-            earnings['performance_bonus']
+            attendance_salary +
+            application_commissions +
+            total_worksheet_commission +
+            meetings_bonus +
+            trainings_bonus +
+            performance_bonus
         )
+        total_earnings = total_before_deduction - total_deduction_amount
 
-        earnings['total_earnings'] = total_before_deduction - earnings['deduction_amount']
+        # 7. Return all calculated values in a dictionary
+        return {
+            'attendance_salary': attendance_salary,
+            'application_commissions': application_commissions,
+            'worksheet_commissions': total_worksheet_commission,
+            'meetings_bonus': meetings_bonus,
+            'trainings_bonus': trainings_bonus,
+            'performance_bonus': performance_bonus,
+            'monthly_deductions_list': deductions_qs,
+            'deduction_amount': total_deduction_amount,
+            'total_earnings': total_earnings,
+        }
 
-        return earnings
 
 
 
@@ -702,23 +697,7 @@ class TodoTask(models.Model):
         return self.description
     
 
-class MonthlyBonus(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='monthly_bonuses')
-    year = models.PositiveIntegerField()
-    month = models.PositiveIntegerField()
-    
-    meetings_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    trainings_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    performance_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    class Meta:
-        unique_together = ('employee', 'year', 'month') # Ensures one bonus entry per employee per month
-        verbose_name = "Monthly Bonus"
-        verbose_name_plural = "Monthly Bonuses"
-
-    def __str__(self):
-        return f"Bonuses for {self.employee.name} - {self.month}/{self.year}"
-    
 
 # --- ADD THIS NEW MODEL for Meetings ---
 class Meeting(models.Model):
@@ -752,6 +731,28 @@ class MeetingAttendance(models.Model):
     def __str__(self):
         status = "Attended" if self.attended else "Absent"
         return f"{self.employee.name} - {self.meeting.topic} ({status})"
+
+
+        # --- NEW MODEL: PerformanceBonus ---
+class PerformanceBonus(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='performance_bonuses')
+    date = models.DateField(default=timezone.now)
+    reason = models.CharField(max_length=255, help_text="e.g., Exceeded Sales Target, Project Completion Bonus")
+    amount = models.DecimalField("Bonus Amount", max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Performance Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
+
+class TrainingBonus(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='training_bonuses')
+    date = models.DateField(default=timezone.now)
+    reason = models.CharField(max_length=255, help_text="e.g., Advanced Python Course, Safety Protocol Training")
+    amount = models.DecimalField("Bonus Amount", max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Training Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
 
 # --- NEW MODEL FOR RESOURCE REPAIR CHECKLIST ---
 class ResourceRepairReport(models.Model):

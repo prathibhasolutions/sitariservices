@@ -275,5 +275,65 @@
         </div>
     </div>
 
+    <!-- === ADD THIS ENTIRE NEW ROW FOR TRAININGS AND PERFORMANCE BONUSES === -->
+    <div class="row mt-4">
+        <!-- Trainings Attended -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Trainings Attended This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for training in attended_trainings %}
+                                        <tr>
+                                            <td>{{ training.date|date:"d M Y" }}</td>
+                                            <td>{{ training.reason }}</td>
+                                            <td>₹{{ training.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No trainings this month.</td></tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="3" class="text-muted text-center">Locked</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Performance Bonuses -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Performance Bonuses This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for bonus in performance_bonuses %}
+                                        <tr>
+                                            <td>{{ bonus.date|date:"d M Y" }}</td>
+                                            <td>{{ bonus.reason }}</td>
+                                            <td>₹{{ bonus.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No performance bonuses this month.</td></tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="3" class="text-muted text-center">Locked</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </main>
 {% endblock %}
