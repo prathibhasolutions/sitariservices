@@ -1,0 +1,21 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+    <div class="d-flex justify-content-between align-items-center">
+        {# This div holds the original breadcrumbs on the left #}
+        <div>
+            {{ block.super }}
+        </div>
+
+        {# This div holds our new buttons and is pushed to the right #}
+        <div class="d-flex" style="gap: 0.5rem;">
+            <a href="{{ attendance_report_url }}" class="btn btn-primary">
+                <i class="fas fa-calendar-alt"></i> Attendance Report
+            </a>
+            <a href="{{ salary_report_url }}" class="btn btn-warning">
+                <i class="fas fa-file-invoice-dollar"></i> Salary Report
+            </a>
+        </div>
+    </div>
+{% endblock %}

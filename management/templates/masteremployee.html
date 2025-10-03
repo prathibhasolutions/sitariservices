@@ -207,10 +207,10 @@
         <a class="nav-link mb-2 {% if request.path == attendance_url %}active{% endif %}" href="{{ attendance_url }}">Attendance</a>
         
         {% url 'applications' as applications_url %}
-        <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">Applications</a>
+        <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">WorkSheet Applications</a>
 
         {% url 'worksheet' as worksheet_url %}
-        <a class="nav-link mb-2 {% if request.path == worksheet_url %}active{% endif %}" href="{{ worksheet_url }}">Worksheet</a>
+        <a class="nav-link mb-2 {% if request.path == worksheet_url %}active{% endif %}" href="{{ worksheet_url }}">Daily Worksheet</a>
 
         <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
 

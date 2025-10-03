@@ -10,7 +10,7 @@ def close_stale_sessions():
     1. It has received a ping, but the last_ping was more than 15 minutes ago.
     2. It has never received a ping, and the login_time was more than 15 minutes ago.
     """
-    cutoff = timezone.now() - timedelta(minutes=15)
+    cutoff = timezone.now() - timedelta(minutes=1)
 
     # Build the query to find all stale sessions
     # This uses an OR condition to check both scenarios
@@ -33,9 +33,9 @@ def close_stale_sessions():
         
         # Set a clear reason based on why it was closed
         if session.last_ping is None:
-            session.logout_reason = "Auto-logout: Tab closed for more than 15mins."
+            session.logout_reason = "Auto-logout: Tab closed"
         else:
-            session.logout_reason = "Auto-logout: Tab closed for more than 15minutes."
+            session.logout_reason = "Auto-logout: Tab closed"
             
         session.save(update_fields=['logout_time', 'logout_reason'])
 

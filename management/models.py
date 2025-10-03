@@ -292,8 +292,8 @@ class Employee(models.Model):
                 daily_totals[entry.date] += entry.amount
             
             for total_amount in daily_totals.values():
-                if total_amount > 1000:
-                    total_worksheet_commission += (total_amount - 1000) * Decimal('0.10')
+                if total_amount > 500:
+                    total_worksheet_commission += (total_amount - 500) * Decimal('0.05')
         else:
             total_monthly_amount = monthly_worksheets.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             total_worksheet_commission = total_monthly_amount * Decimal('0.05')

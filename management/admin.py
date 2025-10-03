@@ -42,23 +42,42 @@ class ManagedLinkAdmin(admin.ModelAdmin):
     search_fields = ('description',)
     ordering = ('description',)
 
-# --- UNIFIED EmployeeAdmin CLASS ---
-# In your management/admin.py file
 
+from .models import TrainingBonus, PerformanceBonus,MonthlyDeduction
+
+
+class TrainingBonusInline(admin.TabularInline):
+    model = TrainingBonus
+    extra = 0  # Show one empty row for adding a new bonus
+    fields = ('date', 'reason', 'amount')
+
+class PerformanceBonusInline(admin.TabularInline):
+    model = PerformanceBonus
+    extra = 0 # Show one empty row for adding a new bonus
+    fields = ('date', 'reason', 'amount')
+
+
+class MonthlyDeductionInline(admin.TabularInline):
+    model = MonthlyDeduction
+    extra = 0  # Show one empty row for adding a new deduction
+    fields = ('month', 'year', 'amount', 'notes')   
 # In your management/admin.py file
 
 from django.templatetags.static import static # Import the static tag function
 from .forms import EmployeeAdminForm
 from datetime import datetime, date
+from django.urls import reverse
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
     # --- 1. Display and Search Settings ---
+    inlines = [MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline]
     list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
     list_filter = ['department']
     change_list_template = "admin/employee_changelist.html"
+    change_form_template = "admin/employee_change_form.html"
     
     # --- 2. THIS IS THE FIX: Fieldset and Readonly Field Configuration ---
     # We define a readonly field to show the image preview.
@@ -97,6 +116,22 @@ class EmployeeAdmin(admin.ModelAdmin):
     filter_horizontal = ('assigned_links',)
 
     # --- 3. Custom Methods for Display ---
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        
+        # --- THIS IS THE CHANGE ---
+        # Make BOTH URLs use '?employee=' for consistency.
+        extra_context['attendance_report_url'] = (
+            reverse('admin:employee-attendance-report') + f'?employee={object_id}'
+        )
+        extra_context['salary_report_url'] = (
+            reverse('admin:employee-salary-report') + f'?employee={object_id}'
+        )
+        
+        return super().change_view(
+            request, object_id, form_url, extra_context=extra_context,
+        )
 
     @admin.display(description='')
     def profile_pic_preview(self, obj):
@@ -149,73 +184,69 @@ class EmployeeAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    # --- 7. Existing Attendance Report View (Unchanged) ---
-    # Make sure you have this import at the top of your admin.py file
-# Make sure you have this import at the top of your admin.py file
     from datetime import datetime
 
     # ... inside your EmployeeAdmin class
 
     def attendance_report_view(self, request):
-        employee_id = request.GET.get('employee_id')
+        employee_id = request.GET.get('employee')
         month_str = request.GET.get('month')
-        employee, daily_summary, total_wage = None, [], 0
-        working_day_count = 0  # Initialize the counter
 
-        if employee_id and month_str:
+        # --- THIS IS THE FINAL FIX ---
+        # If no month is selected, default to the current month.
+        if not month_str:
+            now = timezone.now()
+            month_str = now.strftime('%Y-%m') # Format as "YYYY-MM"
+
+        # Initialize variables
+        selected_employee = None
+        daily_summary = []
+        total_wage = 0
+        working_day_count = 0
+
+        # Get the employee object if an ID is provided
+        if employee_id:
             try:
-                employee = Employee.objects.get(pk=employee_id)
+                selected_employee = Employee.objects.get(pk=employee_id)
+            except (Employee.DoesNotExist, ValueError):
+                pass
+
+        # If we have both an employee and a month, get the report data
+        if selected_employee and month_str:
+            try:
                 year, month = map(int, month_str.split('-'))
+                daily_summary_dicts, total_wage = selected_employee.get_daily_attendance_summary(year, month)
                 
-                # This method returns a list of DICTIONARIES
-                daily_summary_dicts, total_wage = employee.get_daily_attendance_summary(year, month)
-
-                # --- START: FINAL Corrected Logic ---
-                
-                # Use a default start time if not set for the employee
-                employee_start_time = employee.working_start_time or datetime.strptime("23:59", "%H:%M").time()
-
+                employee_start_time = selected_employee.working_start_time or datetime.strptime("23:59", "%H:%M").time()
                 processed_summary = []
                 for record_dict in daily_summary_dicts:
-                    # Get the login time from the dictionary
                     login_datetime = record_dict.get('login_time')
-                    
-                    # Initialize the remark
                     record_dict['remark'] = ''
-                    
-                    # Check for late login only if a login time exists
                     if login_datetime:
-                        # --- THE FIX: Extract just the .time() component for comparison ---
                         login_time_only = login_datetime.time()
                         if login_time_only > employee_start_time:
                             record_dict['remark'] = 'Late Login'
-                    
-                    # Increment the counter if both login and logout times exist
                     if record_dict.get('login_time') and record_dict.get('logout_time'):
                         working_day_count += 1
-                    
                     processed_summary.append(record_dict)
                 
-                # Use the newly processed list for the context
                 daily_summary = processed_summary
-                
-                # --- END: Corrected Logic ---
-                        
-            except (Employee.DoesNotExist, ValueError):
-                pass
-                
+
+            except (ValueError, AttributeError):
+                pass 
+            
+        # Build the full context
         context = {
             **self.admin_site.each_context(request),
             'title': 'Monthly Attendance Report',
             'all_employees': Employee.objects.all(),
-            'selected_employee': employee,
+            'selected_employee': selected_employee,
             'selected_month_str': month_str,
-            'daily_summary_records': daily_summary, # This now contains the 'remark' key
+            'daily_summary_records': daily_summary,
             'total_monthly_wage': total_wage,
             'working_day_count': working_day_count,
         }
         return render(request, 'admin/attendance_report.html', context)
-
 
  # --- 3. MODIFIED Salary Report View ---
     def salary_report_view(self, request):
@@ -487,11 +518,6 @@ class AllowedIPAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         cache.clear()
     
-@admin.register(MonthlyDeduction)
-class MonthlyDeductionAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'month', 'year', 'amount', 'notes')
-    list_filter = ('year', 'month', 'employee')
-    search_fields = ('employee__name', 'notes')
 
 @admin.register(UploadService)
 class UploadServiceAdmin(admin.ModelAdmin):
@@ -753,21 +779,5 @@ class NotificationAdmin(admin.ModelAdmin):
         return obj.recipients.count()
 
 
-# admin.py
 
-from django.contrib import admin
-from .models import TrainingBonus, PerformanceBonus # and your other models
 
-@admin.register(TrainingBonus)
-class TrainingBonusAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'date', 'reason', 'amount')
-    list_filter = ('employee', 'date')
-    search_fields = ('reason', 'employee__name')
-    date_hierarchy = 'date'
-
-@admin.register(PerformanceBonus)
-class PerformanceBonusAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'date', 'reason', 'amount')
-    list_filter = ('employee', 'date')
-    search_fields = ('reason', 'employee__name')
-    date_hierarchy = 'date'
