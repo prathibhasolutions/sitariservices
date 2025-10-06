@@ -486,100 +486,102 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.utils import timezone
 from decimal import Decimal
-from .models import Application, ApplicationAssignment, Employee, ChatMessage
-
+from .models import Application, ApplicationAssignment, Employee, ChatMessage,ServiceType
 
 @require_employee
 def application_list_create_view(request, employee):
     """
-    Handles viewing and creating work applications.
-    This version requires a password for EVERY visit to the page.
+    Handles viewing and creating applications with UPDATED commission logic for 'Own' assignments.
     """
-    
-    # --- STEP 1: Handle POST requests ---
     if request.method == 'POST':
-        # --- A) If it's a password verification attempt ---
+        # Password verification logic remains the same
         if 'verify_password' in request.POST:
             entered_password = request.POST.get('password')
             if entered_password == employee.password:
-                # Password is correct. Proceed to load the main content.
-                # We will gather all the context data and render the page below.
-                pass # Fall through to the GET request logic at the end.
+                pass # Fall through to the GET logic
             else:
-                # Password is wrong, show an error and re-render the prompt page.
                 messages.error(request, "Incorrect password. Please try again.")
                 return render(request, 'application_password_prompt.html', {'employee': employee})
         
-        # --- B) If it's an application creation attempt ---
+        # Application creation logic
         else:
             try:
-                assign_type = request.POST.get('assign_type')
+                service_type_id = request.POST.get('service_type')
+                if not service_type_id:
+                    raise ValueError("You must select a service type.")
                 
-                # Auto-calculate total commission if sharing
-                if assign_type == 'sharing':
-                    creator_amount = Decimal(request.POST.get('creator_share_amount', '0'))
-                    partner_amount = Decimal(request.POST.get('partner_share_amount', '0'))
-                    total_commission = creator_amount + partner_amount
-                else:
-                    total_commission = Decimal(request.POST.get('total_commission'))
-
+                service_type = ServiceType.objects.get(id=service_type_id)
+                total_commission = Decimal(request.POST.get('total_commission'))
+                assign_type = request.POST.get('assign_type')
                 expected_date = request.POST.get('expected_date_of_completion') or None
 
+                # Create the Application instance first
                 app = Application.objects.create(
-                    application_name=request.POST.get('application_name'),
+                    service_type=service_type,
                     customer_name=request.POST.get('customer_name'),
                     customer_mobile_number=request.POST.get('customer_mobile_number'),
-                    description=request.POST.get('description'),
                     expected_date_of_completion=expected_date,
                     total_commission=total_commission,
                     approved=False
                 )
 
+                # --- COMMISSION ASSIGNMENT LOGIC ---
                 if assign_type == 'own':
-                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=total_commission)
+                    # --- NEW LOGIC FOR 'OWN' ASSIGNMENT ---
+                    # The employee gets a commission based on the sum of the referee and partner percentages.
+                    own_commission_percentage = service_type.referee_commission_percentage + service_type.partner_commission_percentage
+                    own_commission_amount = (total_commission * (own_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+                    
+                    ApplicationAssignment.objects.create(
+                        application=app, 
+                        employee=employee, 
+                        commission_amount=own_commission_amount
+                    )
+
                 elif assign_type == 'sharing':
+                    # This logic remains the same, splitting commission based on the predefined percentages
                     other_employee_id = request.POST.get('other_employee')
                     if not other_employee_id:
-                        app.delete()
+                        app.delete() # Clean up created application if no partner is selected
                         raise ValueError("Please select an employee to share with.")
                     
                     other_emp = Employee.objects.get(employee_id=other_employee_id)
-                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=creator_amount)
+                    
+                    referee_amount = (total_commission * (service_type.referee_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+                    partner_amount = (total_commission * (service_type.partner_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+
+                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=referee_amount)
                     ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_amount=partner_amount)
 
-                messages.success(request, f"Application '{app.application_name}' created successfully!")
+                messages.success(request, f"Application for '{app.service_type.name}' created successfully!")
                 return redirect('applications')
 
-            except (ValueError, TypeError, Employee.DoesNotExist) as e:
+            except (ValueError, TypeError, Employee.DoesNotExist, ServiceType.DoesNotExist) as e:
                 messages.error(request, f"Error creating application: {e}")
                 return redirect('applications')
 
-
-    # --- STEP 2: Handle GET requests or successful password POST ---
-    # If the request is a GET, the password hasn't been verified yet.
+    # GET request or successful password verification
     if request.method == 'GET':
-        # Always show the password prompt for a GET request.
         return render(request, 'application_password_prompt.html', {'employee': employee})
     
-    # If we are here, it means it was a POST request with a correct password.
-    # Now we gather all the data needed for the applications.html page.
-
+    # This part runs after a successful password POST
     today = timezone.localtime(timezone.now())
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
-    your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
-
+    your_applications = Application.objects.filter(assigned_employees=employee).select_related('service_type').order_by('-date_created').distinct()
     approved_assignments = ApplicationAssignment.objects.filter(
         employee=employee,
         application__approved=True,
         application__date_created__year=selected_year,
         application__date_created__month=selected_month
-    ).select_related('application')
+    ).select_related('application', 'application__service_type')
     
     total_monthly_commission = approved_assignments.aggregate(total=Sum('commission_amount'))['total'] or 0
 
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
+    service_types = ServiceType.objects.all()
+    
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
     selected_month_display = months[selected_month - 1]['display']
     current_year = timezone.now().year
@@ -590,6 +592,7 @@ def application_list_create_view(request, employee):
         'approved_assignments': approved_assignments,
         'total_commission': total_monthly_commission,
         'other_employees': other_employees,
+        'service_types': service_types,
         'selected_month': selected_month,
         'selected_month_display': selected_month_display,
         'selected_year': selected_year,

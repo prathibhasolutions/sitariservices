@@ -1,0 +1,18 @@
+{% load i18n %}
+<h3>{% blocktrans with filter_title=title %} By {{ filter_title }} {% endblocktrans %}</h3>
+<ul>
+  <li>
+    <form method="GET" action="">
+        <div style="margin-bottom: 5px;">
+            <label for="date_from" style="font-weight: bold;">From:</label>
+            <input type="date" id="date_from" name="date__gte" value="{{ request.GET.date__gte|default:'' }}" class="form-control">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="date_to" style="font-weight: bold;">To:</label>
+            <input type="date" id="date_to" name="date__lte" value="{{ request.GET.date__lte|default:'' }}" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+        <a href="?" class="btn btn-secondary btn-sm" style="margin-left: 5px;">Reset</a>
+    </form>
+  </li>
+</ul>

@@ -345,12 +345,6 @@ class Employee(models.Model):
         }
 
 
-
-
-
-
-
-
 class AttendanceSession(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance_sessions')
@@ -458,25 +452,72 @@ class Particular(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
 
-# management/models.py
+# In management/models.py
+
 from django.db import models
-from django.utils import timezone
+from django.core.exceptions import ValidationError
 from decimal import Decimal
 
-# Ensure your Employee model is defined or imported above this point
 
+# --- NEW MODEL: ServiceType ---
+class ServiceType(models.Model):
+    """
+    Defines a type of service with pre-defined commission splits for sharing.
+    """
+    name = models.CharField(max_length=255, unique=True)
+    
+    # These fields represent the percentage split for shared applications
+    referee_commission_percentage = models.DecimalField(
+        "Referee Commission (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=50.00,
+        help_text="Percentage of the total commission for the employee creating the application when it is shared."
+    )
+    partner_commission_percentage = models.DecimalField(
+        "Partner Commission (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=50.00,
+        help_text="Percentage of the total commission for the employee the application is shared with."
+    )
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        """
+        VALIDATION UPDATED:
+        Ensures the sum of employee commissions does not exceed 100%.
+        """
+        total_employee_commission = self.referee_commission_percentage + self.partner_commission_percentage
+        
+        # Check if the total percentage is greater than 100
+        if total_employee_commission > Decimal('100.00'):
+            raise ValidationError("The sum of referee and partner commission percentages cannot exceed 100%.")
+
+# --- MODIFIED MODEL: Application ---
 class Application(models.Model):
     """
     This is the central model for a client's job.
+    'application_name' is now 'service_type' and 'description' is removed.
     """
     id = models.AutoField(primary_key=True)
     date_created = models.DateTimeField(auto_now_add=True)
-    application_name = models.CharField(max_length=255)
+    
+
+    service_type = models.ForeignKey(
+        ServiceType, 
+        on_delete=models.PROTECT, 
+        related_name='applications',
+        help_text="Select the type of service for this application.",
+        blank=True,
+        null = True
+    )
+
     customer_name = models.CharField(max_length=150)
     customer_mobile_number = models.CharField(max_length=15)
-    description = models.TextField()
     
-    # --- UPDATED FIELD ---
     expected_date_of_completion = models.DateField(
         null=True, blank=True, help_text="Expected date to complete the work"
     )
@@ -486,8 +527,17 @@ class Application(models.Model):
     assigned_employees = models.ManyToManyField(Employee, through='ApplicationAssignment', related_name='applications')
 
     def __str__(self):
-        return f"Application#{self.id} ({self.application_name}) for {self.customer_name}"
+        # Updated to reflect the new structure
+        service_name = self.service_type.name if self.service_type else "[No Service Type]"
+        
+        # Return the new string format
+        return f"App#{self.id} ({service_name}) for {self.customer_name}"
 
+# The rest of your models (ApplicationAssignment, ApplicationDateExtension, etc.)
+# can remain the same as they do not need changes for this request.
+
+
+# In management/models.py
 
 class ApplicationAssignment(models.Model):
     """
@@ -497,7 +547,6 @@ class ApplicationAssignment(models.Model):
     application = models.ForeignKey(Application, on_delete=models.CASCADE)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     
-    # --- UPDATED FIELD ---
     commission_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0, help_text="The exact commission amount for this employee"
     )
@@ -506,7 +555,15 @@ class ApplicationAssignment(models.Model):
         unique_together = ('application', 'employee')
 
     def __str__(self):
-        return f"{self.employee.name} has commission of ₹{self.commission_amount} for {self.application.application_name}"
+        """
+        CORRECTED: Safely displays the service type name instead of application_name.
+        """
+        # Safely get the service name from the related application
+        service_name = self.application.service_type.name if self.application and self.application.service_type else "[No Service Type]"
+        
+        # Return the corrected string
+        return f"{self.employee.name} has commission of ₹{self.commission_amount} for {service_name}"
+
 
 # In management/models.py
 

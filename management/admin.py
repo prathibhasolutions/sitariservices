@@ -548,48 +548,36 @@ class ApplicationAssignmentInline(admin.TabularInline):
 
 from django.contrib import admin
 from django.shortcuts import get_object_or_404, render
-from .models import Application, ApplicationAssignment # Make sure to import your models
+from .models import Application, ApplicationAssignment,ServiceType # Make sure to import your models
 
 # Assuming ApplicationAssignmentInline is defined elsewhere
 # from .inlines import ApplicationAssignmentInline 
+@admin.register(ServiceType)
+class ServiceTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'referee_commission_percentage', 'partner_commission_percentage')
+    search_fields = ('name',)
+
+
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    """
-    Consolidated and corrected admin class for the Application model.
-    This version uses only native Django and Jazzmin features.
-    """
-    
     inlines = [ApplicationAssignmentInline]
-    list_display = ('application_name', 'customer_name', 'total_commission', 'date_created', 'approved')
     
-    # --- THIS IS THE CORRECT, NATIVE WAY ---
-    list_filter = (
-        # For the ManyToMany autocomplete filter, just use the field name
-        'assigned_employees',  
-        
-        # For a date filter, use Django's built-in DateFieldListFilter
-        ('date_created', admin.DateFieldListFilter), 
-        
-        # Standard boolean filter
-        'approved',
-    )
+    # --- CORRECTED ---
+    list_display = ('get_service_type_name', 'customer_name', 'total_commission', 'date_created', 'approved')
+    search_fields = ('service_type__name', 'customer_name', 'assigned_employees__name')
+    # -----------------
 
-    # --- THIS IS THE KEY TO THE AUTOCOMPLETE WIDGET ---
-    # This tells the admin to use an autocomplete search box for this M2M field in filters.
-    # It replaces the need for the `AssignedEmployeeFilter` class entirely.
-    autocomplete_fields = ['assigned_employees']
-
-    # Add 'assigned_employees__name' to make the autocomplete filter searchable by employee name
-    search_fields = ('application_name', 'customer_name', 'assigned_employees__name')
-    
+    list_filter = ('service_type', 'assigned_employees', ('date_created', admin.DateFieldListFilter), 'approved')
+    autocomplete_fields = ['assigned_employees', 'service_type']
     actions = ['approve_applications']
-    
-    # You can keep your template override for the print button
     change_list_template = 'admin/management/application/change_list.html'
     change_form_template = 'admin/management/application/change_form_detail.html'
 
-    # --- Custom Methods (Unchanged) ---
+    def get_service_type_name(self, obj):
+        return obj.service_type.name if obj.service_type else "[No Service Type]"
+    get_service_type_name.short_description = 'Service Type'
+    get_service_type_name.admin_order_field = 'service_type__name'
 
     def approve_applications(self, request, queryset):
         queryset.update(approved=True)
@@ -598,38 +586,26 @@ class ApplicationAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         urls = super().get_urls()
-        custom_urls = [
-            path('print/', self.admin_site.admin_view(self.print_view), name='application-print'),
-        ]
+        custom_urls = [path('print/', self.admin_site.admin_view(self.print_view), name='application-print')]
         return custom_urls + urls
 
     def print_view(self, request):
         cl = self.get_changelist_instance(request)
         queryset = cl.get_queryset(request)
         context = {
-            'title': 'Application Report',
-            'applications': queryset,
-            'site_header': self.admin_site.site_header,
+            'title': 'Application Report', 'applications': queryset, 'site_header': self.admin_site.site_header,
         }
         return render(request, 'admin/management/application/print_template.html', context)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         application = get_object_or_404(Application, pk=object_id)
-        assignments = application.applicationassignment_set.all().select_related('employee')
-        extension_history = application.date_extensions.all().order_by('-timestamp')
-        chat_messages = application.chat_messages.all().order_by('timestamp').select_related('employee')
+        extra_context['assignments'] = application.applicationassignment_set.all().select_related('employee')
+        extra_context['extension_history'] = application.date_extensions.all().order_by('-timestamp')
+        extra_context['chat_messages'] = application.chat_messages.all().order_by('timestamp').select_related('employee')
         is_shared = application.assigned_employees.count() > 1
-        is_chat_active = is_shared and not application.approved
-        
-        extra_context['assignments'] = assignments
-        extra_context['extension_history'] = extension_history
-        extra_context['chat_messages'] = chat_messages
-        extra_context['is_chat_active'] = is_chat_active
-        
-        return super().change_view(
-            request, object_id, form_url, extra_context=extra_context,
-        )
+        extra_context['is_chat_active'] = is_shared and not application.approved
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
 from decimal import Decimal
 

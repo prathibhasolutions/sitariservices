@@ -22,6 +22,7 @@ ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.
 INSTALLED_APPS = [
     'jazzmin',
     'dal',
+    'rangefilter',
     'dal_select2',
     'daterangefilter',
     'django.contrib.admin',

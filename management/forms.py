@@ -162,3 +162,33 @@ class EmployeeAdminForm(forms.ModelForm):
             # THIS IS THE KEY: Replace the default widget with a simple one
             'profile_picture': forms.FileInput,
         }
+
+
+from django import forms
+from .models import Employee, Department 
+    
+class WorksheetFilterForm(forms.Form):
+    employee = forms.ModelChoiceField(
+        queryset=Employee.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    approved = forms.ChoiceField(
+        choices=[('', '---------'), ('yes', 'Yes'), ('no', 'No')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
