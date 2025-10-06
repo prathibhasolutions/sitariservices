@@ -334,30 +334,29 @@
 
     // --- YOUR EXISTING SCRIPTS (UNCHANGED) ---
 
-    function printTodayEntries() {
-    // Get the HTML of the hidden print header
-    var printHeader = document.getElementById('print-header').innerHTML;
-    
-    // Get the entire inner HTML of the printable area.
-    // This correctly includes both the worksheet table and the resource report section.
-    var printContent = document.getElementById('todays-report-printable').innerHTML;
-    
-    // Store the original page content to restore it after printing
-    var originalContent = document.body.innerHTML;
-    
-    // Construct a new, temporary page with only the report content
-    document.body.innerHTML = '<html><head><title>Print Daily Report</title>' +
-        '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-        '<style>body { padding: 20px; }</style>' + // Optional: Add some padding for better print layout
-        '</head><body>' + printHeader + printContent + '</body></html>';
-    
-    // Trigger the browser's print dialog
-    window.print();
-    
-    // Restore the original page and reload it to ensure all scripts work again
-    document.body.innerHTML = originalContent;
-    location.reload(); 
-}
+    function printHistoricalReport() {
+        // Get the HTML of the hidden print header for historical data
+        var printHeader = document.getElementById('historical-print-header').innerHTML;
+        
+        // Get the entire inner HTML of the historical report printable area.
+        var printContent = document.getElementById('historical-report-printable').innerHTML;
+        
+        // Store the original page content
+        var originalContent = document.body.innerHTML;
+        
+        // Construct a new page for printing
+        document.body.innerHTML = '<html><head><title>Print Historical Report</title>' +
+            '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
+            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' + // Hide filter form and buttons
+            '</head><body>' + printHeader + printContent + '</body></html>';
+        
+        // Trigger the print dialog
+        window.print();
+        
+        // Restore the original page and reload
+        document.body.innerHTML = originalContent;
+        location.reload(); 
+    }
 
 
     document.addEventListener('click', function(event) {
