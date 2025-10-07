@@ -524,6 +524,7 @@ class UploadServiceAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
     search_fields = ('name',)
 
+
 @admin.register(EmployeeUpload)
 class EmployeeUploadAdmin(admin.ModelAdmin):
     list_display = ('employee', 'service', 'description', 'file_link', 'uploaded_at')
@@ -556,7 +557,8 @@ from .models import Application, ApplicationAssignment,ServiceType # Make sure t
 class ServiceTypeAdmin(admin.ModelAdmin):
     list_display = ('name', 'referee_commission_percentage', 'partner_commission_percentage')
     search_fields = ('name',)
-
+    
+    change_list_template = "admin/service_type_changelist.html"
 
 
 @admin.register(Application)
