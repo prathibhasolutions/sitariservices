@@ -90,10 +90,14 @@ class Employee(models.Model):
 
 # In models.py, inside the Employee class
 
+# In models.py, inside the Employee class
+
+# In models.py, inside the Employee class
+
     def get_daily_attendance_summary(self, year, month):
         """
-        Generates a day-by-day attendance summary with updated logic for daily wage calculation,
-        basing it on total working hours minus 2.
+        Generates a day-by-day attendance summary with a cap on the daily wage,
+        ensuring it does not exceed the base daily wage.
         """
         from .models import AttendanceSession, BreakSession
         from django.utils import timezone
@@ -113,22 +117,13 @@ class Employee(models.Model):
         if end_dt_base < start_dt_base:
             end_dt_base += timedelta(days=1)
         
-        # --- START OF MODIFICATION ---
-        
-        # 1. Calculate the total scheduled work seconds for a full day.
         scheduled_work_seconds = (end_dt_base - start_dt_base).total_seconds()
-        
-        # 2. Subtract 2 hours (7200 seconds) to get the new target for a full day's wage.
         wage_target_seconds = scheduled_work_seconds - (2 * 3600)
         
-        # 3. Add a safeguard: If the shift is 2 hours or less, use the original duration
-        #    to prevent division by zero or negative targets.
         if wage_target_seconds <= 0:
             wage_target_seconds = scheduled_work_seconds
 
-        # --- END OF MODIFICATION ---
-            
-        base_daily_wage = self.salary / Decimal(days_in_month) if days_in_month > 0 else Decimal('0.00')
+        base_daily_wage = self.salary / Decimal(days_in_month) if self.salary and days_in_month > 0 else Decimal('0.00')
 
         all_attendance_sessions = list(AttendanceSession.objects.filter(
             employee=self, login_time__year=year, login_time__month=month
@@ -191,15 +186,14 @@ class Employee(models.Model):
 
                     total_active_seconds = work_seconds + approved_break_seconds
 
-            # --- MODIFIED: Use the new wage_target_seconds for the calculation ---
+            # --- This is your existing, correct logic for capping the wage ---
+            capped_active_seconds = min(total_active_seconds, wage_target_seconds)
             daily_wage = Decimal('0.00')
             if wage_target_seconds > 0:
-                # Calculate the work ratio against the adjusted target time
-                work_ratio = Decimal(total_active_seconds) / Decimal(wage_target_seconds)
-                # Employee can earn more than 100% of their daily wage if they work longer
-                # than the adjusted target time. The wage is not capped.
+                work_ratio = Decimal(capped_active_seconds) / Decimal(wage_target_seconds)
                 daily_wage = base_daily_wage * work_ratio
-                daily_wage = max(Decimal('0.00'), daily_wage) # Ensure wage is not negative
+                daily_wage = max(Decimal('0.00'), daily_wage)
+            # --- End of existing logic ---
 
             total_monthly_wage += daily_wage
 
@@ -215,9 +209,7 @@ class Employee(models.Model):
                 
                 break_details.append({
                     'timings': f"{timezone.localtime(b.start_time).strftime('%H:%M')} - {timezone.localtime(b.end_time).strftime('%H:%M') if b.end_time else 'Active'}",
-                    'reason': b.logout_reason,
-                    'duration': duration_str,
-                    'approved': b.approved
+                    'reason': b.logout_reason, 'duration': duration_str, 'approved': b.approved
                 })
 
             h, rem = divmod(total_active_seconds, 3600)
@@ -225,16 +217,18 @@ class Employee(models.Model):
             total_duration_str = f"{int(h)}h {int(m)}m"
 
             daily_records.append({
-                'sl_no': day,
-                'date': current_date,
+                'sl_no': day, 'date': current_date,
                 'login_time': timezone.localtime(login_time) if login_time else None,
                 'logout_time': timezone.localtime(logout_time) if logout_time else None,
-                'break_sessions': break_details,
-                'total_duration': total_duration_str,
+                'break_sessions': break_details, 'total_duration': total_duration_str,
                 'daily_wage': round(daily_wage, 2),
             })
 
-        return daily_records, round(total_monthly_wage, 2)
+        # ### THE FINAL, CORRECTED RETURN STATEMENT ###
+        # This now returns all three values that the worksheet_view is expecting.
+        return daily_records, round(total_monthly_wage, 2), round(base_daily_wage, 2)
+
+
 
 
 

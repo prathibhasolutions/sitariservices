@@ -10,7 +10,7 @@ def close_stale_sessions():
     1. It has received a ping, but the last_ping was more than 15 minutes ago.
     2. It has never received a ping, and the login_time was more than 15 minutes ago.
     """
-    cutoff = timezone.now() - timedelta(minutes=5)
+    cutoff = timezone.now() - timedelta(minutes=15)
 
     # Build the query to find all stale sessions
     # This uses an OR condition to check both scenarios

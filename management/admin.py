@@ -189,64 +189,65 @@ class EmployeeAdmin(admin.ModelAdmin):
     # ... inside your EmployeeAdmin class
 
     def attendance_report_view(self, request):
-        employee_id = request.GET.get('employee')
-        month_str = request.GET.get('month')
+            employee_id = request.GET.get('employee')
+            month_str = request.GET.get('month')
 
-        # --- THIS IS THE FINAL FIX ---
-        # If no month is selected, default to the current month.
-        if not month_str:
-            now = timezone.now()
-            month_str = now.strftime('%Y-%m') # Format as "YYYY-MM"
+            if not month_str:
+                now = timezone.now()
+                month_str = now.strftime('%Y-%m')
 
-        # Initialize variables
-        selected_employee = None
-        daily_summary = []
-        total_wage = 0
-        working_day_count = 0
+            selected_employee = None
+            daily_summary = []
+            total_wage = Decimal('0.00')
+            max_daily_wage = Decimal('0.00') # Initialize
+            working_day_count = 0
 
-        # Get the employee object if an ID is provided
-        if employee_id:
-            try:
-                selected_employee = Employee.objects.get(pk=employee_id)
-            except (Employee.DoesNotExist, ValueError):
-                pass
+            if employee_id:
+                try:
+                    selected_employee = Employee.objects.get(pk=employee_id)
+                except (Employee.DoesNotExist, ValueError):
+                    pass
 
-        # If we have both an employee and a month, get the report data
-        if selected_employee and month_str:
-            try:
-                year, month = map(int, month_str.split('-'))
-                daily_summary_dicts, total_wage = selected_employee.get_daily_attendance_summary(year, month)
-                
-                employee_start_time = selected_employee.working_start_time or datetime.strptime("23:59", "%H:%M").time()
-                processed_summary = []
-                for record_dict in daily_summary_dicts:
-                    login_datetime = record_dict.get('login_time')
-                    record_dict['remark'] = ''
-                    if login_datetime:
-                        login_time_only = login_datetime.time()
-                        if login_time_only > employee_start_time:
-                            record_dict['remark'] = 'Late Login'
-                    if record_dict.get('login_time') and record_dict.get('logout_time'):
-                        working_day_count += 1
-                    processed_summary.append(record_dict)
-                
-                daily_summary = processed_summary
+            if selected_employee and month_str:
+                try:
+                    year, month = map(int, month_str.split('-'))
+                    
+                    # 1. CORRECTLY UNPACK THE THREE VALUES
+                    daily_summary_dicts, total_wage, max_daily_wage = selected_employee.get_daily_attendance_summary(year, month)
+                    
+                    employee_start_time = selected_employee.working_start_time or datetime.strptime("23:59", "%H:%M").time()
+                    processed_summary = []
+                    for record_dict in daily_summary_dicts:
+                        login_datetime = record_dict.get('login_time')
+                        record_dict['remark'] = ''
+                        if login_datetime:
+                            login_time_only = login_datetime.time()
+                            if login_time_only > employee_start_time:
+                                record_dict['remark'] = 'Late Login'
+                        if record_dict.get('login_time') and record_dict.get('logout_time'):
+                            working_day_count += 1
+                        processed_summary.append(record_dict)
+                    
+                    daily_summary = processed_summary
 
-            except (ValueError, AttributeError):
-                pass 
+                except ValueError as e:
+                    # 2. PROVIDE A HELPFUL ERROR MESSAGE INSTEAD OF FAILING SILENTLY
+                    self.message_user(request, f"An error occurred: {e}. Please check the data and try again.", level=messages.ERROR)
+                except Exception as e:
+                    self.message_user(request, f"An unexpected error occurred: {e}", level=messages.ERROR)
             
-        # Build the full context
-        context = {
-            **self.admin_site.each_context(request),
-            'title': 'Monthly Attendance Report',
-            'all_employees': Employee.objects.all(),
-            'selected_employee': selected_employee,
-            'selected_month_str': month_str,
-            'daily_summary_records': daily_summary,
-            'total_monthly_wage': total_wage,
-            'working_day_count': working_day_count,
-        }
-        return render(request, 'admin/attendance_report.html', context)
+            context = {
+                **self.admin_site.each_context(request),
+                'title': 'Monthly Attendance Report',
+                'all_employees': Employee.objects.all(),
+                'selected_employee': selected_employee,
+                'selected_month_str': month_str,
+                'daily_summary_records': daily_summary,
+                'total_monthly_wage': total_wage,
+                'working_day_count': working_day_count,
+                'max_daily_wage': max_daily_wage, # Pass the new value to the template
+            }
+            return render(request, 'admin/attendance_report.html', context)
 
  # --- 3. MODIFIED Salary Report View ---
     def salary_report_view(self, request):
@@ -306,7 +307,6 @@ class EmployeeAdmin(admin.ModelAdmin):
             'selected_date': selected_date_object,
             'current_month_earnings': earnings_data,
             'attended_meetings': attended_meetings,
-            # --- ADDED: Pass the new bonus lists to the template ---
             'attended_trainings': attended_trainings,
             'performance_bonuses': performance_bonuses,
         }

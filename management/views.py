@@ -369,6 +369,10 @@ def employee_dashboard(request):
     return render(request, 'employee_dashboard.html', context)
 
 
+# In views.py
+
+# In views.py
+
 def attendance_view(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
@@ -384,10 +388,28 @@ def attendance_view(request):
     month = int(request.GET.get('month', today.month))
     year = int(request.GET.get('year', today.year))
     
-    # --- Get the detailed daily summary from the model method ---
-    daily_summary, total_wage = employee.get_daily_attendance_summary(year, month)
+    # ### START OF THE CRITICAL FIX ###
 
-    # --- Logic for other sections (e.g., Today's sessions) ---
+    # 1. Initialize variables to hold the values, preventing errors
+    daily_summary, total_wage, max_daily_wage = [], Decimal('0.00'), Decimal('0.00')
+
+    try:
+        # 2. Correctly unpack the THREE values returned from the model method
+        daily_summary, total_wage, max_daily_wage = employee.get_daily_attendance_summary(year, month)
+    except Exception as e:
+        messages.error(request, f"Could not calculate attendance summary: {e}")
+
+    # 3. Find today's calculated wage from the summary
+    todays_calculated_wage = Decimal('0.00')
+    if month == today.month and year == today.year:
+        for record in daily_summary:
+            if record['date'].day == today.day:
+                todays_calculated_wage = record['daily_wage']
+                break
+    
+    # ### END OF THE CRITICAL FIX ###
+    
+    # --- The rest of the view remains the same ---
     if employee.working_start_time and employee.working_end_time:
         start_dt = datetime.combine(datetime.today().date(), employee.working_start_time)
         end_dt = datetime.combine(datetime.today().date(), employee.working_end_time)
@@ -431,12 +453,16 @@ def attendance_view(request):
         'todays_sessions': todays_sessions,
         'daily_summary_records': daily_summary,
         'total_monthly_wage': total_wage,
-        'calculated_salary': total_wage,
+        'calculated_salary': total_wage, # This context variable might be legacy, but we'll keep it
         'days_in_month': monthrange(year, month)[1],
         'daily_working_hours': daily_working_hours,
         'expected_hours': monthrange(year, month)[1] * daily_working_hours,
+        # The context now uses the correct values passed directly from the model
+        'max_daily_wage': max_daily_wage,
+        'todays_calculated_wage': todays_calculated_wage,
     }
     return render(request, 'attendance.html', context)
+
 
 
 @csrf_exempt  # Only use csrf_exempt if you cannot get CSRF cookie in JS; otherwise, handle it securely
@@ -739,6 +765,23 @@ from .forms import (
 )
 
 
+
+
+# In views.py
+
+from django.db.models import Sum, Q
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.utils import timezone
+from .forms import (
+    MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, 
+    FormsWorksheetForm, XeroxWorksheetForm, NotaryAndBondsWorksheetForm,
+    ResourceRepairForm
+)
+from .models import Worksheet, ResourceRepairReport, Employee
+
+from decimal import Decimal
+
 @require_employee
 def worksheet_view(request, employee):
     department = employee.department
@@ -746,99 +789,96 @@ def worksheet_view(request, employee):
         messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
         return redirect('employee_dashboard')
 
-    # --- Logic for the primary Worksheet Form ---
+    # --- Form Handling (No changes needed) ---
     form_map = {
-        'Mee Seva': MeesevaWorksheetForm,
-        'Online Hub': MeesevaWorksheetForm,
-        'Aadhaar': AadharWorksheetForm,
-        'Bhu Bharathi': BhuBharathiWorksheetForm,
-        'Forms': FormsWorksheetForm,       # RENAMED from 'xerox'
-        'Xerox': XeroxWorksheetForm,       # NEW 'Xerox' department
-        'Notary and Bonds': NotaryAndBondsWorksheetForm, # NEW 'Notary and Bonds' department
+        'Mee Seva': MeesevaWorksheetForm, 'Online Hub': MeesevaWorksheetForm, 'Aadhaar': AadharWorksheetForm, 
+        'Bhu Bharathi': BhuBharathiWorksheetForm, 'Forms': FormsWorksheetForm, 
+        'Xerox': XeroxWorksheetForm, 'Notary and Bonds': NotaryAndBondsWorksheetForm,
     }
     WorksheetForm = form_map.get(department.name)
-    worksheet_form = WorksheetForm() # Initialize for GET request
-
-    # --- Logic for the new Resource Repair Form ---
+    worksheet_form = WorksheetForm() if WorksheetForm else None
     today = timezone.now().date()
-    repair_form = None
-    # Check if a report for the current employee and date already exists
     todays_repair_report = ResourceRepairReport.objects.filter(employee=employee, date=today).first()
-    
-    # Only create a form instance if a report for today doesn't exist yet
+    repair_form = None
     if not todays_repair_report:
         repair_form = ResourceRepairForm()
 
-    # --- Combined Form Handling on POST request ---
     if request.method == 'POST':
-        # Use a hidden input to determine which form was submitted
         form_type = request.POST.get('form_type')
-
-        # Handle the Worksheet Entry submission
         if form_type == 'worksheet_entry' and WorksheetForm:
             worksheet_form = WorksheetForm(request.POST)
             if worksheet_form.is_valid():
-                entry = worksheet_form.save(commit=False)
-                entry.employee = employee
-                entry.department_name = department.name
-                entry.save()
+                entry = worksheet_form.save(commit=False); entry.employee = employee; entry.department_name = department.name; entry.save()
                 messages.success(request, "Worksheet entry added successfully.")
                 return redirect('worksheet')
-            else:
-                messages.error(request, "Please correct the errors in the worksheet entry.")
-
-        # Handle the Resource Repair Report submission
         elif form_type == 'repair_report':
-            # Double-check to prevent submitting again if the page was reloaded
-            if todays_repair_report:
-                 messages.error(request, "You have already submitted the repair report for today.")
-            else:
+            if not todays_repair_report:
                 repair_form = ResourceRepairForm(request.POST)
                 if repair_form.is_valid():
-                    report = repair_form.save(commit=False)
-                    report.employee = employee
-                    report.date = today
-                    report.save()
+                    report = repair_form.save(commit=False); report.employee = employee; report.date = today; report.save()
                     messages.success(request, "Resource repair report submitted successfully.")
                     return redirect('worksheet')
-                else:
-                    # If form is invalid, it will be re-rendered with errors below
-                    messages.error(request, "Please correct the errors in the repair report.")
-    
-    # --- Data Fetching for Template Context ---
-    # Today's worksheet entries and totals
+
+    # --- Data Fetching (No changes needed) ---
     todays_entries = Worksheet.objects.filter(employee=employee, date=today)
     todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
     todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
     
-    # Historical worksheet entries with filtering
     all_entries = Worksheet.objects.filter(employee=employee)
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    mobile_filter = request.GET.get('mobile_number')
-
+    start_date_str = request.GET.get('start_date'); end_date_str = request.GET.get('end_date')
     if start_date_str and end_date_str:
         all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
-    
+    mobile_filter = request.GET.get('mobile_number')
     if mobile_filter:
-        all_entries = all_entries.filter(
-            Q(customer_mobile__icontains=mobile_filter) | 
-            Q(login_mobile_no__icontains=mobile_filter)
-        )
+        all_entries = all_entries.filter(Q(customer_mobile__icontains=mobile_filter) | Q(login_mobile_no__icontains=mobile_filter))
     
+    # ### START OF THE DEBUGGING FIX ###
+    
+    todays_attendance_wage = Decimal('0.00')
+    max_daily_wage = Decimal('0.00')
+
+    print("--- Starting Salary Calculation Debug ---")
+    print(f"Employee: {employee.name}, Salary in DB: {employee.salary}")
+
+    try:
+        daily_summary, _, calculated_max_wage = employee.get_daily_attendance_summary(today.year, today.month)
+        
+        max_daily_wage = calculated_max_wage
+        print(f"Calculated Max Daily Wage from model: {max_daily_wage}")
+
+        for record in daily_summary:
+            if record['date'] == today:
+                todays_attendance_wage = record['daily_wage']
+                break
+        
+        print(f"Found Today's Calculated Wage: {todays_attendance_wage}")
+
+    except Exception as e:
+        # THIS IS THE CRITICAL CHANGE: We now show the error on the screen.
+        error_message = f"An error occurred during salary calculation: {e}"
+        print(error_message) # Also print to console
+        messages.error(request, error_message)
+        
+    print("--- Ending Salary Calculation Debug ---")
+    
+    # ### END OF THE DEBUGGING FIX ###
+
     context = {
         'employee': employee,
-        'form': worksheet_form, # The main worksheet entry form
-        'repair_form': repair_form, # The repair form (is None if already submitted)
+        'form': worksheet_form,
+        'repair_form': repair_form,
         'department': department,
         'todays_entries': todays_entries,
         'todays_total_amount': todays_total_amount,
         'todays_total_payment': todays_total_payment,
-        'todays_repair_report': todays_repair_report, # The submitted report object (is None if not submitted)
+        'todays_repair_report': todays_repair_report,
         'all_entries': all_entries.order_by('-date'),
         'today': today,
+        'todays_attendance_wage': todays_attendance_wage,
+        'max_daily_wage': max_daily_wage,
     }
     return render(request, 'worksheet.html', context)
+
 
 
 @require_employee

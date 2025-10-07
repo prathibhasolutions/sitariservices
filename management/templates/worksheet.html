@@ -1,6 +1,7 @@
 {% extends "masteremployee.html" %}
 {% load static %}
 
+
 {% block content %}
 <div class="container mt-4">
     {% if messages %}
@@ -12,6 +13,7 @@
         {% endfor %}
     {% endif %}
     <h1 style="text-decoration: underline;">Daily Worksheet</h1>
+
 
     <div class="row">
         <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
@@ -26,7 +28,7 @@
         <div class="card-body">
             <form method="post">
                 {% csrf_token %}
-                 <input type="hidden" name="form_type" value="worksheet_entry">
+                <input type="hidden" name="form_type" value="worksheet_entry">
                 <div class="form-row align-items-end">
                     {% for field in form %}
                         <div class="col">
@@ -52,7 +54,8 @@
         </div>
     </div>
 
-     <!-- This entire section will only appear if the report for today has not been submitted yet -->
+
+    <!-- This entire section will only appear if the report for today has not been submitted yet -->
     {% if repair_form %}
     <div class="card mb-4 shadow-sm" id="repair-checklist-card">
         <div class="card-header">
@@ -89,7 +92,8 @@
     </div>
     {% endif %}
 
- <!-- Section for Today's Entries (Print function is updated) -->
+
+ <!-- Section for Today's Entries -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>Today's Entries ({{ today|date:"d M Y" }})</h4>
@@ -97,14 +101,16 @@
                 <i class="fas fa-print"></i> Print Today's Worksheet
             </button>
         </div>
-        <div class="card-body" id="todays-report-printable">
+        <div class="card-body">
+            
             <div class="d-none" id="print-header">
                 <h3 class="text-center">Worksheet Report</h3>
                 <p class="text-center"><strong>Employee:</strong> {{ employee.name }}</p>
                 <p class="text-center"><strong>Department:</strong> {{ department.name }}</p>
                 <p class="text-center"><strong>Date:</strong> {{ today|date:"d F Y" }}</p>
             </div>
-            <div class="table-responsive">
+            
+            <div class="table-responsive" id="worksheet-table-content">
                 <table class="table table-striped table-bordered">
                     <thead class="thead-dark">
                         <tr>
@@ -158,11 +164,13 @@
                         </tr>
                     </tfoot>
                 </table>
+                
             </div>
 
-            <!-- NEW FEATURE: Display for submitted repair report for printing -->
+
+            <!-- Display for submitted repair report for printing -->
             {% if todays_repair_report %}
-            <div class="mt-4 pt-4 border-top">
+            <div class="mt-4 pt-4 border-top" id="repair-report-content">
                 <h5 class="text-center" style="text-decoration: underline;">Today's Resource Condition Report</h5>
                 <div class="row">
                     <div class="col-md-6"><strong>Monitor:</strong> {{ todays_repair_report.get_monitor_status_display }}</div>
@@ -181,8 +189,22 @@
                 {% endif %}
             </div>
             {% endif %}
+
+
+            <div class="d-none" id="salary-summary-for-print">
+            <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc;">
+                <h4 class="text-center">Daily Salary Summary</h4>
+                <p class="text-center" style="font-size: 1.1em; margin-bottom: 5px;">
+                    <strong>Maximum Possible Daily Salary:</strong> ₹{{ max_daily_wage|floatformat:2 }}
+                </p>
+                <p class="text-center" style="font-size: 1.1em;">
+                    <strong>Calculated Attendance Salary for Today:</strong> ₹{{ todays_attendance_wage|floatformat:2 }}
+                </p>
+            </div>
+        </div>
         </div>
     </div>
+
 
     <!-- Section for All Historical Entries -->
     <div class="card shadow-sm">
@@ -204,6 +226,7 @@
                     <p class="text-center"><strong>Filtered by Mobile:</strong> {{ request.GET.mobile_number }}</p>
                 {% endif %}
             </div>
+
 
             <!-- Filter Form -->
             <form method="get" class="form-row align-items-center mb-3">
@@ -294,7 +317,9 @@
     </div>
 </div>
 
+
 <!-- Modal and Scripts remain unchanged -->
+
 
 
 
@@ -315,48 +340,62 @@
   </div>
 </div>
 
-<script>
-    // --- SCRIPT FOR HISTORICAL ENTRIES PRINTING (UPDATED) ---
-    function printTodayEntries() {
-        var printHeader = document.getElementById('print-header').innerHTML;
-        // This now grabs the entire card body, including the worksheet table AND the submitted repair report details
-        var printContent = document.getElementById('todays-report-printable').innerHTML;
-        var originalContent = document.body.innerHTML;
-        
-        document.body.innerHTML = '<html><head><title>Print Report</title>' +
-            '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-            '</head><body>' + printHeader + printContent + '</body></html>';
-        
-        window.print();
-        document.body.innerHTML = originalContent;
-        location.reload(); 
-    }
 
-    // --- YOUR EXISTING SCRIPTS (UNCHANGED) ---
+<script>
+    // ### FINAL AND CORRECTED SCRIPT ###
+    function printTodayEntries() {
+        // 1. Get the elements themselves, not their innerHTML yet.
+        const headerEl = document.getElementById('print-header');
+        const worksheetTableEl = document.getElementById('worksheet-table-content');
+        const repairReportEl = document.getElementById('repair-report-content'); // This can be null
+        const salarySummaryEl = document.getElementById('salary-summary-for-print');
+
+        // 2. Safely get the innerHTML, providing an empty string if an element doesn't exist.
+        // This prevents the "reading 'innerHTML' of null" error.
+        const headerHTML = headerEl ? headerEl.innerHTML : '';
+        const worksheetHTML = worksheetTableEl ? worksheetTableEl.innerHTML : '';
+        const repairHTML = repairReportEl ? repairReportEl.innerHTML : ''; // The crucial fix is here
+        const salaryHTML = salarySummaryEl ? salarySummaryEl.innerHTML : '';
+
+        // 3. Assemble the final content for printing.
+        const printContent = headerHTML + worksheetHTML + repairHTML + salaryHTML;
+        
+        // 4. Open a new window and write the content to it.
+        const printWindow = window.open('', '', 'height=800,width=800');
+        printWindow.document.write('<html><head><title>Print Report</title>');
+        printWindow.document.write('<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">');
+        printWindow.document.write('<style>body { padding: 20px; } @page { size: auto; margin: 0.5in; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(printContent);
+        printWindow.document.write('</body></html>');
+        
+        // 5. Print and close the new window.
+        printWindow.document.close();
+        printWindow.focus();
+        
+        // Use a short timeout to ensure all content and styles are loaded before the print dialog is triggered.
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    }
 
     function printHistoricalReport() {
-        // Get the HTML of the hidden print header for historical data
         var printHeader = document.getElementById('historical-print-header').innerHTML;
-        
-        // Get the entire inner HTML of the historical report printable area.
         var printContent = document.getElementById('historical-report-printable').innerHTML;
-        
-        // Store the original page content
         var originalContent = document.body.innerHTML;
         
-        // Construct a new page for printing
         document.body.innerHTML = '<html><head><title>Print Historical Report</title>' +
             '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' + // Hide filter form and buttons
+            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' +
             '</head><body>' + printHeader + printContent + '</body></html>';
         
-        // Trigger the print dialog
         window.print();
         
-        // Restore the original page and reload
         document.body.innerHTML = originalContent;
         location.reload(); 
     }
+
 
 
     document.addEventListener('click', function(event) {
@@ -373,6 +412,7 @@
         }
     });
 </script>
+
 
 
 {% endblock %}
