@@ -132,7 +132,11 @@
         <div class="col-lg-6 mb-4">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <h5 class="card-title mb-4">Current Month Earnings <small class="text-muted">({{ "now"|date:"F Y" }})</small></h5>
+                   <h5 class="card-title mb-4">
+  Current Month Earnings 
+  <small class="text-muted">({% now "F Y" %})</small>
+</h5>
+
                     <div class="table-responsive">
                         <table class="table table-bordered mb-0">
                             <tbody>

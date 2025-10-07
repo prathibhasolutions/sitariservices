@@ -261,7 +261,7 @@ class Employee(models.Model):
 
         # 1. Get the accurate attendance-based salary
         # This assumes your get_daily_attendance_summary function exists and returns the salary
-        _, attendance_salary = self.get_daily_attendance_summary(year, month)
+        _, attendance_salary,_ = self.get_daily_attendance_summary(year, month)
 
         # 2. Calculate Application Commissions (Logic remains the same)
         application_commissions = ApplicationAssignment.objects.filter(

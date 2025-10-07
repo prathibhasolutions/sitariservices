@@ -1,0 +1,10 @@
+cd /home/ubuntu/sitariservices/
+
+git status
+
+
+git add .
+
+git commit -m "Backup of live server code - September 25, 2025"
+
+git push origin main --force
