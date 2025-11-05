@@ -48,6 +48,17 @@ def login_with_otp(request):
 
                     now = timezone.now()
 
+                    # 1. Find and close any still-open AttendanceSession for this employee
+                    open_attendance_sessions = AttendanceSession.objects.filter(
+                        employee=employee,
+                        logout_time__isnull=True
+                    )
+                    for old_session in open_attendance_sessions:
+                        old_session.logout_time = now
+                        old_session.logout_reason = "New Login Override"
+                        old_session.session_closed = True
+                        old_session.save()
+
                     # If a break session is still open (from idle/tab close/previous logout), end it NOW
                     last_break = BreakSession.objects.filter(
                         employee=employee,
@@ -92,6 +103,8 @@ def login_with_otp(request):
             return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
 
     return render(request, 'login.html', {'otp_sent': False})
+
+
 
 
 def change_password_request(request):
@@ -249,8 +262,11 @@ from .forms import EmployeeUploadForm
 from django.utils import timezone
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from .forms import EmployeeProfilePictureForm
+from .models import Employee, MeetingAttendance, TrainingBonus, PerformanceBonus
 
 def employee_dashboard(request):
+    # 1. Authenticate Employee (Unchanged)
     employee_id = request.session.get('employee_id')
     if not employee_id:
         return redirect('login')
@@ -260,15 +276,27 @@ def employee_dashboard(request):
     except Employee.DoesNotExist:
         request.session.flush()
         return redirect('login')
+    
+    # 2. Handle Profile Picture Upload (Unchanged)
+    if request.method == 'POST' and 'upload_profile_pic' in request.POST:
+        form = EmployeeProfilePictureForm(request.POST, request.FILES, instance=employee)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Profile picture updated successfully')
+            return redirect('employee_dashboard')
+    else:
+        # This is for the GET request, initializes the form
+        form = EmployeeProfilePictureForm(instance=employee)
 
-    # --- OTP and Session Management (Unchanged) ---
+    # 3. Handle OTP and Session Logic for Sensitive Data (Unchanged)
     otp_verified = request.session.get('otp_verified', False)
     show_sensitive = otp_verified
     otp_sent = request.session.get('otp_sent_flag', False)
 
     if request.method == 'POST':
+        # OTP Sending Logic (Unchanged)
         if 'send_otp' in request.POST:
-            from .utils import generate_otp, send_otp_whatsapp
+            from .utils import generate_otp, send_otp_whatsapp # Assuming you have this utility
             otp = generate_otp()
             request.session['emp_otp'] = otp
             send_otp_whatsapp(employee.mobile_number, otp)
@@ -276,6 +304,7 @@ def employee_dashboard(request):
             messages.success(request, f"OTP sent to {employee.mobile_number}")
             return redirect('employee_dashboard')
 
+        # OTP Verification Logic (Unchanged)
         elif 'verify_otp' in request.POST:
             entered_otp = request.POST.get('otp')
             expected_otp = request.session.get('emp_otp')
@@ -286,16 +315,18 @@ def employee_dashboard(request):
                     del request.session['emp_otp']
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
-                request.session['otp_sent_flag'] = True # Keep the form visible
+                request.session['otp_sent_flag'] = True # Keep OTP form visible
             return redirect('employee_dashboard')
 
-    # --- Data for Template (Unchanged) ---
+    # 4. Fetch Data for the Template
+    # Fetches earnings totals using the updated get_current_month_earnings method
     earnings_data = {}
     if show_sensitive:
         earnings_data = employee.get_current_month_earnings()
 
-    # --- ADDITION: Fetch meetings attended this month ---
+    # --- UPDATED DATA FETCHING FOR BONUS LISTS ---
     now = timezone.now()
+    # Fetch meetings attended (Unchanged)
     attended_meetings = MeetingAttendance.objects.filter(
         employee=employee,
         attended=True,
@@ -303,27 +334,44 @@ def employee_dashboard(request):
         meeting__date__month=now.month
     ).select_related('meeting').order_by('-meeting__date')
 
-    # --- Update the context to include the new meeting data ---
+    # Fetch individual training bonuses for the month (NEW)
+    attended_trainings = TrainingBonus.objects.filter(
+        employee=employee, date__year=now.year, date__month=now.month
+    ).order_by('-date')
+    
+    # Fetch individual performance bonuses for the month (NEW)
+    performance_bonuses = PerformanceBonus.objects.filter(
+        employee=employee, date__year=now.year, date__month=now.month
+    ).order_by('-date')
+
+    # 5. Build the Context Dictionary (Now includes new bonus lists)
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
         'otp_sent': otp_sent,
         'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
-        'upload_form': EmployeeUploadForm(),
-        'attended_meetings': attended_meetings,  # Pass the new data to the template
+        'upload_profile_form': form,
+        'attended_meetings': attended_meetings,
+        'attended_trainings': attended_trainings,      # NEW
+        'performance_bonuses': performance_bonuses,    # NEW
+        'upload_form': EmployeeUploadForm(), # This was in your original code
     }
 
-    # --- Session Cleanup (Unchanged) ---
+    # 6. Perform Session Cleanup (Unchanged)
     if 'otp_verified' in request.session:
         del request.session['otp_verified']
     if 'otp_sent_flag' in request.session:
-        if not 'emp_otp' in request.session:
-             del request.session['otp_sent_flag']
+        if 'emp_otp' not in request.session:
+            del request.session['otp_sent_flag']
 
+    # 7. Render the Template
     return render(request, 'employee_dashboard.html', context)
 
 
+# In views.py
+
+# In views.py
 
 def attendance_view(request):
     employee_id = request.session.get('employee_id')
@@ -340,10 +388,28 @@ def attendance_view(request):
     month = int(request.GET.get('month', today.month))
     year = int(request.GET.get('year', today.year))
     
-    # --- Get the detailed daily summary from the model method ---
-    daily_summary, total_wage = employee.get_daily_attendance_summary(year, month)
+    # ### START OF THE CRITICAL FIX ###
 
-    # --- Logic for other sections (e.g., Today's sessions) ---
+    # 1. Initialize variables to hold the values, preventing errors
+    daily_summary, total_wage, max_daily_wage = [], Decimal('0.00'), Decimal('0.00')
+
+    try:
+        # 2. Correctly unpack the THREE values returned from the model method
+        daily_summary, total_wage, max_daily_wage = employee.get_daily_attendance_summary(year, month)
+    except Exception as e:
+        messages.error(request, f"Could not calculate attendance summary: {e}")
+
+    # 3. Find today's calculated wage from the summary
+    todays_calculated_wage = Decimal('0.00')
+    if month == today.month and year == today.year:
+        for record in daily_summary:
+            if record['date'].day == today.day:
+                todays_calculated_wage = record['daily_wage']
+                break
+    
+    # ### END OF THE CRITICAL FIX ###
+    
+    # --- The rest of the view remains the same ---
     if employee.working_start_time and employee.working_end_time:
         start_dt = datetime.combine(datetime.today().date(), employee.working_start_time)
         end_dt = datetime.combine(datetime.today().date(), employee.working_end_time)
@@ -387,12 +453,16 @@ def attendance_view(request):
         'todays_sessions': todays_sessions,
         'daily_summary_records': daily_summary,
         'total_monthly_wage': total_wage,
-        'calculated_salary': total_wage,
+        'calculated_salary': total_wage, # This context variable might be legacy, but we'll keep it
         'days_in_month': monthrange(year, month)[1],
         'daily_working_hours': daily_working_hours,
         'expected_hours': monthrange(year, month)[1] * daily_working_hours,
+        # The context now uses the correct values passed directly from the model
+        'max_daily_wage': max_daily_wage,
+        'todays_calculated_wage': todays_calculated_wage,
     }
     return render(request, 'attendance.html', context)
+
 
 
 @csrf_exempt  # Only use csrf_exempt if you cannot get CSRF cookie in JS; otherwise, handle it securely
@@ -442,100 +512,102 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.utils import timezone
 from decimal import Decimal
-from .models import Application, ApplicationAssignment, Employee, ChatMessage
-
+from .models import Application, ApplicationAssignment, Employee, ChatMessage,ServiceType
 
 @require_employee
 def application_list_create_view(request, employee):
     """
-    Handles viewing and creating work applications.
-    This version requires a password for EVERY visit to the page.
+    Handles viewing and creating applications with UPDATED commission logic for 'Own' assignments.
     """
-    
-    # --- STEP 1: Handle POST requests ---
     if request.method == 'POST':
-        # --- A) If it's a password verification attempt ---
+        # Password verification logic remains the same
         if 'verify_password' in request.POST:
             entered_password = request.POST.get('password')
             if entered_password == employee.password:
-                # Password is correct. Proceed to load the main content.
-                # We will gather all the context data and render the page below.
-                pass # Fall through to the GET request logic at the end.
+                pass # Fall through to the GET logic
             else:
-                # Password is wrong, show an error and re-render the prompt page.
                 messages.error(request, "Incorrect password. Please try again.")
                 return render(request, 'application_password_prompt.html', {'employee': employee})
         
-        # --- B) If it's an application creation attempt ---
+        # Application creation logic
         else:
             try:
-                assign_type = request.POST.get('assign_type')
+                service_type_id = request.POST.get('service_type')
+                if not service_type_id:
+                    raise ValueError("You must select a service type.")
                 
-                # Auto-calculate total commission if sharing
-                if assign_type == 'sharing':
-                    creator_amount = Decimal(request.POST.get('creator_share_amount', '0'))
-                    partner_amount = Decimal(request.POST.get('partner_share_amount', '0'))
-                    total_commission = creator_amount + partner_amount
-                else:
-                    total_commission = Decimal(request.POST.get('total_commission'))
-
+                service_type = ServiceType.objects.get(id=service_type_id)
+                total_commission = Decimal(request.POST.get('total_commission'))
+                assign_type = request.POST.get('assign_type')
                 expected_date = request.POST.get('expected_date_of_completion') or None
 
+                # Create the Application instance first
                 app = Application.objects.create(
-                    application_name=request.POST.get('application_name'),
+                    service_type=service_type,
                     customer_name=request.POST.get('customer_name'),
                     customer_mobile_number=request.POST.get('customer_mobile_number'),
-                    description=request.POST.get('description'),
                     expected_date_of_completion=expected_date,
                     total_commission=total_commission,
                     approved=False
                 )
 
+                # --- COMMISSION ASSIGNMENT LOGIC ---
                 if assign_type == 'own':
-                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=total_commission)
+                    # --- NEW LOGIC FOR 'OWN' ASSIGNMENT ---
+                    # The employee gets a commission based on the sum of the referee and partner percentages.
+                    own_commission_percentage = service_type.referee_commission_percentage + service_type.partner_commission_percentage
+                    own_commission_amount = (total_commission * (own_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+                    
+                    ApplicationAssignment.objects.create(
+                        application=app, 
+                        employee=employee, 
+                        commission_amount=own_commission_amount
+                    )
+
                 elif assign_type == 'sharing':
+                    # This logic remains the same, splitting commission based on the predefined percentages
                     other_employee_id = request.POST.get('other_employee')
                     if not other_employee_id:
-                        app.delete()
+                        app.delete() # Clean up created application if no partner is selected
                         raise ValueError("Please select an employee to share with.")
                     
                     other_emp = Employee.objects.get(employee_id=other_employee_id)
-                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=creator_amount)
+                    
+                    referee_amount = (total_commission * (service_type.referee_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+                    partner_amount = (total_commission * (service_type.partner_commission_percentage / Decimal('100.00'))).quantize(Decimal('0.01'))
+
+                    ApplicationAssignment.objects.create(application=app, employee=employee, commission_amount=referee_amount)
                     ApplicationAssignment.objects.create(application=app, employee=other_emp, commission_amount=partner_amount)
 
-                messages.success(request, f"Application '{app.application_name}' created successfully!")
+                messages.success(request, f"Application for '{app.service_type.name}' created successfully!")
                 return redirect('applications')
 
-            except (ValueError, TypeError, Employee.DoesNotExist) as e:
+            except (ValueError, TypeError, Employee.DoesNotExist, ServiceType.DoesNotExist) as e:
                 messages.error(request, f"Error creating application: {e}")
                 return redirect('applications')
 
-
-    # --- STEP 2: Handle GET requests or successful password POST ---
-    # If the request is a GET, the password hasn't been verified yet.
+    # GET request or successful password verification
     if request.method == 'GET':
-        # Always show the password prompt for a GET request.
         return render(request, 'application_password_prompt.html', {'employee': employee})
     
-    # If we are here, it means it was a POST request with a correct password.
-    # Now we gather all the data needed for the applications.html page.
-
+    # This part runs after a successful password POST
     today = timezone.localtime(timezone.now())
     selected_month = int(request.GET.get('month', today.month))
     selected_year = int(request.GET.get('year', today.year))
 
-    your_applications = Application.objects.filter(assigned_employees=employee).order_by('-date_created').distinct()
-
+    your_applications = Application.objects.filter(assigned_employees=employee).select_related('service_type').order_by('-date_created').distinct()
     approved_assignments = ApplicationAssignment.objects.filter(
         employee=employee,
         application__approved=True,
         application__date_created__year=selected_year,
         application__date_created__month=selected_month
-    ).select_related('application')
+    ).select_related('application', 'application__service_type')
     
     total_monthly_commission = approved_assignments.aggregate(total=Sum('commission_amount'))['total'] or 0
 
     other_employees = Employee.objects.exclude(employee_id=employee.employee_id)
+    service_types = ServiceType.objects.all()
+    
     months = [{'value': i, 'display': timezone.datetime(2000, i, 1).strftime('%B')} for i in range(1, 13)]
     selected_month_display = months[selected_month - 1]['display']
     current_year = timezone.now().year
@@ -546,6 +618,7 @@ def application_list_create_view(request, employee):
         'approved_assignments': approved_assignments,
         'total_commission': total_monthly_commission,
         'other_employees': other_employees,
+        'service_types': service_types,
         'selected_month': selected_month,
         'selected_month_display': selected_month_display,
         'selected_year': selected_year,
@@ -680,7 +753,34 @@ def assigned_links_view(request):
 
 
 
-from django.db.models import Q # Make sure to import Q for complex lookups
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.db.models import Sum, Q
+from django.utils import timezone
+from .models import Employee, Worksheet, Department, ResourceRepairReport
+from .forms import (
+    MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, 
+    FormsWorksheetForm, XeroxWorksheetForm, NotaryAndBondsWorksheetForm, 
+    WorksheetEntryEditForm, ResourceRepairForm
+)
+
+
+
+
+# In views.py
+
+from django.db.models import Sum, Q
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.utils import timezone
+from .forms import (
+    MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, 
+    FormsWorksheetForm, XeroxWorksheetForm, NotaryAndBondsWorksheetForm,
+    ResourceRepairForm
+)
+from .models import Worksheet, ResourceRepairReport, Employee
+
+from decimal import Decimal
 
 @require_employee
 def worksheet_view(request, employee):
@@ -689,69 +789,96 @@ def worksheet_view(request, employee):
         messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
         return redirect('employee_dashboard')
 
+    # --- Form Handling (No changes needed) ---
     form_map = {
-        'Mee Seva': MeesevaWorksheetForm,
-        'Online Hub': MeesevaWorksheetForm,
-        'Aadhaar': AadharWorksheetForm,
-        'Bhu Bharathi': BhuBharathiWorksheetForm,
-        'xerox': XeroxWorksheetForm,
+        'Mee Seva': MeesevaWorksheetForm, 'Online Hub': MeesevaWorksheetForm, 'Aadhaar': AadharWorksheetForm, 
+        'Bhu Bharathi': BhuBharathiWorksheetForm, 'Forms': FormsWorksheetForm, 
+        'Xerox': XeroxWorksheetForm, 'Notary and Bonds': NotaryAndBondsWorksheetForm,
     }
     WorksheetForm = form_map.get(department.name)
-
-    if not WorksheetForm:
-        messages.error(request, f"No worksheet available for the '{department.name}' department.")
-        return redirect('employee_dashboard')
+    worksheet_form = WorksheetForm() if WorksheetForm else None
+    today = timezone.now().date()
+    todays_repair_report = ResourceRepairReport.objects.filter(employee=employee, date=today).first()
+    repair_form = None
+    if not todays_repair_report:
+        repair_form = ResourceRepairForm()
 
     if request.method == 'POST':
-        form = WorksheetForm(request.POST)
-        if form.is_valid():
-            worksheet_entry = form.save(commit=False)
-            worksheet_entry.employee = employee
-            worksheet_entry.department_name = department.name
-            worksheet_entry.save()
-            messages.success(request, "Worksheet entry added successfully.")
-            return redirect('worksheet')
-        else:
-            messages.error(request, "Please correct the errors below.")
-    else:
-        form = WorksheetForm()
+        form_type = request.POST.get('form_type')
+        if form_type == 'worksheet_entry' and WorksheetForm:
+            worksheet_form = WorksheetForm(request.POST)
+            if worksheet_form.is_valid():
+                entry = worksheet_form.save(commit=False); entry.employee = employee; entry.department_name = department.name; entry.save()
+                messages.success(request, "Worksheet entry added successfully.")
+                return redirect('worksheet')
+        elif form_type == 'repair_report':
+            if not todays_repair_report:
+                repair_form = ResourceRepairForm(request.POST)
+                if repair_form.is_valid():
+                    report = repair_form.save(commit=False); report.employee = employee; report.date = today; report.save()
+                    messages.success(request, "Resource repair report submitted successfully.")
+                    return redirect('worksheet')
 
-    today = timezone.now().date()
-    
-    # --- Today's Entries with DUAL totals ---
+    # --- Data Fetching (No changes needed) ---
     todays_entries = Worksheet.objects.filter(employee=employee, date=today)
     todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
-    # NEW: Calculate total for the 'payment' column
     todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
-
-    # --- Historical Entries with NEW mobile filter ---
+    
     all_entries = Worksheet.objects.filter(employee=employee)
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    mobile_filter = request.GET.get('mobile_number') # Get the mobile number from the URL
-
+    start_date_str = request.GET.get('start_date'); end_date_str = request.GET.get('end_date')
     if start_date_str and end_date_str:
         all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
-    
-    # NEW: Apply the mobile number filter
+    mobile_filter = request.GET.get('mobile_number')
     if mobile_filter:
-        # Use Q objects to search in either customer_mobile OR login_mobile_no
-        all_entries = all_entries.filter(
-            Q(customer_mobile__icontains=mobile_filter) | 
-            Q(login_mobile_no__icontains=mobile_filter)
-        )
+        all_entries = all_entries.filter(Q(customer_mobile__icontains=mobile_filter) | Q(login_mobile_no__icontains=mobile_filter))
     
+    # ### START OF THE DEBUGGING FIX ###
+    
+    todays_attendance_wage = Decimal('0.00')
+    max_daily_wage = Decimal('0.00')
+
+    print("--- Starting Salary Calculation Debug ---")
+    print(f"Employee: {employee.name}, Salary in DB: {employee.salary}")
+
+    try:
+        daily_summary, _, calculated_max_wage = employee.get_daily_attendance_summary(today.year, today.month)
+        
+        max_daily_wage = calculated_max_wage
+        print(f"Calculated Max Daily Wage from model: {max_daily_wage}")
+
+        for record in daily_summary:
+            if record['date'] == today:
+                todays_attendance_wage = record['daily_wage']
+                break
+        
+        print(f"Found Today's Calculated Wage: {todays_attendance_wage}")
+
+    except Exception as e:
+        # THIS IS THE CRITICAL CHANGE: We now show the error on the screen.
+        error_message = f"An error occurred during salary calculation: {e}"
+        print(error_message) # Also print to console
+        messages.error(request, error_message)
+        
+    print("--- Ending Salary Calculation Debug ---")
+    
+    # ### END OF THE DEBUGGING FIX ###
+
     context = {
         'employee': employee,
-        'form': form,
+        'form': worksheet_form,
+        'repair_form': repair_form,
         'department': department,
         'todays_entries': todays_entries,
-        'todays_total_amount': todays_total_amount, # Changed name for clarity
-        'todays_total_payment': todays_total_payment, # Pass new total to template
-        'all_entries': all_entries.order_by('-date'), # Ensure consistent ordering
+        'todays_total_amount': todays_total_amount,
+        'todays_total_payment': todays_total_payment,
+        'todays_repair_report': todays_repair_report,
+        'all_entries': all_entries.order_by('-date'),
         'today': today,
+        'todays_attendance_wage': todays_attendance_wage,
+        'max_daily_wage': max_daily_wage,
     }
     return render(request, 'worksheet.html', context)
+
 
 
 @require_employee
@@ -762,9 +889,7 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         messages.error(request, "This entry is approved and cannot be edited.")
         return redirect('worksheet')
 
-    # NEW: Use a separate, restricted form for editing
     if request.method == 'POST':
-        # Pass the instance to the restricted form
         form = WorksheetEntryEditForm(request.POST, instance=entry)
         if form.is_valid():
             form.save()
@@ -774,7 +899,6 @@ def worksheet_entry_edit_view(request, employee, entry_id):
             context = {'form': form, 'entry_id': entry_id}
             return render(request, 'partials/worksheet_edit_form.html', context)
     else:
-        # Show the restricted form on GET request
         form = WorksheetEntryEditForm(instance=entry)
 
     context = {
@@ -782,6 +906,7 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         'entry_id': entry_id
     }
     return render(request, 'partials/worksheet_edit_form.html', context)
+
 
 
 

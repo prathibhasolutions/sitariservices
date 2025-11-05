@@ -7,6 +7,8 @@ from django.conf import settings
 import os
 from django.db.models import Sum, F, ExpressionWrapper, fields
 import calendar
+from calendar import monthrange
+from collections import defaultdict
 
 class Department(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -43,6 +45,11 @@ from calendar import monthrange
 class Employee(models.Model):
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
+    profile_picture = models.ImageField(
+        upload_to='profile_pictures/', 
+        default='default_profile.jpg', 
+        blank=True, null=True
+    )
     mobile_number = models.CharField(max_length=15, unique=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2)
     pf = models.DecimalField("Provident Fund (PF)", max_digits=10, decimal_places=2, null=True, blank=True)
@@ -81,10 +88,16 @@ class Employee(models.Model):
     
     # In models.py, inside the Employee class
 
+# In models.py, inside the Employee class
+
+# In models.py, inside the Employee class
+
+# In models.py, inside the Employee class
+
     def get_daily_attendance_summary(self, year, month):
         """
-        Generates a day-by-day attendance summary with final, corrected logic
-        for login/logout times and exclusion of out-of-hours sessions.
+        Generates a day-by-day attendance summary with a cap on the daily wage,
+        ensuring it does not exceed the base daily wage.
         """
         from .models import AttendanceSession, BreakSession
         from django.utils import timezone
@@ -103,9 +116,14 @@ class Employee(models.Model):
         end_dt_base = datetime.combine(datetime.today(), end_work_time)
         if end_dt_base < start_dt_base:
             end_dt_base += timedelta(days=1)
-        expected_daily_work_seconds = (end_dt_base - start_dt_base).total_seconds()
         
-        base_daily_wage = self.salary / Decimal(days_in_month) if days_in_month > 0 else Decimal('0.00')
+        scheduled_work_seconds = (end_dt_base - start_dt_base).total_seconds()
+        wage_target_seconds = scheduled_work_seconds - (2 * 3600)
+        
+        if wage_target_seconds <= 0:
+            wage_target_seconds = scheduled_work_seconds
+
+        base_daily_wage = self.salary / Decimal(days_in_month) if self.salary and days_in_month > 0 else Decimal('0.00')
 
         all_attendance_sessions = list(AttendanceSession.objects.filter(
             employee=self, login_time__year=year, login_time__month=month
@@ -120,18 +138,15 @@ class Employee(models.Model):
             work_start_datetime = timezone.make_aware(datetime.combine(current_date, start_work_time))
             work_end_datetime = timezone.make_aware(datetime.combine(current_date, end_work_time))
 
-            # --- NEW: Rule 1 - Filter out logins that are after the workday ends ---
             day_attendance = [
                 s for s in all_attendance_sessions 
                 if timezone.localtime(s.login_time).date() == current_date and s.login_time < work_end_datetime
             ]
 
-            # --- NEW: Rule 2 - Filter out breaks that are completely outside work hours ---
             day_breaks = []
             for b in all_break_sessions:
                 if timezone.localtime(b.start_time).date() == current_date:
-                    # Check for any overlap with the work day
-                    break_end = b.end_time or work_end_datetime # Assume ongoing breaks end with the day
+                    break_end = b.end_time or work_end_datetime
                     if b.start_time < work_end_datetime and break_end > work_start_datetime:
                         day_breaks.append(b)
 
@@ -171,11 +186,14 @@ class Employee(models.Model):
 
                     total_active_seconds = work_seconds + approved_break_seconds
 
+            # --- This is your existing, correct logic for capping the wage ---
+            capped_active_seconds = min(total_active_seconds, wage_target_seconds)
             daily_wage = Decimal('0.00')
-            if expected_daily_work_seconds > 0:
-                work_ratio = Decimal(total_active_seconds) / Decimal(expected_daily_work_seconds)
+            if wage_target_seconds > 0:
+                work_ratio = Decimal(capped_active_seconds) / Decimal(wage_target_seconds)
                 daily_wage = base_daily_wage * work_ratio
                 daily_wage = max(Decimal('0.00'), daily_wage)
+            # --- End of existing logic ---
 
             total_monthly_wage += daily_wage
 
@@ -191,9 +209,7 @@ class Employee(models.Model):
                 
                 break_details.append({
                     'timings': f"{timezone.localtime(b.start_time).strftime('%H:%M')} - {timezone.localtime(b.end_time).strftime('%H:%M') if b.end_time else 'Active'}",
-                    'reason': b.logout_reason,
-                    'duration': duration_str,
-                    'approved': b.approved
+                    'reason': b.logout_reason, 'duration': duration_str, 'approved': b.approved
                 })
 
             h, rem = divmod(total_active_seconds, 3600)
@@ -201,103 +217,126 @@ class Employee(models.Model):
             total_duration_str = f"{int(h)}h {int(m)}m"
 
             daily_records.append({
-                'sl_no': day,
-                'date': current_date,
+                'sl_no': day, 'date': current_date,
                 'login_time': timezone.localtime(login_time) if login_time else None,
                 'logout_time': timezone.localtime(logout_time) if logout_time else None,
-                'break_sessions': break_details,
-                'total_duration': total_duration_str,
+                'break_sessions': break_details, 'total_duration': total_duration_str,
                 'daily_wage': round(daily_wage, 2),
             })
 
-        return daily_records, round(total_monthly_wage, 2)
+        # ### THE FINAL, CORRECTED RETURN STATEMENT ###
+        # This now returns all three values that the worksheet_view is expecting.
+        return daily_records, round(total_monthly_wage, 2), round(base_daily_wage, 2)
 
 
-    def get_current_month_earnings(self):
+
+
+
+# In models.py, replace the existing get_current_month_earnings method with this one
+
+
+
+# In models.py, inside the Employee class
+
+    def get_current_month_earnings(self, year=None, month=None):
         """
-        Calculates all earnings and deductions for the current month.
-        This includes attendance salary, commissions from applications and worksheets,
-        monthly bonuses, and any deductions.
+        Calculates all earnings and deductions for a given month/year.
+        This updated version uses the new event-based models for all bonuses.
         """
-        from .models import ApplicationAssignment, Worksheet, MonthlyDeduction, MonthlyBonus
+        # Import necessary models inside the function to avoid circular imports
+        from .models import (
+            ApplicationAssignment, Worksheet, MonthlyDeduction, 
+            TrainingBonus, PerformanceBonus, MeetingAttendance
+        )
         from django.db.models import Sum
         from django.utils import timezone
         from decimal import Decimal
+        from collections import defaultdict
 
-        now = timezone.now()
-        current_year = now.year
-        current_month = now.month
+        # Default to the current month if no year or month is provided
+        if year is None or month is None:
+            now = timezone.localtime(timezone.now())
+            year = now.year
+            month = now.month
 
         # 1. Get the accurate attendance-based salary
-        # This calls your other robust method to get the salary based on hours worked.
-        _, attendance_salary_from_summary = self.get_daily_attendance_summary(current_year, current_month)
+        # This assumes your get_daily_attendance_summary function exists and returns the salary
+        _, attendance_salary,_ = self.get_daily_attendance_summary(year, month)
 
-        # 2. Initialize the dictionary to hold all financial data
-        earnings = {
-            'attendance_salary': attendance_salary_from_summary,
-            'application_commissions': Decimal('0.00'),
-            'worksheet_commissions': Decimal('0.00'),
-            'meetings_bonus': Decimal('0.00'),
-            'trainings_bonus': Decimal('0.00'),
-            'performance_bonus': Decimal('0.00'),
-            'monthly_deductions_list': [],
-            'deduction_amount': Decimal('0.00'),
-            'total_earnings': Decimal('0.00'),
-        }
-
-        # 3. Calculate Application Commissions (Existing Functionality)
+        # 2. Calculate Application Commissions (Logic remains the same)
         application_commissions = ApplicationAssignment.objects.filter(
             employee=self,
             application__approved=True,
-            application__date_created__year=current_year,
-            application__date_created__month=current_month
+            application__date_created__year=year,
+            application__date_created__month=month
         ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
-        earnings['application_commissions'] = application_commissions
 
-        # 4. Calculate Worksheet Commissions (Existing Functionality)
-        worksheet_sum = self.worksheet_entries.filter(
-            date__year=current_year,
-            date__month=current_month,
-            approved=True  # Assuming you only commission approved worksheets
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        worksheet_commission = worksheet_sum * Decimal('0.05')
-        earnings['worksheet_commissions'] = worksheet_commission
-
-        # 5. Fetch Monthly Bonuses from the new model
-        try:
-            bonus_obj = self.monthly_bonuses.get(year=current_year, month=current_month)
-            earnings['meetings_bonus'] = bonus_obj.meetings_bonus
-            earnings['trainings_bonus'] = bonus_obj.trainings_bonus
-            earnings['performance_bonus'] = bonus_obj.performance_bonus
-        except MonthlyBonus.DoesNotExist:
-            # It's okay if no bonus entry exists for the month. Defaults will be 0.
-            pass
-
-        # 6. Calculate Deductions (Existing Functionality)
-        deductions_qs = MonthlyDeduction.objects.filter(employee=self, month=current_month, year=current_year)
-        total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        earnings['monthly_deductions_list'] = deductions_qs
-        earnings['deduction_amount'] = total_deduction_amount
-
-        # 7. Calculate Final Total Earnings
-        total_before_deduction = (
-            earnings['attendance_salary'] + 
-            earnings['application_commissions'] + 
-            earnings['worksheet_commissions'] +
-            earnings['meetings_bonus'] +
-            earnings['trainings_bonus'] +
-            earnings['performance_bonus']
+        # 3. Calculate Worksheet Commissions (Logic remains the same)
+        total_worksheet_commission = Decimal('0.00')
+        monthly_worksheets = self.worksheet_entries.filter(
+            date__year=year,
+            date__month=month,
+            approved=True
         )
         
-        earnings['total_earnings'] = total_before_deduction - earnings['deduction_amount']
+        is_xerox_dept = self.department and self.department.name == 'Xerox'
+        if is_xerox_dept:
+            daily_totals = defaultdict(Decimal)
+            for entry in monthly_worksheets:
+                daily_totals[entry.date] += entry.amount
+            
+            for total_amount in daily_totals.values():
+                if total_amount > 500:
+                    total_worksheet_commission += (total_amount - 500) * Decimal('0.05')
+        else:
+            total_monthly_amount = monthly_worksheets.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            total_worksheet_commission = total_monthly_amount * Decimal('0.05')
 
-        return earnings
+        # --- UPDATED BONUS CALCULATION LOGIC ---
+        # 4. Calculate total bonuses by summing amounts from the new event-based models
 
+        # Sum of bonuses from all meetings attended this month
+        meetings_bonus = MeetingAttendance.objects.filter(
+            employee=self, attended=True, meeting__date__year=year, meeting__date__month=month
+        ).aggregate(total=Sum('meeting__amount'))['total'] or Decimal('0.00')
+        
+        # Sum of bonuses from all training sessions this month
+        trainings_bonus = self.training_bonuses.filter(
+            date__year=year, date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
+        # Sum of all performance incentives this month
+        performance_bonus = self.performance_bonuses.filter(
+            date__year=year, date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
+        # 5. Calculate Deductions (Logic remains the same)
+        deductions_qs = MonthlyDeduction.objects.filter(employee=self, year=year, month=month)
+        total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
+        # 6. Calculate Final Total Earnings
+        total_before_deduction = (
+            attendance_salary +
+            application_commissions +
+            total_worksheet_commission +
+            meetings_bonus +
+            trainings_bonus +
+            performance_bonus
+        )
+        total_earnings = total_before_deduction - total_deduction_amount
+
+        # 7. Return all calculated values in a dictionary
+        return {
+            'attendance_salary': attendance_salary,
+            'application_commissions': application_commissions,
+            'worksheet_commissions': total_worksheet_commission,
+            'meetings_bonus': meetings_bonus,
+            'trainings_bonus': trainings_bonus,
+            'performance_bonus': performance_bonus,
+            'monthly_deductions_list': deductions_qs,
+            'deduction_amount': total_deduction_amount,
+            'total_earnings': total_earnings,
+        }
 
 
 class AttendanceSession(models.Model):
@@ -407,25 +446,72 @@ class Particular(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
 
 
-# management/models.py
+# In management/models.py
+
 from django.db import models
-from django.utils import timezone
+from django.core.exceptions import ValidationError
 from decimal import Decimal
 
-# Ensure your Employee model is defined or imported above this point
 
+# --- NEW MODEL: ServiceType ---
+class ServiceType(models.Model):
+    """
+    Defines a type of service with pre-defined commission splits for sharing.
+    """
+    name = models.CharField(max_length=255, unique=True)
+    
+    # These fields represent the percentage split for shared applications
+    referee_commission_percentage = models.DecimalField(
+        "Referee Commission (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=50.00,
+        help_text="Percentage of the total commission for the employee creating the application when it is shared."
+    )
+    partner_commission_percentage = models.DecimalField(
+        "Partner Commission (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=50.00,
+        help_text="Percentage of the total commission for the employee the application is shared with."
+    )
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        """
+        VALIDATION UPDATED:
+        Ensures the sum of employee commissions does not exceed 100%.
+        """
+        total_employee_commission = self.referee_commission_percentage + self.partner_commission_percentage
+        
+        # Check if the total percentage is greater than 100
+        if total_employee_commission > Decimal('100.00'):
+            raise ValidationError("The sum of referee and partner commission percentages cannot exceed 100%.")
+
+# --- MODIFIED MODEL: Application ---
 class Application(models.Model):
     """
     This is the central model for a client's job.
+    'application_name' is now 'service_type' and 'description' is removed.
     """
     id = models.AutoField(primary_key=True)
     date_created = models.DateTimeField(auto_now_add=True)
-    application_name = models.CharField(max_length=255)
+    
+
+    service_type = models.ForeignKey(
+        ServiceType, 
+        on_delete=models.PROTECT, 
+        related_name='applications',
+        help_text="Select the type of service for this application.",
+        blank=True,
+        null = True
+    )
+
     customer_name = models.CharField(max_length=150)
     customer_mobile_number = models.CharField(max_length=15)
-    description = models.TextField()
     
-    # --- UPDATED FIELD ---
     expected_date_of_completion = models.DateField(
         null=True, blank=True, help_text="Expected date to complete the work"
     )
@@ -435,8 +521,17 @@ class Application(models.Model):
     assigned_employees = models.ManyToManyField(Employee, through='ApplicationAssignment', related_name='applications')
 
     def __str__(self):
-        return f"Application#{self.id} ({self.application_name}) for {self.customer_name}"
+        # Updated to reflect the new structure
+        service_name = self.service_type.name if self.service_type else "[No Service Type]"
+        
+        # Return the new string format
+        return f"App#{self.id} ({service_name}) for {self.customer_name}"
 
+# The rest of your models (ApplicationAssignment, ApplicationDateExtension, etc.)
+# can remain the same as they do not need changes for this request.
+
+
+# In management/models.py
 
 class ApplicationAssignment(models.Model):
     """
@@ -446,7 +541,6 @@ class ApplicationAssignment(models.Model):
     application = models.ForeignKey(Application, on_delete=models.CASCADE)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     
-    # --- UPDATED FIELD ---
     commission_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0, help_text="The exact commission amount for this employee"
     )
@@ -455,7 +549,15 @@ class ApplicationAssignment(models.Model):
         unique_together = ('application', 'employee')
 
     def __str__(self):
-        return f"{self.employee.name} has commission of ₹{self.commission_amount} for {self.application.application_name}"
+        """
+        CORRECTED: Safely displays the service type name instead of application_name.
+        """
+        # Safely get the service name from the related application
+        service_name = self.application.service_type.name if self.application and self.application.service_type else "[No Service Type]"
+        
+        # Return the corrected string
+        return f"{self.employee.name} has commission of ₹{self.commission_amount} for {service_name}"
+
 
 # In management/models.py
 
@@ -510,15 +612,12 @@ class Worksheet(models.Model):
     payment = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     department_name = models.CharField(max_length=50, editable=False)
-    
-    # NEW: Approval status field
     approved = models.BooleanField(default=False)
 
     # Department-Specific Fields (all optional)
     token_no = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=150, blank=True, null=True)
     customer_mobile = models.CharField(max_length=15, blank=True, null=True)
-
     service = models.CharField(max_length=200, blank=True, null=True)
     certificate_number = models.CharField(max_length=100, blank=True, null=True)
     transaction_num = models.CharField("Transaction Number", max_length=100, blank=True, null=True)
@@ -527,6 +626,9 @@ class Worksheet(models.Model):
     application_no = models.CharField("Application No.", max_length=100, blank=True, null=True)
     status = models.CharField(max_length=100, blank=True, null=True)
     particulars = models.CharField(max_length=255, blank=True, null=True)
+    
+    # NEW field for 'Notary and Bonds'
+    bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
 
     class Meta:
         ordering = ['-date']
@@ -664,23 +766,7 @@ class TodoTask(models.Model):
         return self.description
     
 
-class MonthlyBonus(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='monthly_bonuses')
-    year = models.PositiveIntegerField()
-    month = models.PositiveIntegerField()
-    
-    meetings_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    trainings_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    performance_bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    class Meta:
-        unique_together = ('employee', 'year', 'month') # Ensures one bonus entry per employee per month
-        verbose_name = "Monthly Bonus"
-        verbose_name_plural = "Monthly Bonuses"
-
-    def __str__(self):
-        return f"Bonuses for {self.employee.name} - {self.month}/{self.year}"
-    
 
 # --- ADD THIS NEW MODEL for Meetings ---
 class Meeting(models.Model):
@@ -714,3 +800,56 @@ class MeetingAttendance(models.Model):
     def __str__(self):
         status = "Attended" if self.attended else "Absent"
         return f"{self.employee.name} - {self.meeting.topic} ({status})"
+
+
+        # --- NEW MODEL: PerformanceBonus ---
+class PerformanceBonus(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='performance_bonuses')
+    date = models.DateField(default=timezone.now)
+    reason = models.CharField(max_length=255, help_text="e.g., Exceeded Sales Target, Project Completion Bonus")
+    amount = models.DecimalField("Bonus Amount", max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Performance Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
+
+class TrainingBonus(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='training_bonuses')
+    date = models.DateField(default=timezone.now)
+    reason = models.CharField(max_length=255, help_text="e.g., Advanced Python Course, Safety Protocol Training")
+    amount = models.DecimalField("Bonus Amount", max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Training Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
+
+# --- NEW MODEL FOR RESOURCE REPAIR CHECKLIST ---
+class ResourceRepairReport(models.Model):
+    """Stores the daily resource condition report submitted by an employee."""
+    STATUS_CHOICES = [
+        ('OK', 'OK'),
+        ('Repair', 'Needs Repair')
+    ]
+    
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='repair_reports')
+    date = models.DateField(default=timezone.now)
+    
+    monitor_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    cpu_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    keyboard_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    mouse_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    cables_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    printer_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    bike_status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OK')
+    
+    remarks = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-date', 'employee']
+        # This constraint ensures an employee can only submit one report per day
+        constraints = [
+            models.UniqueConstraint(fields=['employee', 'date'], name='unique_daily_report_per_employee')
+        ]
+
+    def __str__(self):
+        return f"Repair Report for {self.employee.name} on {self.date}"

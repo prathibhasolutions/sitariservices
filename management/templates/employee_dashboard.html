@@ -17,9 +17,50 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <h5 class="card-title mb-4">Your Profile</h5>
+
+    <hr class="my-4 w-100" style="max-width: 400px;">
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
                             <tbody>
+                               <tr>
+    <th scope="row" style="width: 40%; vertical-align: middle;">Profile Pic</th>
+    <td>
+        <!-- Image display -->
+        {% if employee.profile_picture and employee.profile_picture.url != '/media/default_profile.png' %}
+            <img src="{{ employee.profile_picture.url }}" alt="Profile Picture" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+        {% else %}
+            <img src="{% static 'images/default_profile.png' %}" alt="Default Profile" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+        {% endif %}
+        
+        <!-- Modal Trigger Button (ensure data-bs- attributes are correct) -->
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" data-bs-toggle="modal" data-bs-target="#uploadProfilePicModal">
+            Change
+        </button>
+
+        <!-- The Modal Structure (hidden by default) -->
+        <div class="modal fade" id="uploadProfilePicModal" tabindex="-1" aria-labelledby="uploadProfilePicModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="uploadProfilePicModalLabel">Update Profile Picture</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Form inside the modal -->
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                {{ upload_profile_form.profile_picture }}
+                            </div>
+                            <button type="submit" name="upload_profile_pic" class="btn btn-primary w-100">Upload</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </td>
+</tr>
+    {# === END OF NEW ROW === #}
                                 {# --- Your existing profile details (unchanged) --- #}
                                 <tr>
                                     <th scope="row" style="width: 40%;">Employee Name</th>
@@ -91,7 +132,11 @@
         <div class="col-lg-6 mb-4">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <h5 class="card-title mb-4">Current Month Earnings <small class="text-muted">({{ "now"|date:"F Y" }})</small></h5>
+                   <h5 class="card-title mb-4">
+  Current Month Earnings 
+  <small class="text-muted">({% now "F Y" %})</small>
+</h5>
+
                     <div class="table-responsive">
                         <table class="table table-bordered mb-0">
                             <tbody>
@@ -105,9 +150,15 @@
                                     <td>{% if show_sensitive %}₹{{ current_month_earnings.application_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
                                 </tr>
                                 <tr>
-                                    <th scope="row">Worksheet Commissions (5%)</th>
-                                    <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
-                                </tr>
+                            <th scope="row">
+                                {% if employee.department.name == 'Xerox' %}
+                                    Worksheet Commissions (5%)
+                                {% else %}
+                                    Worksheet Commissions (5%)
+                                {% endif %}
+                            </th>
+                            <td>{% if show_sensitive %}₹{{ current_month_earnings.worksheet_commissions|floatformat:0|intcomma }}{% else %}<span class="text-muted">Locked</span>{% endif %}</td>
+                        </tr>
 
                                 <!-- === ADDED SECTION for Monthly Extras === -->
                                 <tr class="table-success">
@@ -219,6 +270,66 @@
                                     <tr>
                                         <td colspan="3" class="text-muted text-center">Locked</td>
                                     </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === ADD THIS ENTIRE NEW ROW FOR TRAININGS AND PERFORMANCE BONUSES === -->
+    <div class="row mt-4">
+        <!-- Trainings Attended -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Trainings Attended This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for training in attended_trainings %}
+                                        <tr>
+                                            <td>{{ training.date|date:"d M Y" }}</td>
+                                            <td>{{ training.reason }}</td>
+                                            <td>₹{{ training.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No trainings this month.</td></tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="3" class="text-muted text-center">Locked</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Performance Bonuses -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Performance Bonuses This Month</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                            <tbody>
+                                {% if show_sensitive %}
+                                    {% for bonus in performance_bonuses %}
+                                        <tr>
+                                            <td>{{ bonus.date|date:"d M Y" }}</td>
+                                            <td>{{ bonus.reason }}</td>
+                                            <td>₹{{ bonus.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No performance bonuses this month.</td></tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="3" class="text-muted text-center">Locked</td></tr>
                                 {% endif %}
                             </tbody>
                         </table>

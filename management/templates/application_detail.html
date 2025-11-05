@@ -4,11 +4,12 @@
 <div class="container my-4">
     <div class="card shadow-sm">
         <div class="card-header bg-dark text-white">
-            <h4>Application Details: {{ application.application_name }}</h4>
+            <!-- UPDATED: Use service_type.name -->
+            <h4>Application Details: {{ application.service_type.name }}</h4>
         </div>
         <div class="card-body">
             <div class="row">
-                <!-- Left Column: Application Details (Updated) -->
+                <!-- Left Column: Application Details -->
                 <div class="col-md-6">
                     <p><strong>Application ID:</strong> {{ application.id }}</p>
                     <div><strong>Assigned Employees & Share:</strong>
@@ -16,7 +17,6 @@
                             {% for assignment in assignments %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 {{ assignment.employee.name }}
-                                <!-- Display the direct commission amount -->
                                 <span class="badge badge-info badge-pill">₹{{ assignment.commission_amount|floatformat:2 }}</span>
                             </li>
                             {% endfor %}
@@ -26,33 +26,32 @@
                     <p><strong>Customer Mobile:</strong> {{ application.customer_mobile_number }}</p>
                     <p><strong>Created On:</strong> {{ application.date_created|date:"l, d F Y" }}</p>
 
-                    <strong>Work Description:</strong>
-                    <p class="border p-2 bg-light rounded">{{ application.description|linebreaksbr }}</p>
+                    <!-- REMOVED: Work Description section is gone -->
 
                     <p><strong>Expected Completion Date:</strong> 
-    {% if application.expected_date_of_completion %}
-        {{ application.expected_date_of_completion|date:"l, d F Y" }}
-    {% else %}
-        Not set
-    {% endif %}
-</p>
+                        {% if application.expected_date_of_completion %}
+                            {{ application.expected_date_of_completion|date:"l, d F Y" }}
+                        {% else %}
+                            Not set
+                        {% endif %}
+                    </p>
 
-<!-- NEW: Display Date Extension History -->
-{% if extension_history %}
-    <div class="mt-3">
-        <strong>Date Extension History:</strong>
-        <ul class="list-unstyled mt-2 small">
-            {% for extension in extension_history %}
-                <li class="mb-1">
-                    <i class="fas fa-history text-muted"></i>
-                    Extended from <strong>{{ extension.previous_date|date:"d M Y"|default:"(Original)" }}</strong> to <strong>{{ extension.new_date|date:"d M Y" }}</strong> by {{ extension.extended_by.name }} on {{ extension.timestamp|date:"d M Y" }}.
-                </li>
-            {% endfor %}
-        </ul>
-    </div>
-{% endif %}
+                    <!-- Date Extension History (Unchanged) -->
+                    {% if extension_history %}
+                    <div class="mt-3">
+                        <strong>Date Extension History:</strong>
+                        <ul class="list-unstyled mt-2 small">
+                            {% for extension in extension_history %}
+                            <li class="mb-1">
+                                <i class="fas fa-history text-muted"></i>
+                                Extended from <strong>{{ extension.previous_date|date:"d M Y"|default:"(Original)" }}</strong> to <strong>{{ extension.new_date|date:"d M Y" }}</strong> by {{ extension.extended_by.name }} on {{ extension.timestamp|date:"d M Y" }}.
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
 
-                    <p><strong>Total Commission:</strong> ₹{{ application.total_commission|floatformat:2 }}</p>
+                    <p class="mt-3"><strong>Total Commission:</strong> ₹{{ application.total_commission|floatformat:2 }}</p>
                     <p><strong>Status:</strong> 
                         <span class="badge {% if application.approved %}badge-success{% else %}badge-warning{% endif %} p-2">
                             {{ application.approved|yesno:"Approved,Pending Approval" }}
@@ -60,7 +59,7 @@
                     </p>
                 </div>
 
-                <!-- Right Column: Chat Box Section -->
+                <!-- Right Column: Chat Box Section (Unchanged) -->
                 <div class="col-md-6">
                     {% if is_chat_active %}
                     <div class="card h-100">
@@ -70,18 +69,18 @@
                         <div class="card-body" style="max-height: 400px; overflow-y: auto;" id="chat-box">
                             {% if chat_messages %}
                                 {% for msg in chat_messages %}
-                                    <div class="mb-3 p-2 rounded {% if msg.employee.employee_id == request.session.employee_id %}bg-light text-right{% else %}border{% endif %}">
-                                        <strong>{{ msg.employee.name }}</strong> 
-                                        <small class="text-muted">({{ msg.timestamp|date:"d M, H:i" }})</small>
-                                        {% if msg.message %}
-                                            <p class="mb-1 mt-1">{{ msg.message|linebreaksbr }}</p>
-                                        {% endif %}
-                                        {% if msg.file %}
-                                            <a href="{{ msg.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
-                                                Download: {{ msg.file.name|cut:"chat_files/" }}
-                                            </a>
-                                        {% endif %}
-                                    </div>
+                                <div class="mb-3 p-2 rounded {% if msg.employee.employee_id == request.session.employee_id %}bg-light text-right{% else %}border{% endif %}">
+                                    <strong>{{ msg.employee.name }}</strong> 
+                                    <small class="text-muted">({{ msg.timestamp|date:"d M, H:i" }})</small>
+                                    {% if msg.message %}
+                                        <p class="mb-1 mt-1">{{ msg.message|linebreaksbr }}</p>
+                                    {% endif %}
+                                    {% if msg.file %}
+                                        <a href="{{ msg.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary mt-1">
+                                            Download: {{ msg.file.name|cut:"chat_files/" }}
+                                        </a>
+                                    {% endif %}
+                                </div>
                                 {% endfor %}
                             {% else %}
                                 <p class="text-center text-muted">No messages yet. Start the conversation!</p>
@@ -110,42 +109,41 @@
             </div>
         </div>
     </div>
-<br>
+    <br>
     
-<button type="button" class="btn btn-warning" data-toggle="modal" data-target="#extendDateModal">
-    Extend Completion Date
-</button>
+    <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#extendDateModal">
+        Extend Completion Date
+    </button>
 
     <div class="mt-4">
         <a href="{% url 'applications' %}" class="btn btn-outline-secondary">&larr; Back to Applications List</a>
     </div>
 </div>
 
-<!-- Extend Date Modal -->
+<!-- Extend Date Modal (Unchanged) -->
 <div class="modal fade" id="extendDateModal" tabindex="-1" role="dialog" aria-labelledby="extendDateModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <form method="post" action="{% url 'application-detail' application.id %}">
-        {% csrf_token %}
-        <div class="modal-header">
-          <h5 class="modal-title" id="extendDateModalLabel">Extend Completion Date</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="post" action="{% url 'application-detail' application.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="extendDateModalLabel">Extend Completion Date</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="new_completion_date">New Expected Completion Date</label>
+                        <input type="date" class="form-control" name="new_completion_date" id="new_completion_date" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" name="extend_date" class="btn btn-primary">Save New Date</button>
+                </div>
+            </form>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="new_completion_date">New Expected Completion Date</label>
-            <input type="date" class="form-control" name="new_completion_date" id="new_completion_date" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-          <button type="submit" name="extend_date" class="btn btn-primary">Save New Date</button>
-        </div>
-      </form>
     </div>
-  </div>
 </div>
-
 {% endblock %}

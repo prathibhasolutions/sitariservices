@@ -20,11 +20,10 @@ ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.
 
 # Application definition
 INSTALLED_APPS = [
+    'jazzmin',
     'dal',
     'dal_select2',
-    'admin_auto_filters',
     'daterangefilter',
-    'rangefilter',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -34,6 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'management',
     'widget_tweaks',
+    
 ]
 
 MIDDLEWARE = [
@@ -77,18 +77,7 @@ DATABASES = {
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    
 ]
 
 # Internationalization
@@ -107,7 +96,9 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Include your static source folders for development convenience
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -125,3 +116,28 @@ CSRF_COOKIE_SECURE = False     # Set to True after SSL setup
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+
+JAZZMIN_SETTINGS = {
+    # Title on the brand, and login screen (19 chars max)
+    "site_header": "Sitari Solutions",
+    "site_brand": "Sitari Solutions",
+
+    # Logo to use for your site, must be present in static files
+    "site_logo": "img/logo.jpg",
+
+    # Logo to use for your site on the login screen, must be present in static files
+    "login_logo": "img/logo.jpg",
+
+    # CSS classes that are applied to the logo above
+    "site_logo_classes": "img-circle",
+
+    # Welcome text on the login screen
+    "welcome_sign": "Welcome to Sitari Solutions Admin",
+
+    # Copyright on the footer
+    "copyright": "Sitari Solutions Ltd",
+
+    "custom_css": "css/jazzmin_custom.css",
+}
+

@@ -6,16 +6,17 @@
 {% block content %}
 <div id="content-main">
     
-
-    <!-- 1. Filter Form -->
+    <!-- 1. Filter Form (Corrected) -->
     <form method="get" id="report-form" style="margin-bottom: 20px;">
         <div class="form-row" style="display: flex; align-items: flex-end;">
             <div>
                 <label for="employee-select">Select Employee:</label>
-                <select id="employee-select" name="employee_id">
+                <!-- CHANGE 1: The 'name' attribute MUST BE 'employee' -->
+                <select id="employee-select" name="employee">
                     <option value="">---------</option>
                     {% for emp in all_employees %}
-                        <option value="{{ emp.pk }}" {% if selected_employee.pk == emp.pk %}selected{% endif %}>
+                        <!-- CHANGE 2: The 'if' condition is corrected -->
+                        <option value="{{ emp.pk }}" {% if selected_employee and selected_employee.pk == emp.pk %}selected{% endif %}>
                             {{ emp.name }}
                         </option>
                     {% endfor %}
@@ -33,10 +34,10 @@
 
     <hr>
 
-    <!-- 2. Report Section -->
+    <!-- 2. Report Section (Corrected) -->
     {% if selected_employee and daily_summary_records %}
     <div id="printable-report">
-        <!-- Header for printing -->
+        <!-- Header for printing (Unchanged) -->
         <div id="print-header" style="display: none; text-align: center; margin-bottom: 20px;">
             <h2>Attendance Report for {{ selected_employee.name }}</h2>
             <p><strong>Month:</strong> {% firstof selected_month_str 'N/A' %}</p>
@@ -52,6 +53,7 @@
                     <th style="padding: 8px; border: 1px solid #ddd;">Break Sessions</th>
                     <th style="padding: 8px; border: 1px solid #ddd;">Total Duration</th>
                     <th style="padding: 8px; border: 1px solid #ddd;">Daily Wage (₹)</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">Remarks</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,12 +79,17 @@
                     </td>
                     <td style="padding: 8px; border: 1px solid #ddd;">{{ record.total_duration }}</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">{{ record.daily_wage|floatformat:2 }}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{{ record.remark }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
             <tfoot>
+                <tr style="font-weight: bold; background-color: #f8f8f8;">
+                    <td colspan="7" style="padding: 8px; border: 1px solid #ddd; text-align: right;">Total Working Days (Logged In & Out):</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">{{ working_day_count }}</td>
+                </tr>
                 <tr style="font-weight: bold; background-color: #f2f2f2;">
-                    <td colspan="6" style="padding: 8px; border: 1px solid #ddd; text-align: right;">Total Monthly Wage:</td>
+                    <td colspan="7" style="padding: 8px; border: 1px solid #ddd; text-align: right;">Total Monthly Wage:</td>
                     <td style="padding: 8px; border: 1px solid #ddd;">₹{{ total_monthly_wage|floatformat:2 }}</td>
                 </tr>
             </tfoot>
@@ -93,19 +100,20 @@
         <button onclick="printReport()" id="print-button">Print Report</button>
     </div>
 
-    {% elif request.GET.employee_id %}
+    <!-- CHANGE 3: The 'elif' condition must check for 'employee' -->
+    {% elif request.GET.employee %}
         <p>No attendance records found for the selected employee and month.</p>
     {% endif %}
 
 </div>
 
+<!-- Your existing script remains unchanged -->
 <script>
 function printReport() {
     var printHeader = document.getElementById('print-header');
     var reportContent = document.getElementById('printable-report');
     var originalContent = document.body.innerHTML;
 
-    // Temporarily show the header and hide the button for printing
     printHeader.style.display = 'block';
     document.getElementById('report-form').style.display = 'none';
     document.getElementById('print-button').style.display = 'none';
@@ -116,9 +124,7 @@ function printReport() {
 
     window.print();
     
-    // Restore the original page content
     document.body.innerHTML = originalContent;
-    // Reload to ensure all scripts and event handlers work correctly
     window.location.reload();
 }
 </script>

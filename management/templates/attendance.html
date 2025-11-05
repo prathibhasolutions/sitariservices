@@ -157,19 +157,35 @@
       </div>
     </div>
 
-    <!-- Original Monthly Salary Display -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <h5>Total Calculated Salary: ₹{{ total_monthly_wage|floatformat:2 }}</h5>
-            <small>(Based on daily work duration within working hours for {{ selected_month_name }})</small>
-            <div class="mt-2">
-                <small class="text-muted">
-                    Working Hours: {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }} 
-                    ({{ daily_working_hours|floatformat:1 }} hours/day)
-                </small>
-            </div>
+    <!-- In attendance.html -->
+
+<!-- UPDATED: Today's Salary Summary -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Today's Salary Summary ({{ today|date:"d-m-Y" }})</h5>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="text-muted mb-0">Maximum Possible Daily Salary:</h6>
+            <h5 class="mb-0">₹{{ max_daily_wage|floatformat:2 }}</h5>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="font-weight-bold mb-0">Calculated Salary for Today:</h6>
+            <h5 class="font-weight-bold mb-0">₹{{ todays_calculated_wage|floatformat:2 }}</h5>
+        </div>
+        <hr>
+        <small class="text-muted">
+            Salary is calculated based on your daily work duration (including approved breaks) within your scheduled working hours. A 2-hour break is factored into the calculation. The daily wage is capped and will not exceed the maximum possible daily salary.
+        </small>
+        <div class="mt-2">
+            <small class="text-muted">
+                Your Working Hours: {{ employee.working_start_time|time:"H:i" }} - {{ employee.working_end_time|time:"H:i" }} 
+                ({{ daily_working_hours|floatformat:1 }} hours/day)
+            </small>
         </div>
     </div>
+</div>
+
 
 </main>
 {% endblock %}

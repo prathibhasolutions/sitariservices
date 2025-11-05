@@ -1,0 +1,76 @@
+/* static/css/jazzmin_custom.css */
+
+/* --- Custom styles for Jazzmin --- */
+
+/* Style for the logo on the login page */
+.login-logo img {
+    max-width: 120px !important;  /* Adjust this value for the login logo size */
+    height: auto !important;
+}
+
+/* Style for the logo in the dashboard navbar */
+.brand-image {
+    max-height: 40px !important; /* Adjust this value for the navbar logo size */
+    width: auto !important;
+}
+
+
+/* static/css/jazzmin_custom.css */
+
+/* --- Force styles for all admin filters --- */
+
+/* Style the main filter container on the right sidebar */
+#changelist-filter {
+    background-color: #f8f9fa; /* A slightly off-white background */
+}
+
+#changelist-filter h3 {
+    background-color: #e9ecef; /* A light grey header for each filter section */
+    padding: 10px 15px;
+    margin-bottom: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+#changelist-filter ul {
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+/* --- Specific styles for the Autocomplete filter --- */
+#changelist-filter .admin-filter-autocomplete {
+    padding: 10px 15px !important;
+}
+
+/* Force-style the Select2 widget used by the autocomplete filter */
+#changelist-filter .select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da !important;
+    height: 38px !important;
+    padding: .375rem .75rem !important;
+    font-size: 1rem !important;
+    line-height: 1.5 !important;
+    border-radius: .25rem !important;
+}
+
+/* Style the Search and Reset buttons for autocomplete */
+#changelist-filter .admin-filter-autocomplete .btn {
+    display: inline-block;
+    padding: 0.375rem 0.75rem !important;
+    margin-top: 8px !important;
+    margin-right: 5px !important;
+    font-size: 0.9rem !important;
+    border-radius: .25rem !important;
+}
+
+/* Specifically style the Reset button */
+#changelist-filter .admin-filter-autocomplete a.btn[href="?"] {
+    background-color: #6c757d !important; /* Bootstrap secondary color */
+    color: white !important;
+}
+
+/* --- Fix the styling for default Django list filters (like 'approved') --- */
+#changelist-filter ul.admin-filter-choices li.selected a {
+    background-color: #007bff !important; /* Jazzmin's primary blue */
+    color: white !important;
+    border-radius: .25rem;
+}

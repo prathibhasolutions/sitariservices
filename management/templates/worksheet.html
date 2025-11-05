@@ -1,6 +1,7 @@
 {% extends "masteremployee.html" %}
 {% load static %}
 
+
 {% block content %}
 <div class="container mt-4">
     {% if messages %}
@@ -13,11 +14,13 @@
     {% endif %}
     <h1 style="text-decoration: underline;">Daily Worksheet</h1>
 
+
     <div class="row">
-    <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
-    <h3 class="mb-4 col-6">Department: <span class="text-primary">{{ department.name }}</span></h3>
-</div>
-    <!-- Section to Add New Entry (Unchanged) -->
+        <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
+        <h3 class="mb-4 col-6">Department: <span class="text-primary">{{ department.name }}</span></h3>
+    </div>
+    
+    <!-- Section to Add New Entry -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header">
             <h4>Add New Entry for {{ today|date:"d M Y" }}</h4>
@@ -25,6 +28,7 @@
         <div class="card-body">
             <form method="post">
                 {% csrf_token %}
+                <input type="hidden" name="form_type" value="worksheet_entry">
                 <div class="form-row align-items-end">
                     {% for field in form %}
                         <div class="col">
@@ -50,7 +54,46 @@
         </div>
     </div>
 
-    <!-- Section for Today's Entries (UPDATED with Dual Totals) -->
+
+    <!-- This entire section will only appear if the report for today has not been submitted yet -->
+    {% if repair_form %}
+    <div class="card mb-4 shadow-sm" id="repair-checklist-card">
+        <div class="card-header">
+            <h4>Daily Resource Condition Checklist for {{ today|date:"d M Y" }}</h4>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <!-- IMPORTANT: Hidden input to identify this form -->
+                <input type="hidden" name="form_type" value="repair_report">
+                <div class="row">
+                    {% for field in repair_form %}
+                        {% if field.name != 'remarks' %}
+                        <div class="col-md-4 col-sm-6 mb-3">
+                            <strong>{{ field.label }}:</strong>
+                            <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                                {% for choice in field %}
+                                <label class="btn btn-outline-secondary {% if choice.data.value == 'OK' %}active{% endif %}">
+                                    <input type="radio" name="{{ choice.data.name }}" value="{{ choice.data.value }}" {% if choice.data.value == 'OK' %}checked{% endif %}> {{ choice.choice_label }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="form-group mt-3">
+                    {{ repair_form.remarks.label_tag }}
+                    {{ repair_form.remarks }}
+                </div>
+                <button type="submit" class="btn btn-info">Submit Daily Report</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+
+ <!-- Section for Today's Entries -->
     <div class="card mb-4 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>Today's Entries ({{ today|date:"d M Y" }})</h4>
@@ -58,14 +101,16 @@
                 <i class="fas fa-print"></i> Print Today's Worksheet
             </button>
         </div>
-        <div class="card-body" id="todays-report-printable">
+        <div class="card-body">
+            
             <div class="d-none" id="print-header">
                 <h3 class="text-center">Worksheet Report</h3>
                 <p class="text-center"><strong>Employee:</strong> {{ employee.name }}</p>
                 <p class="text-center"><strong>Department:</strong> {{ department.name }}</p>
                 <p class="text-center"><strong>Date:</strong> {{ today|date:"d F Y" }}</p>
             </div>
-            <div class="table-responsive">
+            
+            <div class="table-responsive" id="worksheet-table-content">
                 <table class="table table-striped table-bordered">
                     <thead class="thead-dark">
                         <tr>
@@ -76,8 +121,12 @@
                                 <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment</th>
                             {% elif department.name == "Bhu Bharathi" %}
                                 <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment</th>
-                            {% elif department.name == "xerox" %}
+                            {% elif department.name == "Forms" %}
                                 <th>Particulars</th>
+                            {% elif department.name == "Xerox" %}
+                                <!-- No extra columns -->
+                            {% elif department.name == "Notary and Bonds" %}
+                                <th>Token No</th><th>Customer Name</th><th>Service</th><th>Bonds Sl. No</th><th>Payment</th>
                             {% endif %}
                             <th>Amount (₹)</th>
                         </tr>
@@ -92,8 +141,12 @@
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Bhu Bharathi" %}
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
-                            {% elif department.name == "xerox" %}
+                            {% elif department.name == "Forms" %}
                                 <td>{{ entry.particulars|default:"-" }}</td>
+                            {% elif department.name == "Xerox" %}
+                                <!-- No extra columns -->
+                            {% elif department.name == "Notary and Bonds" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% endif %}
                             <td>{{ entry.amount|floatformat:2 }}</td>
                         </tr>
@@ -102,128 +155,173 @@
                         {% endfor %}  
                     </tbody>
                     <tfoot>
-    <tr class="font-weight-bold bg-light">
-        <td colspan="{% if department.name == 'xerox' %}1{% elif department.name == 'Bhu Bharathi' %}5{% else %}7{% endif %}" class="text-right">Total</td>
-        {% if department.name != 'xerox' %}
-            <td>₹{{ todays_total_payment|floatformat:2 }}</td>
-        {% endif %}
-        <td>₹{{ todays_total_amount|floatformat:2 }}</td>
-    </tr>
-</tfoot>
+                        <tr class="font-weight-bold bg-light">
+                            <td colspan="{% if department.name == 'Mee Seva' or department.name == 'Online Hub' %}7{% elif department.name == 'Aadhaar' %}7{% elif department.name == 'Bhu Bharathi' %}5{% elif department.name == 'Forms' %}1{% elif department.name == 'Xerox' %}0{% elif department.name == 'Notary and Bonds' %}5{% endif %}" class="text-right">Total</td>
+                            {% if department.name != 'Forms' and department.name != 'Xerox' %}
+                                <td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                            {% endif %}
+                            <td>₹{{ todays_total_amount|floatformat:2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+            </div>
 
+
+            <!-- Display for submitted repair report for printing -->
+            {% if todays_repair_report %}
+            <div class="mt-4 pt-4 border-top" id="repair-report-content">
+                <h5 class="text-center" style="text-decoration: underline;">Today's Resource Condition Report</h5>
+                <div class="row">
+                    <div class="col-md-6"><strong>Monitor:</strong> {{ todays_repair_report.get_monitor_status_display }}</div>
+                    <div class="col-md-6"><strong>CPU:</strong> {{ todays_repair_report.get_cpu_status_display }}</div>
+                    <div class="col-md-6"><strong>Keyboard:</strong> {{ todays_repair_report.get_keyboard_status_display }}</div>
+                    <div class="col-md-6"><strong>Mouse:</strong> {{ todays_repair_report.get_mouse_status_display }}</div>
+                    <div class="col-md-6"><strong>Cables:</strong> {{ todays_repair_report.get_cables_status_display }}</div>
+                    <div class="col-md-6"><strong>Printer:</strong> {{ todays_repair_report.get_printer_status_display }}</div>
+                    <div class="col-md-6"><strong>Bike:</strong> {{ todays_repair_report.get_bike_status_display }}</div>
+                </div>
+                {% if todays_repair_report.remarks %}
+                <div class="mt-2">
+                    <strong>Remarks:</strong>
+                    <p class="text-muted" style="white-space: pre-wrap;">{{ todays_repair_report.remarks }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+
+            <div class="d-none" id="salary-summary-for-print">
+            <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ccc;">
+                <h4 class="text-center">Daily Salary Summary</h4>
+                <p class="text-center" style="font-size: 1.1em; margin-bottom: 5px;">
+                    <strong>Maximum Possible Daily Salary:</strong> ₹{{ max_daily_wage|floatformat:2 }}
+                </p>
+                <p class="text-center" style="font-size: 1.1em;">
+                    <strong>Calculated Attendance Salary for Today:</strong> ₹{{ todays_attendance_wage|floatformat:2 }}
+                </p>
+            </div>
+        </div>
+        </div>
+    </div>
+
+
+    <!-- Section for All Historical Entries -->
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4>All Entries</h4>
+            <button class="btn btn-secondary btn-sm" onclick="printHistoricalReport()">
+                <i class="fas fa-print"></i> Print Report
+            </button>
+        </div>
+        <div class="card-body" id="historical-report-printable">
+            <div class="d-none" id="historical-print-header">
+                <h3 class="text-center">Worksheet Report</h3>
+                <p class="text-center"><strong>Employee:</strong> {{ employee.name }}</p>
+                <p class="text-center"><strong>Department:</strong> {{ department.name }}</p>
+                {% if request.GET.start_date and request.GET.end_date %}
+                    <p class="text-center"><strong>Date Range:</strong> {{ request.GET.start_date }} to {{ request.GET.end_date }}</p>
+                {% endif %}
+                {% if request.GET.mobile_number %}
+                    <p class="text-center"><strong>Filtered by Mobile:</strong> {{ request.GET.mobile_number }}</p>
+                {% endif %}
+            </div>
+
+
+            <!-- Filter Form -->
+            <form method="get" class="form-row align-items-center mb-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="sr-only">From:</label>
+                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ request.GET.start_date|default:'' }}" placeholder="Start Date">
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="sr-only">To:</label>
+                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ request.GET.end_date|default:'' }}" placeholder="End Date">
+                </div>
+                <div class="col-md-4">
+                    <label for="mobile_number" class="sr-only">Mobile Number</label>
+                    <input type="text" name="mobile_number" id="mobile_number" class="form-control" placeholder="Search by Customer/Login Mobile..." value="{{ request.GET.mobile_number|default:'' }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear</a>
+                </div>
+            </form>
+            
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Sl. No</th>
+                            <th>Date</th>
+                            {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment (₹)</th>
+                            {% elif department.name == "Aadhaar" %}
+                                <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment (₹)</th>
+                            {% elif department.name == "Bhu Bharathi" %}
+                                <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment (₹)</th>
+                            {% elif department.name == "Forms" %}
+                                <th>Particulars</th>
+                            {% elif department.name == "Xerox" %}
+                                <!-- No extra columns for Xerox -->
+                            {% elif department.name == "Notary and Bonds" %}
+                                <th>Token No</th><th>Customer Name</th><th>Service</th><th>Bonds Sl. No</th><th>Payment (₹)</th>
+                            {% endif %}
+                            <th>Amount (₹)</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in all_entries %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ entry.date|date:"d M Y" }}</td>
+                            {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                            {% elif department.name == "Aadhaar" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                            {% elif department.name == "Bhu Bharathi" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                            {% elif department.name == "Forms" %}
+                                <td>{{ entry.particulars|default:"-" }}</td>
+                            {% elif department.name == "Xerox" %}
+                                <!-- No extra columns for Xerox -->
+                            {% elif department.name == "Notary and Bonds" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                            {% endif %}
+                            <td>{{ entry.amount|floatformat:2 }}</td>
+                            <td>
+                                {% if entry.approved %}
+                                    <span class="badge badge-success">Approved</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not entry.approved %}
+                                    <button type="button" class="btn btn-primary btn-sm edit-btn" 
+                                            data-url="{% url 'worksheet-edit' entry.id %}">
+                                        Edit
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="100%" class="text-center">No historical entries found for the selected filter.</td></tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
-    
-
-<!-- Section for All Historical Entries (UPDATED with Print Functionality) -->
-<div class="card shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h4>All Entries</h4>
-        <button class="btn btn-secondary btn-sm" onclick="printHistoricalReport()">
-            <i class="fas fa-print"></i> Print Report
-        </button>
-    </div>
-    <div class="card-body" id="historical-report-printable">
-        <!-- NEW: Hidden header for printing with an ID -->
-        <div class="d-none" id="historical-print-header">
-            <h3 class="text-center">Worksheet Report</h3>
-            <p class="text-center"><strong>Employee:</strong> {{ employee.name }}</p>
-            <p class="text-center"><strong>Department:</strong> {{ department.name }}</p>
-            {% if request.GET.start_date and request.GET.end_date %}
-                <p class="text-center"><strong>Date Range:</strong> {{ request.GET.start_date }} to {{ request.GET.end_date }}</p>
-            {% endif %}
-            {% if request.GET.mobile_number %}
-                <p class="text-center"><strong>Filtered by Mobile:</strong> {{ request.GET.mobile_number }}</p>
-            {% endif %}
-        </div>
-
-        <!-- Filter Form -->
-        <form method="get" class="form-row align-items-center mb-3">
-            <div class="col-md-3">
-                <label for="start_date" class="sr-only">From:</label>
-                <input type="date" name="start_date" id="start_date" class="form-control" value="{{ request.GET.start_date|default:'' }}" placeholder="Start Date">
-            </div>
-            <div class="col-md-3">
-                <label for="end_date" class="sr-only">To:</label>
-                <input type="date" name="end_date" id="end_date" class="form-control" value="{{ request.GET.end_date|default:'' }}" placeholder="End Date">
-            </div>
-            <div class="col-md-4">
-                <label for="mobile_number" class="sr-only">Mobile Number</label>
-                <input type="text" name="mobile_number" id="mobile_number" class="form-control" placeholder="Search by Customer/Login Mobile..." value="{{ request.GET.mobile_number|default:'' }}">
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary">Filter</button>
-                <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear</a>
-            </div>
-        </form>
-        
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-                <thead class="thead-light">
-                    <tr>
-                        <th>Sl. No</th>
-                        <th>Date</th>
-                        <!-- Department-specific headers -->
-                        {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                            <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment (₹)</th>
-                        {% elif department.name == "Aadhaar" %}
-                            <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment (₹)</th>
-                        {% elif department.name == "Bhu Bharathi" %}
-                            <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment (₹)</th>
-                        {% elif department.name == "xerox" %}
-                            <th>Particulars</th>
-                        {% endif %}
-                        <th>Amount (₹)</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for entry in all_entries %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ entry.date|date:"d M Y" }}</td>
-                         <!-- Department-specific cells -->
-                        {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                            <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
-                        {% elif department.name == "Aadhaar" %}
-                            <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
-                        {% elif department.name == "Bhu Bharathi" %}
-                            <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
-                        {% elif department.name == "xerox" %}
-                            <td>{{ entry.particulars|default:"-" }}</td>
-                        {% endif %}
-                        <td>{{ entry.amount|floatformat:2 }}</td>
-                        <td>
-                            {% if entry.approved %}
-                                <span class="badge badge-success">Approved</span>
-                            {% else %}
-                                <span class="badge badge-warning">Pending</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if not entry.approved %}
-                                <button type="button" class="btn btn-primary btn-sm edit-btn" 
-                                        data-url="{% url 'worksheet-edit' entry.id %}">
-                                    Edit
-                                </button>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="100%" class="text-center">No historical entries found for the selected filter.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 
 
+<!-- Modal and Scripts remain unchanged -->
 
-</div>
+
+
 
 <!-- Bootstrap Modal for the Edit Form (Unchanged) -->
 <div class="modal fade" id="editEntryModal" tabindex="-1" role="dialog" aria-labelledby="editEntryModalLabel" aria-hidden="true">
@@ -242,64 +340,63 @@
   </div>
 </div>
 
+
 <script>
-    // --- SCRIPT FOR HISTORICAL ENTRIES PRINTING (UPDATED) ---
-    function printHistoricalReport() {
-        // 1. Clone the necessary elements to avoid altering the live page
-        var printHeader = document.getElementById('historical-print-header').cloneNode(true);
-        var table = document.getElementById('historical-report-printable').getElementsByTagName('table')[0];
-        var printTable = table.cloneNode(true);
+    // ### FINAL AND CORRECTED SCRIPT ###
+    function printTodayEntries() {
+        // 1. Get the elements themselves, not their innerHTML yet.
+        const headerEl = document.getElementById('print-header');
+        const worksheetTableEl = document.getElementById('worksheet-table-content');
+        const repairReportEl = document.getElementById('repair-report-content'); // This can be null
+        const salarySummaryEl = document.getElementById('salary-summary-for-print');
 
-        // 2. Remove the last two columns ("Status" and "Actions") from the cloned table
-        // Remove from the table header (thead)
-        var headerRows = printTable.tHead.rows;
-        for (var i = 0; i < headerRows.length; i++) {
-            headerRows[i].deleteCell(-1); // Deletes the last cell ("Actions")
-            headerRows[i].deleteCell(-1); // Deletes the new last cell ("Status")
-        }
-        
-        // Remove from all table body rows (tbody)
-        var bodyRows = printTable.tBodies[0].rows;
-        for (var i = 0; i < bodyRows.length; i++) {
-            bodyRows[i].deleteCell(-1); // Deletes the last cell
-            bodyRows[i].deleteCell(-1); // Deletes the new last cell
-        }
+        // 2. Safely get the innerHTML, providing an empty string if an element doesn't exist.
+        // This prevents the "reading 'innerHTML' of null" error.
+        const headerHTML = headerEl ? headerEl.innerHTML : '';
+        const worksheetHTML = worksheetTableEl ? worksheetTableEl.innerHTML : '';
+        const repairHTML = repairReportEl ? repairReportEl.innerHTML : ''; // The crucial fix is here
+        const salaryHTML = salarySummaryEl ? salarySummaryEl.innerHTML : '';
 
-        // 3. Get the HTML of the cleaned header and table
-        var headerHtml = printHeader.innerHTML;
-        var tableHtml = printTable.outerHTML;
+        // 3. Assemble the final content for printing.
+        const printContent = headerHTML + worksheetHTML + repairHTML + salaryHTML;
         
-        // 4. Store the original page content to restore it later
-        var originalContent = document.body.innerHTML;
+        // 4. Open a new window and write the content to it.
+        const printWindow = window.open('', '', 'height=800,width=800');
+        printWindow.document.write('<html><head><title>Print Report</title>');
+        printWindow.document.write('<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">');
+        printWindow.document.write('<style>body { padding: 20px; } @page { size: auto; margin: 0.5in; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(printContent);
+        printWindow.document.write('</body></html>');
         
-        // 5. Construct a new, temporary page with only the report content
-        document.body.innerHTML = '<html><head><title>Print Report</title>' +
-            '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-            '</head><body>' + headerHtml + tableHtml + '</body></html>';
+        // 5. Print and close the new window.
+        printWindow.document.close();
+        printWindow.focus();
         
-        // 6. Trigger the browser's print dialog
-        window.print();
-        
-        // 7. Restore the original page and reload it to ensure all scripts work again
-        document.body.innerHTML = originalContent;
-        location.reload(); 
+        // Use a short timeout to ensure all content and styles are loaded before the print dialog is triggered.
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
     }
 
-    // --- YOUR EXISTING SCRIPTS (UNCHANGED) ---
-
-    function printTodayEntries() {
-        var printHeader = document.getElementById('print-header').innerHTML;
-        var printContent = document.getElementById('todays-report-printable').getElementsByTagName('table')[0].outerHTML;
+    function printHistoricalReport() {
+        var printHeader = document.getElementById('historical-print-header').innerHTML;
+        var printContent = document.getElementById('historical-report-printable').innerHTML;
         var originalContent = document.body.innerHTML;
         
-        document.body.innerHTML = '<html><head><title>Print Report</title>' +
+        document.body.innerHTML = '<html><head><title>Print Historical Report</title>' +
             '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
+            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' +
             '</head><body>' + printHeader + printContent + '</body></html>';
         
         window.print();
+        
         document.body.innerHTML = originalContent;
         location.reload(); 
     }
+
+
 
     document.addEventListener('click', function(event) {
         if (event.target.classList.contains('edit-btn')) {
@@ -315,6 +412,7 @@
         }
     });
 </script>
+
 
 
 {% endblock %}

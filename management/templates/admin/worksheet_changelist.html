@@ -1,0 +1,39 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block result_list %}
+    <!-- Custom Unified Filter Form -->
+    <div class="card card-body mb-4">
+        <form method="get" class="form-inline">
+            <div class="row align-items-end" style="width: 100%;">
+                <div class="col-md-3 mb-2">
+                    <label for="{{ filter_form.employee.id_for_label }}">Employee:</label>
+                    {{ filter_form.employee }}
+                </div>
+                <div class="col-md-2 mb-2">
+                    <label for="{{ filter_form.date_from.id_for_label }}">Date from:</label>
+                    {{ filter_form.date_from }}
+                </div>
+                <div class="col-md-2 mb-2">
+                    <label for="{{ filter_form.date_to.id_for_label }}">Date to:</label>
+                    {{ filter_form.date_to }}
+                </div>
+                <div class="col-md-2 mb-2">
+                    <label for="{{ filter_form.department.id_for_label }}">Department:</label>
+                    {{ filter_form.department }}
+                </div>
+                <div class="col-md-1 mb-2">
+                    <label for="{{ filter_form.approved.id_for_label }}">Approved:</label>
+                    {{ filter_form.approved }}
+                </div>
+                <div class="col-md-2 mb-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary flex-grow-1 mr-1">Search</button>
+                    <a href="?" class="btn btn-secondary flex-grow-1 ms-1">Reset</a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Original Django Admin Results Table -->
+    {{ block.super }}
+{% endblock %}

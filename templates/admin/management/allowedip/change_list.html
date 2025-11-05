@@ -2,24 +2,24 @@
 {% load static %}
 
 {% block object-tools-items %}
-  {# This block adds our custom buttons alongside the default "Add" button #}
-  
-  <li>
-    <a href="allow-all/" class="addlink" style="background-color: #28a745;">
-      &#9989; Allow All IPs
+  {# Put all custom buttons in ONE list item and hide its bullet point #}
+  <li style="list-style-type: none;">
+
+    {# Use Bootstrap's margin-end class (me-2) for spacing between buttons #}
+    <a href="allow-all/" class="btn btn-primary me-2">
+      <i class="fas fa-check-circle"></i> Allow All IPs
     </a>
-  </li>
-  <li>
-    <a href="enforce-list/" class="addlink" style="background-color: #ffc107; color: #212529;">
-      &#128270; Enforce IP List
+    
+    <a href="enforce-list/" class="btn btn-warning me-2">
+      <i class="fas fa-list-alt"></i> Enforce IP List
     </a>
-  </li>
-  <li>
-    <a href="block-all/" class="addlink" style="background-color: #343a40;">
-      &#128683; Block All IPs
+    
+    <a href="block-all/" class="btn btn-danger me-2">
+      <i class="fas fa-ban"></i> Block All IPs
     </a>
+
   </li>
 
-  {# This includes the original "Add button" #}
+  {# This includes the original "Add" button, which is in its own <li> #}
   {{ block.super }}
 {% endblock %}

@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/todos/get/', views.get_employee_todos, name='todos_get'),
     path('api/todos/add/', views.add_employee_todo, name='todos_add'),
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
+    
      
 
     

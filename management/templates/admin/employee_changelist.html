@@ -2,13 +2,23 @@
 {% load static %}
 
 {% block object-tools-items %}
-  {# Keep the default admin buttons (like "Add employee") #}
+  {# This keeps the default admin buttons (like "Add employee") #}
   {{ block.super }}
   
-  {# Add our custom button #}
-  <li>
-    <a href="attendance-report/" class="addlink">
-      Attendance Report
+  {# Use a single list item and remove the bullet point to group the buttons #}
+  <li style="list-style-type: none;">
+
+    {# --- Attendance Report Button (Styled with Jazzmin classes) --- #}
+    {# 'btn' is the base class, 'btn-info' makes it light blue, 'me-2' adds a right margin #}
+   <!--<a href="attendance-report/" class="btn btn-primary me-2">
+      <i class="fas fa-calendar-alt"></i> Attendance Report
     </a>
+
+    {# --- Salary Report Button (Styled with Jazzmin classes) --- #}
+    {# 'btn-success' makes the button green #}
+    <a href="salary-report/" class="btn btn-warning me-2">
+      <i class="fas fa-file-invoice-dollar"></i> Salary Report
+    </a>--> 
+    
   </li>
 {% endblock %}
