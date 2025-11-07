@@ -263,7 +263,7 @@ from django.utils import timezone
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import EmployeeProfilePictureForm
-from .models import Employee, MeetingAttendance, TrainingBonus, PerformanceBonus
+from .models import Employee, MeetingAttendance, TrainingBonus, PerformanceBonus, ExtraDaysBonus
 
 def employee_dashboard(request):
     # 1. Authenticate Employee (Unchanged)
@@ -287,6 +287,21 @@ def employee_dashboard(request):
     else:
         # This is for the GET request, initializes the form
         form = EmployeeProfilePictureForm(instance=employee)
+
+    # 2.1. Initialize upload form
+    upload_form = EmployeeUploadForm()
+    
+    # Handle Document Upload (NEW)
+    if request.method == 'POST' and 'upload_document' in request.POST:
+        upload_form = EmployeeUploadForm(request.POST, request.FILES)
+        if upload_form.is_valid():
+            document = upload_form.save(commit=False)
+            document.employee = employee
+            document.save()
+            messages.success(request, 'Document uploaded successfully')
+            return redirect('employee_dashboard')
+        else:
+            messages.error(request, 'Error uploading document. Please check the form.')
 
     # 3. Handle OTP and Session Logic for Sensitive Data (Unchanged)
     otp_verified = request.session.get('otp_verified', False)
@@ -343,6 +358,11 @@ def employee_dashboard(request):
     performance_bonuses = PerformanceBonus.objects.filter(
         employee=employee, date__year=now.year, date__month=now.month
     ).order_by('-date')
+    
+    # Fetch individual extra days bonuses for the month (NEW)
+    extra_days_bonuses = ExtraDaysBonus.objects.filter(
+        employee=employee, date__year=now.year, date__month=now.month
+    ).order_by('-date')
 
     # 5. Build the Context Dictionary (Now includes new bonus lists)
     context = {
@@ -355,7 +375,8 @@ def employee_dashboard(request):
         'attended_meetings': attended_meetings,
         'attended_trainings': attended_trainings,      # NEW
         'performance_bonuses': performance_bonuses,    # NEW
-        'upload_form': EmployeeUploadForm(), # This was in your original code
+        'extra_days_bonuses': extra_days_bonuses,      # NEW
+        'upload_form': upload_form, # Updated to use the form variable with validation errors
     }
 
     # 6. Perform Session Cleanup (Unchanged)

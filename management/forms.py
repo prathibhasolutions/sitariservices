@@ -97,11 +97,32 @@ class EmployeeUploadForm(forms.ModelForm):
         empty_label="-- Select a Service --",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+    
+    # Add renewal_date field with date picker
+    renewal_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Date when this upload needs to be renewed"
+    )
+    
+    # Add mobile_number field
+    mobile_number = forms.CharField(
+        max_length=15,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter mobile number'
+        }),
+        help_text="Mobile number related to this upload"
+    )
 
     class Meta:
         model = EmployeeUpload
         # Define the order of fields in the form
-        fields = ['service', 'description', 'file']
+        fields = ['service', 'description', 'file', 'renewal_date', 'mobile_number']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
             'file': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),

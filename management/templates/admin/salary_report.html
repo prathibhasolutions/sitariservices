@@ -143,6 +143,7 @@
                                     <tr class="table-success"><th scope="row">Meetings Bonus</th><td>₹{{ current_month_earnings.meetings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Trainings Bonus</th><td>₹{{ current_month_earnings.trainings_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-success"><th scope="row">Performance Bonus</th><td>₹{{ current_month_earnings.performance_bonus|floatformat:0|intcomma }}</td></tr>
+                                    <tr class="table-success"><th scope="row">Extra Days Bonus</th><td>₹{{ current_month_earnings.extra_days_bonus|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-danger"><th scope="row">Total Deductions</th><td>- ₹{{ current_month_earnings.deduction_amount|floatformat:0|intcomma }}</td></tr>
                                     <tr class="table-info"><th scope="row">Total This Month</th><td><strong>₹{{ current_month_earnings.total_earnings|floatformat:0|intcomma }}</strong></td></tr>
                                 </tbody>
@@ -241,6 +242,36 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Fourth Row: Extra Days Bonuses -->
+        <div class="row mt-4">
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Extra Days Bonuses This Month</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered mb-0">
+                                <thead><tr><th>Date</th><th>Reason</th><th>Bonus Earned</th></tr></thead>
+                                <tbody>
+                                    {% for bonus in extra_days_bonuses %}
+                                        <tr>
+                                            <td>{{ bonus.date|date:"d M Y" }}</td>
+                                            <td>{{ bonus.reason }}</td>
+                                            <td>₹{{ bonus.amount|floatformat:0|intcomma }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="3" class="text-muted text-center">No extra days bonuses this month.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Empty column to balance the row -->
+            <div class="col-lg-6 mb-4">
             </div>
         </div>
     {% else %}

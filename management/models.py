@@ -1,10 +1,14 @@
 from django.db import models
 from django.utils import timezone
 from django.db.models import Sum, Q
-from datetime import datetime,time
+from datetime import datetime, time, timedelta
 import uuid
 from django.conf import settings
 import os
+
+def get_renewal_date_default():
+    """Default function for renewal_date - 1 year from today"""
+    return (timezone.now() + timedelta(days=365)).date()
 from django.db.models import Sum, F, ExpressionWrapper, fields
 import calendar
 from calendar import monthrange
@@ -310,6 +314,11 @@ class Employee(models.Model):
             date__year=year, date__month=month
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
+        # Sum of all extra days bonuses this month
+        extra_days_bonus = self.extra_days_bonuses.filter(
+            date__year=year, date__month=month
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
         # 5. Calculate Deductions (Logic remains the same)
         deductions_qs = MonthlyDeduction.objects.filter(employee=self, year=year, month=month)
         total_deduction_amount = deductions_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
@@ -321,7 +330,8 @@ class Employee(models.Model):
             total_worksheet_commission +
             meetings_bonus +
             trainings_bonus +
-            performance_bonus
+            performance_bonus +
+            extra_days_bonus
         )
         total_earnings = total_before_deduction - total_deduction_amount
 
@@ -333,6 +343,7 @@ class Employee(models.Model):
             'meetings_bonus': meetings_bonus,
             'trainings_bonus': trainings_bonus,
             'performance_bonus': performance_bonus,
+            'extra_days_bonus': extra_days_bonus,
             'monthly_deductions_list': deductions_qs,
             'deduction_amount': total_deduction_amount,
             'total_earnings': total_earnings,
@@ -725,9 +736,15 @@ class EmployeeUpload(models.Model):
     description = models.TextField(help_text="A brief description of the uploaded file.")
     file = models.FileField(upload_to='employee_uploads/%Y/%m/%d/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    renewal_date = models.DateField(null=True, blank=True, help_text="Date when this upload needs to be renewed")
+    mobile_number = models.CharField(max_length=15, null=True, blank=True, help_text="Mobile number related to this upload")
 
     class Meta:
         ordering = ['-uploaded_at']
+
+    def save(self, *args, **kwargs):
+        # No automatic renewal_date setting - user must provide it manually
+        super().save(*args, **kwargs)
 
     def __str__(self):
         # Updated string representation
@@ -811,6 +828,16 @@ class PerformanceBonus(models.Model):
 
     def __str__(self):
         return f"Performance Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
+
+class ExtraDaysBonus(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='extra_days_bonuses')
+    date = models.DateField(default=timezone.now)
+    reason = models.CharField(max_length=255, help_text="e.g., Weekend Work, Extra Hours, Holiday Work")
+    amount = models.DecimalField("Bonus Amount", max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Extra Days Bonus for {self.employee.name} on {self.date} - {self.reason}"
 
 
 class TrainingBonus(models.Model):

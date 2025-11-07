@@ -10,7 +10,9 @@ from django.contrib import messages
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from django.contrib.admin import AdminSite
+from django.template.response import TemplateResponse
 
 # Import all your models
 from .models import (
@@ -30,6 +32,8 @@ from .models import (
     EmployeeUpload,
 )
 
+# Renewal alerts are now handled by context processor in context_processors_renewal.py
+
 
 
 
@@ -41,9 +45,10 @@ class ManagedLinkAdmin(admin.ModelAdmin):
     list_display = ('description', 'url', 'created_at')
     search_fields = ('description',)
     ordering = ('description',)
+    date_hierarchy = 'created_at'
 
 
-from .models import TrainingBonus, PerformanceBonus,MonthlyDeduction
+from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction
 
 
 class TrainingBonusInline(admin.TabularInline):
@@ -54,6 +59,11 @@ class TrainingBonusInline(admin.TabularInline):
 class PerformanceBonusInline(admin.TabularInline):
     model = PerformanceBonus
     extra = 0 # Show one empty row for adding a new bonus
+    fields = ('date', 'reason', 'amount')
+
+class ExtraDaysBonusInline(admin.TabularInline):
+    model = ExtraDaysBonus
+    extra = 0  # Show one empty row for adding a new bonus
     fields = ('date', 'reason', 'amount')
 
 
@@ -72,7 +82,7 @@ from django.urls import reverse
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
     # --- 1. Display and Search Settings ---
-    inlines = [MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline]
+    inlines = [MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
     list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
     list_filter = ['department']
@@ -260,6 +270,7 @@ class EmployeeAdmin(admin.ModelAdmin):
         # --- ADDED: Initialize lists for new bonuses ---
         attended_trainings = []
         performance_bonuses = []
+        extra_days_bonuses = []
         
         all_employees = Employee.objects.all().order_by('name')
 
@@ -295,6 +306,10 @@ class EmployeeAdmin(admin.ModelAdmin):
                     employee=selected_employee, date__year=year, date__month=month
                 ).order_by('-date')
 
+                extra_days_bonuses = ExtraDaysBonus.objects.filter(
+                    employee=selected_employee, date__year=year, date__month=month
+                ).order_by('-date')
+
             except Employee.DoesNotExist:
                 pass
 
@@ -309,6 +324,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             'attended_meetings': attended_meetings,
             'attended_trainings': attended_trainings,
             'performance_bonuses': performance_bonuses,
+            'extra_days_bonuses': extra_days_bonuses,
         }
         return render(request, 'admin/salary_report.html', context)
 
@@ -357,6 +373,9 @@ class WorksheetAdmin(admin.ModelAdmin):
 
     # Add 'employee__name' to make the autocomplete filter searchable
     search_fields = ('employee__name', 'customer_name', 'customer_mobile', 'token_no', 'transaction_num')
+    
+    # Add date hierarchy for easy date navigation
+    date_hierarchy = 'date'
 
     # --- Your existing custom methods remain unchanged ---
     
@@ -464,6 +483,7 @@ class ResourceRepairReportAdmin(admin.ModelAdmin):
 
     search_fields = ('employee__name', 'remarks')
     list_per_page = 25
+    date_hierarchy = 'date'
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('employee')
@@ -478,6 +498,7 @@ class AllowedIPAdmin(admin.ModelAdmin):
     search_fields = ('ip_address', 'subnet_prefix', 'description')
     list_editable = ('is_active',)
     ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
     
     def get_urls(self):
         urls = super().get_urls()
@@ -523,21 +544,67 @@ class AllowedIPAdmin(admin.ModelAdmin):
 class UploadServiceAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
     search_fields = ('name',)
+    date_hierarchy = 'created_at'
 
 
 @admin.register(EmployeeUpload)
 class EmployeeUploadAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'service', 'description', 'file_link', 'uploaded_at')
-    list_filter = ('service', 'employee', 'uploaded_at')
-    search_fields = ('employee__name', 'service__name', 'description')
+    list_display = ('employee', 'service', 'short_description', 'mobile_number', 'file_link', 'uploaded_at', 'colored_renewal_date')
+    list_filter = ('service', 'employee', 'uploaded_at', 'renewal_date')
+    search_fields = ('employee__name', 'service__name', 'description', 'mobile_number')
     readonly_fields = ('uploaded_at',)
+    date_hierarchy = 'uploaded_at'
+
+    def short_description(self, obj):
+        if len(obj.description) > 30:
+            return obj.description[:30] + "..."
+        return obj.description
+    short_description.short_description = 'Description'
 
     def file_link(self, obj):
         if obj.file:
-            return format_html('<a href="{}" target="_blank">{}</a>', obj.file.url, obj.file.name)
+            filename = obj.file.name.split('/')[-1]  # Get just the filename
+            if len(filename) > 15:
+                display_name = filename[:12] + "..."
+            else:
+                display_name = filename
+            return format_html('<a href="{}" target="_blank" title="{}">{}</a>', 
+                             obj.file.url, filename, display_name)
         return "No file"
     
     file_link.short_description = 'File'
+
+    def colored_renewal_date(self, obj):
+        if not obj.renewal_date:
+            return "Not set"
+        
+        today = date.today()
+        renewal_date = obj.renewal_date
+        days_until_renewal = (renewal_date - today).days
+        
+        # Red: Today or past due (0 or negative days)
+        if days_until_renewal <= 0:
+            return format_html(
+                '<span style="background-color: #ff4444; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;">{}</span>',
+                renewal_date.strftime('%d %b %Y')
+            )
+        # Yellow: Within 7 days
+        elif days_until_renewal <= 7:
+            return format_html(
+                '<span style="background-color: #ffaa00; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;">{}</span>',
+                renewal_date.strftime('%d %b %Y')
+            )
+        # Normal: More than 7 days
+        else:
+            return renewal_date.strftime('%d %b %Y')
+    
+    colored_renewal_date.short_description = 'Renewal Date'
+    colored_renewal_date.admin_order_field = 'renewal_date'  # Make it sortable
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['title'] = 'Employee Uploads'
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 
@@ -573,6 +640,7 @@ class ApplicationAdmin(admin.ModelAdmin):
     list_filter = ('service_type', 'assigned_employees', ('date_created', admin.DateFieldListFilter), 'approved')
     autocomplete_fields = ['assigned_employees', 'service_type']
     actions = ['approve_applications']
+    date_hierarchy = 'date_created'
     change_list_template = 'admin/management/application/change_list.html'
     change_form_template = 'admin/management/application/change_form_detail.html'
 
@@ -666,6 +734,7 @@ class BreakSessionAdmin(admin.ModelAdmin):
     list_filter = ('employee', ('start_time', admin.DateFieldListFilter), 'approved')
     autocomplete_fields = ['employee']
     search_fields = ['employee__name']
+    date_hierarchy = 'start_time'
     
     # --- 2. ADD THIS: Register the custom action ---
     actions = ['approve_selected_breaks']
@@ -734,6 +803,7 @@ class NotificationAdmin(admin.ModelAdmin):
     list_display = ('description_preview', 'created_at', 'recipient_count')
     search_fields = ('description',)
     ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
     
     # By default, ManyToMany fields aren't shown in the add/change form when
     # a 'through' model is used. The inline handles this, but we can add
@@ -757,5 +827,4 @@ class NotificationAdmin(admin.ModelAdmin):
         return obj.recipients.count()
 
 
-
-
+# Remove the problematic override - we'll use template context instead

@@ -1,0 +1,96 @@
+{% extends "admin/index.html" %}
+{% load i18n static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .renewal-alert {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .renewal-alert.critical {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .renewal-alert h3 {
+            margin-top: 0;
+            color: #721c24;
+        }
+        .renewal-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .renewal-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .renewal-item:last-child {
+            border-bottom: none;
+        }
+        .renewal-employee {
+            font-weight: bold;
+            color: #495057;
+        }
+        .renewal-service {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .renewal-date {
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .renewal-date.overdue {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {% if show_renewal_alert %}
+        <div class="renewal-alert critical">
+            <h3>🔔 Document Renewal Alert</h3>
+            <p><strong>{{ expired_count }} employee upload{{ expired_count|pluralize }} {{ expired_count|pluralize:"has,have" }} reached or passed {{ expired_count|pluralize:"its,their" }} renewal date{{ expired_count|pluralize }}.</strong></p>
+            
+            <div class="renewal-list">
+                {% for upload in expired_uploads %}
+                    <div class="renewal-item">
+                        <div>
+                            <div class="renewal-employee">{{ upload.employee.name }}</div>
+                            <div class="renewal-service">{{ upload.service.name|default:"No Service" }} - {{ upload.description|truncatechars:50 }}</div>
+                        </div>
+                        <div class="renewal-date overdue">
+                            {% if upload.renewal_date < today %}
+                                Overdue: {{ upload.renewal_date|date:"M j, Y" }}
+                            {% else %}
+                                Due: {{ upload.renewal_date|date:"M j, Y" }}
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <p style="margin-top: 15px; margin-bottom: 0;">
+                <a href="{% url 'admin:management_employeeupload_changelist' %}?renewal_date__lte={{ today|date:'Y-m-d' }}" 
+                   class="btn btn-primary" style="color: white; text-decoration: none; padding: 8px 15px; background-color: #007cba; border-radius: 4px;">
+                    📋 View All Expired Uploads
+                </a>
+            </p>
+        </div>
+    {% endif %}
+    
+    {{ block.super }}
+{% endblock %}
