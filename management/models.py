@@ -1,3 +1,36 @@
+
+from django.db import models
+from django.utils import timezone
+from django.db.models import Sum, Q, F, ExpressionWrapper, fields
+from datetime import datetime, time, timedelta
+import uuid
+from django.conf import settings
+import os
+import calendar
+from calendar import monthrange
+from collections import defaultdict
+
+# --- Geofencing Models ---
+class AccessArea(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    latitude = models.FloatField(help_text="Latitude of the center point")
+    longitude = models.FloatField(help_text="Longitude of the center point")
+    radius_meters = models.PositiveIntegerField(default=100, help_text="Radius in meters")
+    active = models.BooleanField(default=True, help_text="Is this area currently enforced?")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} (radius: {self.radius_meters}m)"
+
+class GeofenceSettings(models.Model):
+    enabled = models.BooleanField(default=True, help_text="Enable geofencing for employee access")
+
+    def __str__(self):
+        return "Geofencing is {}".format("Enabled" if self.enabled else "Disabled")
+
+    class Meta:
+        verbose_name = "Geofencing Settings"
+        verbose_name_plural = "Geofencing Settings"
 from django.db import models
 from django.utils import timezone
 from django.db.models import Sum, Q

@@ -1,3 +1,47 @@
+</script>
+
+<!-- Geofencing: Block/Logout if out of access area -->
+<script>
+async function geofenceCheckAndEnforce() {
+    if (!navigator.geolocation) {
+        alert('Geolocation is required for access, but not supported by your browser.');
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(async function(pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        try {
+            const resp = await fetch('/api/geofence_check/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: `latitude=${lat}&longitude=${lng}`
+            });
+            const data = await resp.json();
+            if (!data.allowed) {
+                // Log out with reason
+                await fetch('/logout/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                    body: new URLSearchParams({ 'logout_reason': data.reason })
+                });
+                alert(data.reason || 'You are out of the access area.');
+                window.location.href = '/';
+            }
+        } catch (e) {
+            alert('Geofence check failed.');
+        }
+    }, function(err) {
+        alert('Location access denied. You cannot proceed.');
+    });
+}
+// Only run for logged-in employee pages (not login page)
+if (!window.location.pathname.includes('login')) {
+    geofenceCheckAndEnforce();
+}
+</script>
 {% load static %}
 {% load upload_tags %}
 
@@ -326,21 +370,18 @@ $(function () {
     $('[data-toggle="tooltip"]').tooltip();
 });
 // --- Session Timer Logic ---
-let sessionDuration = 15 * 60; // 15 minutes in seconds
+let sessionDuration = 60 * 60; // 60 minutes in seconds
 let timerInterval = null;
 const timerDisplay = document.getElementById('session-timer');
 const refreshBtn = document.getElementById('refresh-session-btn');
 let blinkInterval = null;
-// Use sessionStorage to persist timer across page reloads/tabs
-function getSessionTimeLeft() {
-    const stored = sessionStorage.getItem('sessionTimeLeft');
-    if (stored !== null) return parseInt(stored, 10);
-    return sessionDuration;
-}
+
+// Always reset timer to 60 minutes on page load (prevents stale sessionStorage from old logins)
 function setSessionTimeLeft(val) {
     sessionStorage.setItem('sessionTimeLeft', val);
 }
-let sessionTimeLeft = getSessionTimeLeft();
+let sessionTimeLeft = sessionDuration;
+setSessionTimeLeft(sessionTimeLeft);
 
 function updateTimerDisplay() {
     const min = Math.floor(sessionTimeLeft / 60).toString().padStart(2, '0');

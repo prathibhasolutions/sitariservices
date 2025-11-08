@@ -1,4 +1,41 @@
+
 from django.contrib import admin
+from .models import AccessArea, GeofenceSettings
+from django.utils import timezone
+from django.contrib import messages
+from django.core.cache import cache
+from django.http import HttpResponseRedirect
+
+@admin.register(GeofenceSettings)
+class GeofenceSettingsAdmin(admin.ModelAdmin):
+    list_display = ("enabled",)
+    def has_add_permission(self, request):
+        # Only allow one settings row
+        return not GeofenceSettings.objects.exists()
+
+@admin.register(AccessArea)
+class AccessAreaAdmin(admin.ModelAdmin):
+    list_display = ("name", "latitude", "longitude", "radius_meters", "active", "created_at")
+    list_filter = ("active",)
+    search_fields = ("name",)
+    actions = ["activate_areas", "deactivate_areas"]
+
+    class Media:
+        js = ("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js",)
+        css = {"all": ("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css",)}
+        # Custom JS for 'use my location' button
+        js += ("admin/js/accessarea_use_my_location.js",)
+
+    def activate_areas(self, request, queryset):
+        queryset.update(active=True)
+        self.message_user(request, "Selected areas activated.")
+    activate_areas.short_description = "Activate selected areas"
+
+    def deactivate_areas(self, request, queryset):
+        queryset.update(active=False)
+        self.message_user(request, "Selected areas deactivated.")
+    deactivate_areas.short_description = "Deactivate selected areas"
+
 from .models import TodoTask
 # Register TodoTask in admin
 @admin.register(TodoTask)
@@ -9,21 +46,6 @@ class TodoTaskAdmin(admin.ModelAdmin):
     autocomplete_fields = ['employee']
     verbose_name = 'Assign task'
     verbose_name_plural = 'Assign tasks'
-# your_app/admin.py
-
-from django.contrib import admin
-from django.urls import path
-from django.shortcuts import render
-from django.db.models import Sum, DurationField, ExpressionWrapper, F
-from django.utils.html import format_html
-from django.http import HttpResponseRedirect
-from django.contrib import messages
-from django.core.cache import cache
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from datetime import datetime, date, timedelta
-from django.contrib.admin import AdminSite
-from django.template.response import TemplateResponse
 
 # Import all your models
 from .models import (

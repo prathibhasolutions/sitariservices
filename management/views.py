@@ -1,3 +1,56 @@
+
+from django.views.decorators.csrf import csrf_exempt
+from .models import AccessArea
+from django.views.decorators.http import require_POST
+import math
+from django.conf import settings
+from django.apps import apps
+
+# Haversine formula to calculate distance between two lat/lng points in meters
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371000  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+@csrf_exempt
+@require_POST
+def geofence_check(request):
+
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        data = request.POST or request.json or {}
+        lat = float(data.get('latitude'))
+        lng = float(data.get('longitude'))
+        logger.info(f"Geofence check received coordinates: lat={lat}, lng={lng}")
+    except Exception as e:
+        logger.error(f"Geofence check error parsing coordinates: {e}")
+        return JsonResponse({'allowed': False, 'reason': 'Invalid coordinates'}, status=400)
+
+    # Check if geofencing is enabled
+    GeofenceSettings = apps.get_model('management', 'GeofenceSettings')
+    enabled = True
+    try:
+        enabled = GeofenceSettings.objects.first().enabled
+    except Exception:
+        pass
+    if not enabled:
+        return JsonResponse({'allowed': True, 'reason': 'Geofencing disabled'})
+
+    # Check if inside any active area
+    for area in AccessArea.objects.filter(active=True):
+        dist = haversine(lat, lng, area.latitude, area.longitude)
+        logger.info(f"Comparing to area '{area.name}': center=({area.latitude},{area.longitude}), radius={area.radius_meters}, distance={dist}")
+        if dist <= area.radius_meters:
+            logger.info(f"User is within area: {area.name}")
+            return JsonResponse({'allowed': True, 'reason': f'Within area: {area.name}'})
+    logger.warning("User is out of all access areas.")
+    return JsonResponse({'allowed': False, 'reason': 'You are out of the access area.'})
 from django.views.decorators.csrf import csrf_exempt
 # --- Session Refresh Endpoint ---
 @csrf_exempt
@@ -13,7 +66,7 @@ def refresh_session(request):
             session_closed=False
         ).order_by('-login_time').first()
         if session:
-            session.session_expires_at = now + timedelta(minutes=15)
+            session.session_expires_at = now + timedelta(minutes=60)
             session.refreshed_at = now
             session.session_status = "refreshed"
             session.save(update_fields=["session_expires_at", "refreshed_at", "session_status"])
@@ -93,7 +146,7 @@ def login_with_otp(request):
                         last_break.ended_by_login = True  # optional for tracking
                         last_break.save()
 
-                    # Create a new attendance session for this login (15-min session)
+                    # Create a new attendance session for this login (60-min session)
 
                     new_session = AttendanceSession.objects.create(
                         employee=employee,
@@ -101,7 +154,7 @@ def login_with_otp(request):
                         logout_time=None,
                         logout_reason="",
                         session_closed=False,
-                        session_expires_at=now + timedelta(minutes=15),
+                        session_expires_at=now + timedelta(minutes=60),
                         refreshed_at=now,
                         session_status="active"
                     )
