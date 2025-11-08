@@ -1,0 +1,67 @@
+{% extends "masteremployee.html" %}
+{% block content %}
+<style>
+.task-card {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: none;
+    transition: box-shadow 0.2s;
+}
+.task-card:hover {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+}
+.task-deadline {
+    color: #dc3545;
+    font-weight: 500;
+    font-size: 1rem;
+}
+.task-empty {
+    text-align: center;
+    color: #888;
+    font-size: 1.2rem;
+    margin-top: 2rem;
+}
+</style>
+<div class="container mt-4" style="max-width: 700px;">
+    <h2 class="mb-4 text-center">Assigned Tasks</h2>
+    <div id="assignedTaskList">
+        <div class="task-empty">Loading tasks...</div>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const taskList = document.getElementById('assignedTaskList');
+        async function loadTasks() {
+            try {
+                const response = await fetch("{% url 'todos_get' %}");
+                const data = await response.json();
+                taskList.innerHTML = '';
+                if (data.todos.length === 0) {
+                    taskList.innerHTML = '<div class="task-empty">No tasks assigned to you.</div>';
+                } else {
+                    data.todos.forEach(task => {
+                        const taskDate = new Date(task.due_time);
+                        const card = document.createElement('div');
+                        card.className = 'card task-card';
+                        card.innerHTML = `
+                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                                <div>
+                                    <div class="h5 mb-2">${task.description}</div>
+                                </div>
+                                <div class="task-deadline text-md-right mt-2 mt-md-0">
+                                    <i class="far fa-clock mr-1"></i>Deadline: ${taskDate.toLocaleString()}
+                                </div>
+                            </div>
+                        `;
+                        taskList.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                taskList.innerHTML = '<div class="task-empty text-danger">Could not load tasks at this time.</div>';
+            }
+        }
+        loadTasks();
+    });
+</script>
+{% endblock %}

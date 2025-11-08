@@ -22,84 +22,42 @@
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped mb-0">
                             <tbody>
-                               <tr>
-    <th scope="row" style="width: 40%; vertical-align: middle;">Profile Pic</th>
-    <td>
-        <!-- Image display -->
-        {% if employee.profile_picture and employee.profile_picture.url != '/media/default_profile.png' %}
-            <img src="{{ employee.profile_picture.url }}" alt="Profile Picture" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
-        {% else %}
-            <img src="{% static 'images/default_profile.png' %}" alt="Default Profile" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
-        {% endif %}
-        
-        <!-- Modal Trigger Button (ensure data-bs- attributes are correct) -->
-        <button type="button" class="btn btn-sm btn-outline-secondary ms-3" data-bs-toggle="modal" data-bs-target="#uploadProfilePicModal">
-            Change
-        </button>
+                            <tr>
+                                <th scope="row" style="width: 40%; vertical-align: middle;">Profile Pic</th>
+                                <td>
+                                    {% if employee.profile_picture and employee.profile_picture.url != '/media/default_profile.png' %}
+                                        <img src="{{ employee.profile_picture.url }}" alt="Profile Picture" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+                                    {% else %}
+                                        <img src="{% static 'images/default_profile.png' %}" alt="Default Profile" class="rounded-circle border" style="width: 60px; height: 60px; object-fit: cover; vertical-align: middle;">
+                                    {% endif %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-3" data-toggle="modal" data-target="#uploadProfilePicModal">
+                                        Change
+                                    </button>
 
-        <!-- The Modal Structure (hidden by default) -->
-        <div class="modal fade" id="uploadProfilePicModal" tabindex="-1" aria-labelledby="uploadProfilePicModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="uploadProfilePicModalLabel">Update Profile Picture</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- Form inside the modal -->
-                        <form method="post" enctype="multipart/form-data">
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                {{ upload_profile_form.profile_picture }}
-                            </div>
-                            <button type="submit" name="upload_profile_pic" class="btn btn-primary w-100">Upload</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </td>
-</tr>
+                                    <!-- Modal for uploading profile picture -->
+                                <div class="modal fade" id="uploadProfilePicModal" tabindex="-1" role="dialog" aria-labelledby="uploadProfilePicModalLabel" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="uploadProfilePicModalLabel">Update Profile Picture</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <form method="post" enctype="multipart/form-data">
+                                                        {% csrf_token %}
+                                                        <div class="mb-3">
+                                                            {{ upload_profile_form.profile_picture }}
+                                                        </div>
+                                                        <button type="submit" name="upload_profile_pic" class="btn btn-primary w-100">Upload</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
 
-<!-- Employee Document Upload Modal -->
-<div class="modal fade" id="uploadDocumentModal" tabindex="-1" aria-labelledby="uploadDocumentModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="uploadDocumentModalLabel">Upload Document</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="{{ upload_form.service.id_for_label }}" class="form-label">Service Type</label>
-                        {{ upload_form.service }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ upload_form.description.id_for_label }}" class="form-label">Description</label>
-                        {{ upload_form.description }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ upload_form.file.id_for_label }}" class="form-label">File</label>
-                        {{ upload_form.file }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ upload_form.renewal_date.id_for_label }}" class="form-label">Renewal Date</label>
-                        {{ upload_form.renewal_date }}
-                        <small class="form-text text-muted">{{ upload_form.renewal_date.help_text }}</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="{{ upload_form.mobile_number.id_for_label }}" class="form-label">Mobile Number</label>
-                        {{ upload_form.mobile_number }}
-                        <small class="form-text text-muted">{{ upload_form.mobile_number.help_text }}</small>
-                    </div>
-                    <button type="submit" name="upload_document" class="btn btn-primary w-100">Upload Document</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+
 
     {# === END OF NEW ROW === #}
                                 {# --- Your existing profile details (unchanged) --- #}
@@ -115,14 +73,7 @@
                                     <th scope="row">Department</th>
                                     <td>{{ employee.department.name|default_if_none:"Not set" }}</td>
                                 </tr>
-                                <tr>
-                                    <th scope="row">Upload Documents</th>
-                                    <td>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
-                                            Upload File
-                                        </button>
-                                    </td>
-                                </tr>
+
                                 <tr>
                                     <th scope="row">Working Hours</th>
                                     <td>

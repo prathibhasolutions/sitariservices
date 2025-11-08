@@ -25,7 +25,7 @@
     <style>
         body {
             background-color: #f8f9fa;
-            overflow: hidden; /* Prevent body from scrolling */
+            /* overflow: hidden;  Removed to allow scrolling */
         }
 
         .wrapper {
@@ -85,13 +85,14 @@
             top: 0;
             z-index: 10;
             background: linear-gradient(135deg, #0062E0 0%, #19AFFF 100%) !important;
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            min-height: 56px;
         }
         
         /* === Responsive behavior for mobile === */
         @media (max-width: 768px) {
-            body {
-                overflow: auto; /* Re-enable body scroll on mobile for simpler layout */
-            }
             #sidebar {
                 margin-left: -250px;
             }
@@ -101,7 +102,7 @@
             #content {
                 width: 100%;
                 margin-left: 0;
-                height: auto; /* Let content determine height */
+                height: auto;
                 overflow-y: visible;
             }
             #content.active {
@@ -130,6 +131,7 @@
 </head>
 
 <body>
+<!-- Sidebar Backdrop removed -->
 <div class="wrapper">
     <!-- Sidebar -->
     <nav id="sidebar">
@@ -137,6 +139,7 @@
             <img src="{% static '/management/img/logo.jpg' %}" alt="Logo" class="sidebar-logo rounded-circle">
             <h5 class="mt-2">Sitari Solutions</h5> <!-- Text Changed -->
         </div>
+
 
         <div class="nav flex-column">
             {% url 'employee_dashboard' as profile_url %}
@@ -147,7 +150,26 @@
             <a class="nav-link mb-2 {% if request.path == worksheet_url %}active{% endif %}" href="{{ worksheet_url }}">Daily Worksheet</a>
             {% url 'applications' as applications_url %}
             <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">WorkSheet Applications</a>
+
+            <!-- Blinking Task Button -->
+            {% url 'assigned_tasks' as assigned_tasks_url %}
+            <a id="taskReminderBtn" class="nav-link mb-2 position-relative" href="{{ assigned_tasks_url }}">
+                <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:2px; left:10px; display:none;">0</span>
+                <span style="margin-left:8px;">Assigned tasks</span>
+            </a>
+
             <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
+</style>
+<style>
+@keyframes blink {
+    0%, 100% { background: #dc3545; color: #fff; }
+    50% { background: #fff; color: #dc3545; }
+}
+#taskReminderBtn.blink {
+    animation: blink 1s linear infinite;
+    border-radius: 6px;
+}
+</style>
             {% url 'create_invoice' as invoice_url %}
             <a class="nav-link mb-2 {% if request.path == invoice_url %}active{% endif %}" href="{{ invoice_url }}">Generate Invoice</a>
             {% url 'assigned_links' as links_url %}
@@ -161,20 +183,25 @@
     <!-- Page Content -->
     <div id="content">
         <nav class="navbar navbar-expand-lg navbar-dark">
-            <div class="container-fluid">
-                <button type="button" id="sidebarCollapse" class="btn btn-info">
+            <div class="container-fluid d-flex flex-nowrap align-items-center justify-content-between" style="padding-left:0; padding-right:0;">
+                <button type="button" id="sidebarCollapse" class="btn btn-info mr-3" style="flex-shrink:0;">
                     <i class="fas fa-align-left"></i>
                     <span>Dashboard</span>
                 </button>
-                <div class="d-flex align-items-center ml-auto">
-                    <a href="{% url 'todo_page' %}" class="mr-4" title="Task Reminder">
-                        <i class="fas fa-list-check navbar-upload-icon"></i>
+                <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
+                    <!-- Session Timer Widget (unchanged, but no mobile stacking) -->
+                    <div id="session-timer-container" class="mr-2" style="flex-shrink:0;">
+                        <button id="session-timer" data-toggle="tooltip" title="Session Timer" class="btn btn-warning" style="font-weight:bold; min-width:70px; transition:background 0.3s;">15:00</button>
+                        <button id="refresh-session-btn" class="btn btn-sm btn-warning ml-2" style="font-weight:600; display:none;" data-toggle="tooltip" title="Refresh Session">Refresh Session</button>
+                    </div>
+                    <a href="{% url 'todo_page' %}" class="mr-2" title="Task Reminder" style="flex-shrink:0;">
+                        <i class="fas fa-list-check navbar-upload-icon" data-toggle="tooltip" title="Task Reminder"></i>
                     </a>
-                    <a href="#" class="mr-4" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files">
-                        <i class="fas fa-upload navbar-upload-icon"></i>
+                    <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
+                        <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>
                     </a>
-                    <div class="navbar-bell">
-                        <a href="{% url 'notification_list' %}" class="text-white" title="View Notifications">
+                    <div class="navbar-bell" style="flex-shrink:0;">
+                        <a href="{% url 'notification_list' %}" class="text-white" data-toggle="tooltip" title="Notifications">
                             <i class="fas fa-bell fa-lg"></i>
                             {% if unread_notification_count > 0 %}
                                 <span class="badge badge-danger">{{ unread_notification_count }}</span>
@@ -204,14 +231,14 @@
         <div class="modal-header">
           <h5 class="modal-title" id="logoutModalLabel">Reason for Logout</h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
+                <span aria-hidden="true" data-toggle="tooltip" title="Close">&times;</span>
           </button>
         </div>
         <div class="modal-body">
           <input type="text" name="logout_reason" class="form-control" placeholder="Enter reason for logout" required>
         </div>
         <div class="modal-footer">
-          <button type="submit" class="btn btn-danger">Logout</button>
+          <button type="submit" class="btn btn-danger" data-toggle="tooltip" title="Logout">Logout</button>
         </div>
       </div>
     </form>
@@ -226,7 +253,7 @@
         {% csrf_token %}
         <div class="modal-header">
           <h5 class="modal-title" id="uploadFileModalLabel">Upload a Document</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close" data-toggle="tooltip" title="Close">
             <span aria-hidden="true">&times;</span>
           </button>
         </div>
@@ -243,8 +270,8 @@
           {% endfor %}
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-          <button type="submit" class="btn btn-primary">Upload File</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal" data-toggle="tooltip" title="Close">Close</button>
+          <button type="submit" class="btn btn-primary" data-toggle="tooltip" title="Upload File">Upload File</button>
         </div>
       </form>
     </div>
@@ -263,18 +290,121 @@
             </div>
             <div class="modal-body" id="reminderModalBody" style="font-size: 1.1rem; font-weight: 500;"></div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="acknowledgeBtn">Clear Reminder</button>
+                <button type="button" class="btn btn-primary" id="acknowledgeBtn" data-toggle="tooltip" title="Clear Reminder">Clear Reminder</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Scripts -->
+<script>
+// Fetch assigned task count and update button
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('{% url "todos_get" %}')
+        .then(response => response.json())
+        .then(data => {
+            var count = data.todos.length;
+            var badge = document.getElementById('taskCountBadge');
+            var btn = document.getElementById('taskReminderBtn');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+                btn.classList.add('blink');
+            } else {
+                badge.style.display = 'none';
+                btn.classList.remove('blink');
+            }
+        });
+});
+</script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Custom Toggle Script -->
 <script>
+// Initialize Bootstrap tooltip for session timer
+$(function () {
+    $('[data-toggle="tooltip"]').tooltip();
+});
+// --- Session Timer Logic ---
+let sessionDuration = 15 * 60; // 15 minutes in seconds
+let timerInterval = null;
+const timerDisplay = document.getElementById('session-timer');
+const refreshBtn = document.getElementById('refresh-session-btn');
+let blinkInterval = null;
+// Use sessionStorage to persist timer across page reloads/tabs
+function getSessionTimeLeft() {
+    const stored = sessionStorage.getItem('sessionTimeLeft');
+    if (stored !== null) return parseInt(stored, 10);
+    return sessionDuration;
+}
+function setSessionTimeLeft(val) {
+    sessionStorage.setItem('sessionTimeLeft', val);
+}
+let sessionTimeLeft = getSessionTimeLeft();
+
+function updateTimerDisplay() {
+    const min = Math.floor(sessionTimeLeft / 60).toString().padStart(2, '0');
+    const sec = (sessionTimeLeft % 60).toString().padStart(2, '0');
+    timerDisplay.textContent = `${min}:${sec}`;
+    if (sessionTimeLeft <= 120) {
+        timerDisplay.classList.remove('btn-warning');
+        timerDisplay.classList.add('btn-danger');
+        timerDisplay.style.animation = 'blinker 1s linear infinite';
+        refreshBtn.style.display = '';
+    } else {
+        timerDisplay.classList.remove('btn-danger');
+        timerDisplay.classList.add('btn-warning');
+        timerDisplay.style.animation = '';
+        refreshBtn.style.display = 'none';
+    }
+}
+
+function startSessionTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    updateTimerDisplay();
+    timerInterval = setInterval(() => {
+        sessionTimeLeft--;
+        setSessionTimeLeft(sessionTimeLeft);
+        updateTimerDisplay();
+        if (sessionTimeLeft <= 0) {
+            clearInterval(timerInterval);
+            sessionStorage.removeItem('sessionTimeLeft');
+            autoLogoutSession();
+        }
+    }, 1000);
+}
+
+function refreshSession() {
+    sessionTimeLeft = sessionDuration;
+    setSessionTimeLeft(sessionTimeLeft);
+    updateTimerDisplay();
+    // Optionally, send an AJAX call to backend to refresh session expiry
+    fetch('/employee/refresh_session/', {method:'POST', headers:{'X-CSRFToken': getCSRFToken()}});
+}
+
+function autoLogoutSession() {
+    // Optionally, send an AJAX call to backend to end session
+    fetch('/logout/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        body: new URLSearchParams({ 'logout_reason': 'Session expired (not refreshed)' })
+    }).then(() => {
+        window.location.href = '/';
+    });
+}
+
+refreshBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    refreshSession();
+});
+
+// Start timer on page load, but don't reset unless first time
+startSessionTimer();
+
+// --- Blinker animation ---
+const style = document.createElement('style');
+style.innerHTML = `@keyframes blinker { 50% { opacity: 0.3; } }`;
+document.head.appendChild(style);
     $(document).ready(function () {
         $('#sidebarCollapse').on('click', function () {
             $('#sidebar').toggleClass('active');
@@ -357,7 +487,7 @@ setInterval(function() {
         method: "POST",
         headers: { "X-CSRFToken": getCSRFToken() },
     });
-}, 5000); // Ping every 5 seconds
+}, 60000); // Ping every 1 minute
 </script>
 
 <script>

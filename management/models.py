@@ -130,7 +130,10 @@ class Employee(models.Model):
         base_daily_wage = self.salary / Decimal(days_in_month) if self.salary and days_in_month > 0 else Decimal('0.00')
 
         all_attendance_sessions = list(AttendanceSession.objects.filter(
-            employee=self, login_time__year=year, login_time__month=month
+            employee=self,
+            login_time__year=year,
+            login_time__month=month,
+            session_status__in=["active", "refreshed", "ended"]  # Only count sessions that were valid
         ).order_by('login_time'))
         
         all_break_sessions = list(BreakSession.objects.filter(
@@ -143,7 +146,7 @@ class Employee(models.Model):
             work_end_datetime = timezone.make_aware(datetime.combine(current_date, end_work_time))
 
             day_attendance = [
-                s for s in all_attendance_sessions 
+                s for s in all_attendance_sessions
                 if timezone.localtime(s.login_time).date() == current_date and s.login_time < work_end_datetime
             ]
 
@@ -159,36 +162,32 @@ class Employee(models.Model):
             total_active_seconds = 0
             
             if day_attendance:
-                earliest_actual_login = min([s.login_time for s in day_attendance])
-                login_time = max(earliest_actual_login, work_start_datetime)
+                # Merge overlapping attendance sessions for the day
+                intervals = []
+                for s in day_attendance:
+                    session_end = s.logout_time or s.session_expires_at or work_end_datetime
+                    overlap_start = max(s.login_time, work_start_datetime)
+                    overlap_end = min(session_end, work_end_datetime)
+                    if overlap_end > overlap_start:
+                        intervals.append((overlap_start, overlap_end))
+                intervals.sort()
+                merged = []
+                for start, end in intervals:
+                    if not merged or start > merged[-1][1]:
+                        merged.append([start, end])
+                    else:
+                        merged[-1][1] = max(merged[-1][1], end)
+                work_seconds = sum((end - start).total_seconds() for start, end in merged)
 
-                logouts = [s.logout_time for s in day_attendance if s.logout_time]
-                if logouts:
-                    latest_actual_logout = max(logouts)
-                    logout_time = min(latest_actual_logout, work_end_datetime)
-                else:
-                    logout_time = work_end_datetime
+                approved_break_seconds = 0
+                for b in day_breaks:
+                    if b.approved and b.end_time:
+                        overlap_start = max(b.start_time, work_start_datetime)
+                        overlap_end = min(b.end_time, work_end_datetime)
+                        if overlap_end > overlap_start:
+                            approved_break_seconds += (overlap_end - overlap_start).total_seconds()
 
-                if login_time >= logout_time:
-                    total_active_seconds = 0
-                else:
-                    work_seconds = 0
-                    for s in day_attendance:
-                        if s.logout_time:
-                            overlap_start = max(s.login_time, login_time)
-                            overlap_end = min(s.logout_time, logout_time)
-                            if overlap_end > overlap_start:
-                                work_seconds += (overlap_end - overlap_start).total_seconds()
-
-                    approved_break_seconds = 0
-                    for b in day_breaks:
-                        if b.approved and b.end_time:
-                            overlap_start = max(b.start_time, login_time)
-                            overlap_end = min(b.end_time, logout_time)
-                            if overlap_end > overlap_start:
-                                approved_break_seconds += (overlap_end - overlap_start).total_seconds()
-
-                    total_active_seconds = work_seconds + approved_break_seconds
+                total_active_seconds = work_seconds + approved_break_seconds
 
             # --- This is your existing, correct logic for capping the wage ---
             capped_active_seconds = min(total_active_seconds, wage_target_seconds)
@@ -358,6 +357,9 @@ class AttendanceSession(models.Model):
     logout_reason = models.CharField(max_length=250, blank=True)
     session_closed = models.BooleanField(default=False)
     last_ping = models.DateTimeField(null=True, blank=True)
+    session_expires_at = models.DateTimeField(null=True, blank=True, help_text="When this 15-min session will expire.")
+    refreshed_at = models.DateTimeField(null=True, blank=True, help_text="Last time this session was refreshed.")
+    session_status = models.CharField(max_length=32, default="active", help_text="active, refreshed, expired, or ended.")
 
     class Meta:
         verbose_name_plural = 'Attendance Sessions'
@@ -774,6 +776,9 @@ class EmployeeLinkAssignment(models.Model):
 
 
 class TodoTask(models.Model):
+    class Meta:
+        verbose_name = 'Assign task'
+        verbose_name_plural = 'Assign tasks'
     employee = models.ForeignKey("Employee", on_delete=models.CASCADE, related_name="personal_todos")
     description = models.CharField(max_length=255)
     due_time = models.DateTimeField()

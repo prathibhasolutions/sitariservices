@@ -1,3 +1,25 @@
+from django.views.decorators.csrf import csrf_exempt
+# --- Session Refresh Endpoint ---
+@csrf_exempt
+def refresh_session(request):
+    if request.method == "POST":
+        employee_id = request.session.get('employee_id')
+        if not employee_id:
+            return JsonResponse({'status': 'not-logged-in'}, status=401)
+        now = timezone.now()
+        session = AttendanceSession.objects.filter(
+            employee_id=employee_id,
+            logout_time__isnull=True,
+            session_closed=False
+        ).order_by('-login_time').first()
+        if session:
+            session.session_expires_at = now + timedelta(minutes=15)
+            session.refreshed_at = now
+            session.session_status = "refreshed"
+            session.save(update_fields=["session_expires_at", "refreshed_at", "session_status"])
+            return JsonResponse({'status': 'refreshed', 'expires_at': session.session_expires_at})
+        return JsonResponse({'status': 'no-active-session'}, status=404)
+    return JsonResponse({'status': 'invalid-method'}, status=405)
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from collections import defaultdict
@@ -39,7 +61,7 @@ def login_with_otp(request):
 
             if mobile != expected_mobile:
                 messages.error(request, "Mobile number mismatch. Please request OTP again.")
-                return redirect('login_with_otp')
+                return redirect('login')
 
             if otp_entered == expected_otp:
                 try:
@@ -48,16 +70,18 @@ def login_with_otp(request):
 
                     now = timezone.now()
 
-                    # 1. Find and close any still-open AttendanceSession for this employee
+                    # 1. Find and close any still-open AttendanceSession for this employee (single device enforcement)
                     open_attendance_sessions = AttendanceSession.objects.filter(
                         employee=employee,
-                        logout_time__isnull=True
+                        logout_time__isnull=True,
+                        session_closed=False
                     )
                     for old_session in open_attendance_sessions:
                         old_session.logout_time = now
-                        old_session.logout_reason = "New Login Override"
+                        old_session.logout_reason = "New Login Override (Logged in from another device)"
                         old_session.session_closed = True
-                        old_session.save()
+                        old_session.session_status = "ended"
+                        old_session.save(update_fields=["logout_time", "logout_reason", "session_closed", "session_status"])
 
                     # If a break session is still open (from idle/tab close/previous logout), end it NOW
                     last_break = BreakSession.objects.filter(
@@ -69,13 +93,19 @@ def login_with_otp(request):
                         last_break.ended_by_login = True  # optional for tracking
                         last_break.save()
 
-                    # Create a new attendance session for this login
-                    AttendanceSession.objects.create(
+                    # Create a new attendance session for this login (15-min session)
+
+                    new_session = AttendanceSession.objects.create(
                         employee=employee,
                         login_time=now,
                         logout_time=None,
-                        logout_reason=""
+                        logout_reason="",
+                        session_closed=False,
+                        session_expires_at=now + timedelta(minutes=15),
+                        refreshed_at=now,
+                        session_status="active"
                     )
+                    request.session['attendance_session_id'] = new_session.id
 
                     request.session.pop('otp', None)
                     request.session.pop('mobile', None)
@@ -83,7 +113,7 @@ def login_with_otp(request):
                     return redirect('employee_dashboard')
                 except Employee.DoesNotExist:
                     messages.error(request, "Employee with this mobile number not found.")
-                    return redirect('login_with_otp')
+                    return redirect('login')
             else:
                 messages.error(request, "Invalid OTP. Please try again.")
                 return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
@@ -110,12 +140,12 @@ def login_with_otp(request):
 def change_password_request(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
-        return redirect('login_with_otp')  # Or your login page
+        return redirect('login')  # Or your login page
 
     try:
         employee = Employee.objects.get(employee_id=employee_id)
     except Employee.DoesNotExist:
-        return redirect('login_with_otp')
+        return redirect('login')
 
     if request.method == 'POST':
         mobile = employee.mobile_number
@@ -1071,3 +1101,12 @@ def delete_employee_todo(request, task_id):
     task = get_object_or_404(TodoTask, id=task_id, employee_id=employee_id)
     task.delete()
     return JsonResponse({"status": "success"})
+
+
+# Assigned tasks page for employees
+from django.contrib.auth.decorators import login_required
+
+def assigned_tasks_view(request):
+    if not request.session.get("employee_id"):
+        return redirect('login')
+    return render(request, 'assigned_tasks.html')

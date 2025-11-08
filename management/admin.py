@@ -1,3 +1,14 @@
+from django.contrib import admin
+from .models import TodoTask
+# Register TodoTask in admin
+@admin.register(TodoTask)
+class TodoTaskAdmin(admin.ModelAdmin):
+    list_display = ('description', 'employee', 'due_time', 'created_at')
+    search_fields = ('description', 'employee__name')
+    list_filter = ('employee',)
+    autocomplete_fields = ['employee']
+    verbose_name = 'Assign task'
+    verbose_name_plural = 'Assign tasks'
 # your_app/admin.py
 
 from django.contrib import admin
@@ -129,16 +140,15 @@ class EmployeeAdmin(admin.ModelAdmin):
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
-        
-        # --- THIS IS THE CHANGE ---
-        # Make BOTH URLs use '?employee=' for consistency.
         extra_context['attendance_report_url'] = (
             reverse('admin:employee-attendance-report') + f'?employee={object_id}'
         )
         extra_context['salary_report_url'] = (
             reverse('admin:employee-salary-report') + f'?employee={object_id}'
         )
-        
+        extra_context['worksheet_report_url'] = (
+            reverse('admin:employee-worksheet-report') + f'?employee={object_id}'
+        )
         return super().change_view(
             request, object_id, form_url, extra_context=extra_context,
         )
@@ -179,20 +189,55 @@ class EmployeeAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            # Your existing attendance report URL
             path(
                 'attendance-report/',
                 self.admin_site.admin_view(self.attendance_report_view),
                 name='employee-attendance-report'
             ),
-            # --- ADD THIS NEW URL ---
             path(
                 'salary-report/',
                 self.admin_site.admin_view(self.salary_report_view),
                 name='employee-salary-report'
             ),
+            path(
+                'worksheet-report/',
+                self.admin_site.admin_view(self.worksheet_report_view),
+                name='employee-worksheet-report'
+            ),
         ]
         return custom_urls + urls
+
+    def worksheet_report_view(self, request):
+        from datetime import datetime
+        employee_id = request.GET.get('employee')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        employee = None
+        worksheets = []
+        error_message = None
+        if employee_id:
+            try:
+                employee = Employee.objects.get(pk=employee_id)
+                qs = Worksheet.objects.filter(employee=employee)
+                # Only filter if a date is actually selected
+                if start_date and end_date:
+                    qs = qs.filter(date__gte=start_date, date__lte=end_date)
+                elif start_date:
+                    qs = qs.filter(date__gte=start_date)
+                elif end_date:
+                    qs = qs.filter(date__lte=end_date)
+                worksheets = qs.order_by('-date')
+            except Employee.DoesNotExist:
+                error_message = "Employee not found."
+        context = {
+            **self.admin_site.each_context(request),
+            'employee': employee,
+            'worksheets': worksheets,
+            'start_date': start_date,
+            'end_date': end_date,
+            'error_message': error_message,
+        }
+        return render(request, 'admin/employee_worksheet_report.html', context)
 
     from datetime import datetime
 

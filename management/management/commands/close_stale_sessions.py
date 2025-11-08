@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = "Closes attendance sessions where employee's tab is no longer active"
 
     def handle(self, *args, **kwargs):
-        cutoff = timezone.now() - timedelta(seconds=70)  # or whatever timeout you set in JS + a buffer!
+        cutoff = timezone.now() - timedelta(seconds=900)  # or whatever timeout you set in JS + a buffer!
         stale_sessions = AttendanceSession.objects.filter(
             logout_time__isnull=True, last_ping__lt=cutoff
         )
