@@ -36,6 +36,7 @@ async function geofenceCheckAndEnforce() {
         }
     }, function(err) {
         alert('Location access denied. You cannot proceed.');
+        window.location.href = '/';
     });
 }
 // Only run for logged-in employee pages (not login page)
@@ -196,12 +197,7 @@ if (!window.location.pathname.includes('login')) {
             {% url 'applications' as applications_url %}
             <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">WorkSheet Applications</a>
 
-            <!-- Blinking Task Button -->
-            {% url 'assigned_tasks' as assigned_tasks_url %}
-            <a id="taskReminderBtn" class="nav-link mb-2 position-relative" href="{{ assigned_tasks_url }}">
-                <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:2px; left:10px; display:none;">0</span>
-                <span style="margin-left:8px;">Assigned tasks</span>
-            </a>
+
 
             <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
 </style>
@@ -239,8 +235,9 @@ if (!window.location.pathname.includes('login')) {
                         <button id="session-timer" data-toggle="tooltip" title="Session Timer" class="btn btn-warning" style="font-weight:bold; min-width:70px; transition:background 0.3s;">15:00</button>
                         <button id="refresh-session-btn" class="btn btn-sm btn-warning ml-2" style="font-weight:600; display:none;" data-toggle="tooltip" title="Refresh Session">Refresh Session</button>
                     </div>
-                    <a href="{% url 'todo_page' %}" class="mr-2" title="Task Reminder" style="flex-shrink:0;">
+                    <a id="taskReminderBtn" href="{% url 'assigned_tasks' %}" class="mr-2 position-relative" title="Task Reminder" style="flex-shrink:0;">
                         <i class="fas fa-list-check navbar-upload-icon" data-toggle="tooltip" title="Task Reminder"></i>
+                        <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:-8px; right:-10px; display:none;">0</span>
                     </a>
                     <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
                         <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>

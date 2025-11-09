@@ -40,9 +40,13 @@ from .models import TodoTask
 # Register TodoTask in admin
 @admin.register(TodoTask)
 class TodoTaskAdmin(admin.ModelAdmin):
-    list_display = ('description', 'employee', 'due_time', 'created_at')
+    def short_description(self, obj):
+        return (obj.description[:40] + '...') if len(obj.description) > 40 else obj.description
+    short_description.short_description = 'Description'
+
+    list_display = ('short_description', 'employee', 'due_time', 'created_at', 'completed')
     search_fields = ('description', 'employee__name')
-    list_filter = ('employee',)
+    list_filter = ('employee', 'completed')
     autocomplete_fields = ['employee']
     verbose_name = 'Assign task'
     verbose_name_plural = 'Assign tasks'
@@ -667,6 +671,53 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
     
     colored_renewal_date.short_description = 'Renewal Date'
     colored_renewal_date.admin_order_field = 'renewal_date'  # Make it sortable
+
+    actions = ['assign_renewal_task_to_other']
+
+    @admin.action(description='Assign renewal task to another employee')
+    def assign_renewal_task_to_other(self, request, queryset):
+        from .models import TodoTask, Employee
+        from django.utils import timezone
+        from django import forms
+        from django.shortcuts import render, redirect
+
+        class EmployeeChoiceForm(forms.Form):
+            employee = forms.ModelChoiceField(queryset=Employee.objects.all(), label="Assign to employee")
+
+        if 'apply' in request.POST:
+            form = EmployeeChoiceForm(request.POST)
+            if form.is_valid():
+                selected_employee = form.cleaned_data['employee']
+                created = 0
+                for upload in queryset:
+                    if not upload.renewal_date:
+                        continue
+                    file_url = upload.file.url if upload.file else ''
+                    file_name = upload.file.name.split('/')[-1] if upload.file else 'No file'
+                    # HTML link for file
+                    file_link = f'<a href="{file_url}" target="_blank">{file_name}</a>' if file_url else file_name
+                    desc = (
+                        f"Renewal required for: {upload.service.name if upload.service else 'Uncategorized'} | "
+                        f"File: {file_link} | {upload.description[:40]}"
+                    )
+                    due_time = timezone.make_aware(timezone.datetime.combine(upload.renewal_date, timezone.datetime.max.time().replace(hour=23, minute=59, second=0, microsecond=0)))
+                    TodoTask.objects.create(
+                        employee=selected_employee,
+                        description=desc,
+                        due_time=due_time
+                    )
+                    created += 1
+                self.message_user(request, f"{created} renewal task(s) assigned to {selected_employee}.")
+                return None
+        else:
+            form = EmployeeChoiceForm()
+
+        return render(request, 'admin/assign_renewal_task_to_other.html', {
+            'uploads': queryset,
+            'form': form,
+            'title': 'Assign renewal task to another employee',
+            'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+        })
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}

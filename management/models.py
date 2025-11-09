@@ -812,10 +812,12 @@ class TodoTask(models.Model):
     class Meta:
         verbose_name = 'Assign task'
         verbose_name_plural = 'Assign tasks'
+
     employee = models.ForeignKey("Employee", on_delete=models.CASCADE, related_name="personal_todos")
     description = models.CharField(max_length=255)
     due_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    completed = models.BooleanField(default=False, help_text="Task completed status")
 
     def __str__(self):
         return self.description

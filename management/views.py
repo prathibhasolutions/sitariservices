@@ -1,3 +1,27 @@
+from .models import TodoTask
+
+from django.views.decorators.http import require_POST
+
+def assign_task_to_self(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        messages.error(request, "Your session has expired. Please log in again.")
+        return redirect('login')
+    if request.method == 'POST':
+        description = request.POST.get('description')
+        due_time = request.POST.get('due_time')
+        if not description or not due_time:
+            messages.error(request, "Please provide both description and due time.")
+            return redirect('assigned_tasks')
+        try:
+            employee = Employee.objects.get(employee_id=employee_id)
+            TodoTask.objects.create(employee=employee, description=description, due_time=due_time)
+            messages.success(request, "Task assigned to yourself successfully.")
+        except Exception as e:
+            messages.error(request, f"Could not assign task: {e}")
+        return redirect('assigned_tasks')
+    else:
+        return redirect('assigned_tasks')
 
 from django.views.decorators.csrf import csrf_exempt
 from .models import AccessArea
@@ -1111,7 +1135,7 @@ def get_employee_todos(request):
     if not employee_id:
         return JsonResponse({"error": "Unauthorized"}, status=401)
     
-    tasks = TodoTask.objects.filter(employee_id=employee_id).order_by('due_time')
+    tasks = TodoTask.objects.filter(employee_id=employee_id, completed=False).order_by('due_time')
     data = {
         "todos": [
             {"id": task.id, "description": task.description, "due_time": task.due_time.isoformat()}
@@ -1152,7 +1176,8 @@ def delete_employee_todo(request, task_id):
         return JsonResponse({"error": "Unauthorized"}, status=401)
     
     task = get_object_or_404(TodoTask, id=task_id, employee_id=employee_id)
-    task.delete()
+    task.completed = True
+    task.save(update_fields=["completed"])
     return JsonResponse({"status": "success"})
 
 
