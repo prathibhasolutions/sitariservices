@@ -1,3 +1,33 @@
+# Monkey-patch admin login view to use custom OTP login
+from django.urls import reverse
+from django.http import HttpResponseRedirect
+from django.utils.deprecation import MiddlewareMixin
+from .admin_otp_login import admin_login_with_otp
+from django.contrib import admin as django_admin
+
+def custom_admin_login(request, extra_context=None):
+    return admin_login_with_otp(request)
+
+django_admin.site.login = custom_admin_login
+from django.contrib.auth.models import User
+from .models import UserProfile
+from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+from django.contrib import admin
+# Inline for UserProfile
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile (OTP Mobile)'
+    fk_name = 'user'
+
+# Extend User admin to include UserProfile inline
+class UserAdmin(DefaultUserAdmin):
+    inlines = [UserProfileInline]
+
+# Unregister and re-register User with new admin
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
+
 
 # --- Audit Log Admin Registration ---
 from django.contrib import admin

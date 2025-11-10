@@ -1,3 +1,13 @@
+from django.db import models
+from django.contrib.auth.models import User
+
+# --- UserProfile for Admin/Staff OTP Login ---
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    mobile_number = models.CharField(max_length=15, blank=True, null=True, unique=True, help_text="Optional. If set, enables OTP login for this admin/staff user.")
+
+    def __str__(self):
+        return f"Profile for {self.user.username} ({self.mobile_number or 'No mobile'})"
 
 # --- Audit Log Proxy Model for Centralized Logging ---
 from django.utils.translation import gettext_lazy as _
@@ -61,6 +71,8 @@ class GeofenceSettings(models.Model):
     class Meta:
         verbose_name = "Geofencing Settings"
         verbose_name_plural = "Geofencing Settings"
+
+
 from django.db import models
 from django.utils import timezone
 from django.db.models import Sum, Q
