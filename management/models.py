@@ -1,4 +1,21 @@
 
+# --- Audit Log Proxy Model for Centralized Logging ---
+from django.utils.translation import gettext_lazy as _
+from django.contrib.contenttypes.models import ContentType
+
+def get_auditlog_logentry():
+    from auditlog.models import LogEntry as AuditlogLogEntry
+    return AuditlogLogEntry
+
+class LogEntry(get_auditlog_logentry()):
+    """
+    Proxy model to allow custom admin and filtering for audit logs.
+    """
+    class Meta:
+        proxy = True
+        verbose_name = _('Audit Log Entry')
+        verbose_name_plural = _('Audit Log Entries')
+
 from django.db import models
 # --- Announcement Modal Model ---
 class Announcement(models.Model):

@@ -1,3 +1,32 @@
+from django.http import JsonResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from auditlog.models import LogEntry
+from django.utils import timezone
+
+# --- Admin Print Event Logging Endpoint ---
+from django.views.decorators.csrf import csrf_exempt
+@csrf_exempt
+@staff_member_required
+def admin_print_event(request):
+    """
+    Log a print event in the audit log for the current admin user.
+    """
+    if request.method == 'POST' and request.user.is_authenticated:
+        from django.contrib.auth import get_user_model
+        from django.contrib.contenttypes.models import ContentType
+        User = get_user_model()
+        LogEntry.objects.create(
+            actor=request.user,
+            action=4,  # Custom action code for print event
+            content_type=ContentType.objects.get_for_model(User),
+            object_id=request.user.pk,
+            object_repr='Admin Print Event',
+            remote_addr=getattr(request, 'auditlog_ip', None),
+            changes={'message': 'Admin triggered print (Ctrl+P or afterprint) in admin interface.'},
+            timestamp=timezone.now(),
+        )
+        return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'forbidden'}, status=403)
 from .models import TodoTask
 
 from django.views.decorators.http import require_POST
@@ -119,6 +148,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 def login_with_otp(request):
+    from auditlog.models import LogEntry
+    from django.contrib.contenttypes.models import ContentType
     if request.method == 'POST':
         mobile = request.POST.get('mobile')
         otp_entered = request.POST.get('otp')
@@ -159,6 +190,17 @@ def login_with_otp(request):
                         old_session.session_closed = True
                         old_session.session_status = "ended"
                         old_session.save(update_fields=["logout_time", "logout_reason", "session_closed", "session_status"])
+
+                    # --- Audit log: login event ---
+                    LogEntry.objects.create(
+                        actor=request.user if request.user.is_authenticated else None,
+                        action=4,  # Custom action code for login event
+                        content_type=ContentType.objects.get_for_model(Employee),
+                        object_id=employee.pk,
+                        object_repr=str(employee),
+                        remote_addr=getattr(request, 'auditlog_ip', None),
+                        changes='User login via OTP',
+                    )
 
                     # If a break session is still open (from idle/tab close/previous logout), end it NOW
                     last_break = BreakSession.objects.filter(
@@ -294,6 +336,8 @@ def change_password_verify(request):
 
 @csrf_exempt
 def logout_view(request):
+    from auditlog.models import LogEntry
+    from django.contrib.contenttypes.models import ContentType
     employee_id = request.session.get('employee_id')
     logout_reason = ""
     if request.method == 'POST':
@@ -317,6 +361,17 @@ def logout_view(request):
                 active_session.logout_reason = reason
                 active_session.session_closed = True
                 active_session.save()
+
+                # --- Audit log: logout event ---
+                LogEntry.objects.create(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action=4,  # Custom action code for logout event
+                    content_type=ContentType.objects.get_for_model(Employee),
+                    object_id=employee.pk,
+                    object_repr=str(employee),
+                    remote_addr=getattr(request, 'auditlog_ip', None),
+                    changes=f'User logout: {reason}',
+                )
                 
                 # Start a BreakSession (ends at next login)
                 BreakSession.objects.create(

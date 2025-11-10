@@ -1,4 +1,16 @@
 from django.utils.deprecation import MiddlewareMixin
+
+class AuditlogIPMiddleware(MiddlewareMixin):
+    """
+    Middleware to attach the user's IP address to the request for audit logging.
+    """
+    def process_request(self, request):
+        ip = request.META.get('HTTP_X_FORWARDED_FOR')
+        if ip:
+            ip = ip.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        request.auditlog_ip = ip
 from django.shortcuts import redirect
 from django.urls import reverse
 from management.models import AttendanceSession, Employee
