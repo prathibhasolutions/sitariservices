@@ -471,7 +471,11 @@ def employee_dashboard(request):
         employee=employee, date__year=now.year, date__month=now.month
     ).order_by('-date')
 
-    # 5. Build the Context Dictionary (Now includes new bonus lists)
+    # 5. Fetch all active announcements (if any)
+    from .models import Announcement
+    active_announcements = Announcement.objects.filter(active=True).order_by('-created_at')
+
+    # 5. Build the Context Dictionary (Now includes new bonus lists and all announcements)
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
@@ -484,6 +488,7 @@ def employee_dashboard(request):
         'performance_bonuses': performance_bonuses,    # NEW
         'extra_days_bonuses': extra_days_bonuses,      # NEW
         'upload_form': upload_form, # Updated to use the form variable with validation errors
+        'active_announcements': active_announcements,
     }
 
     # 6. Perform Session Cleanup (Unchanged)

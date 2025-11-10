@@ -177,6 +177,100 @@ if (!window.location.pathname.includes('login')) {
 </head>
 
 <body>
+{% if active_announcements %}
+    {% for announcement in active_announcements %}
+        <div class="modal fade" id="announcementModal{{ forloop.counter }}" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel{{ forloop.counter }}" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="announcementModalLabel{{ forloop.counter }}">{{ announcement.title }}</h5>
+                        <button type="button" class="close close-announcement-modal" data-dismiss="modal" aria-label="Close" data-modal-index="{{ forloop.counter }}">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body text-center">
+                        {% if announcement.image %}
+                            <img src="{{ announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                        {% endif %}
+                        <div style="white-space: pre-line;">{{ announcement.description }}</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary close-announcement-modal" data-dismiss="modal" data-modal-index="{{ forloop.counter }}">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+<!-- Announcement Modals Script: Show all active announcements in sequence -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modals = [];
+    var total = Number('{{ active_announcements|length|default:"0" }}');
+    for (var i = 1; i <= total; i++) {
+        var modal = document.getElementById('announcementModal' + i);
+        if (modal) modals.push(modal);
+    }
+    function showModal(index) {
+        if (index < modals.length) {
+            $(modals[index]).modal('show');
+            // When closed, show next
+            $(modals[index]).on('hidden.bs.modal', function handler() {
+                $(modals[index]).off('hidden.bs.modal', handler);
+                showModal(index + 1);
+            });
+        }
+    }
+    if (modals.length > 0) {
+        showModal(0);
+    }
+});
+</script>
+{% if active_announcement %}
+<!-- Announcement Modal -->
+<div class="modal fade" id="announcementModal" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="announcementModalLabel">{{ active_announcement.title }}</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" id="closeAnnouncementModalBtn">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                {% if active_announcement.image %}
+                    <img src="{{ active_announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                {% endif %}
+                <div style="white-space: pre-line;">{{ active_announcement.description }}</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal" id="ackAnnouncementBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+<!-- Announcement Modal Script -->
+<script>
+// Show announcement modal if present
+document.addEventListener('DOMContentLoaded', function() {
+    var announcementModal = document.getElementById('announcementModal');
+    if (announcementModal) {
+        $(announcementModal).modal('show');
+        // Optionally, prevent closing by clicking outside
+        $(announcementModal).modal({backdrop: 'static', keyboard: false});
+        // Allow closing with button
+        document.getElementById('closeAnnouncementModalBtn').onclick = function() {
+            $(announcementModal).modal('hide');
+        };
+        document.getElementById('ackAnnouncementBtn').onclick = function() {
+            $(announcementModal).modal('hide');
+        };
+    }
+});
+</script>
+
+
 <!-- Sidebar Backdrop removed -->
 <div class="wrapper">
     <!-- Sidebar -->

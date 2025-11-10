@@ -1,5 +1,15 @@
 
 from django.contrib import admin
+from .models import Announcement
+# Register Announcement in admin
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'active', 'created_at', 'updated_at')
+    list_filter = ('active',)
+    search_fields = ('title', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+
+from django.contrib import admin
 from .models import AccessArea, GeofenceSettings
 from django.utils import timezone
 from django.contrib import messages
