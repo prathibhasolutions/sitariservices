@@ -191,7 +191,7 @@ def login_with_otp(request):
                         old_session.session_status = "ended"
                         old_session.save(update_fields=["logout_time", "logout_reason", "session_closed", "session_status"])
 
-                    # --- Audit log: login event ---
+                    # --- Audit log: login event (changes as dict for admin compatibility) ---
                     LogEntry.objects.create(
                         actor=request.user if request.user.is_authenticated else None,
                         action=4,  # Custom action code for login event
@@ -199,7 +199,7 @@ def login_with_otp(request):
                         object_id=employee.pk,
                         object_repr=str(employee),
                         remote_addr=getattr(request, 'auditlog_ip', None),
-                        changes='User login via OTP',
+                        changes={'message': 'User login via OTP'},
                     )
 
                     # If a break session is still open (from idle/tab close/previous logout), end it NOW
@@ -362,7 +362,7 @@ def logout_view(request):
                 active_session.session_closed = True
                 active_session.save()
 
-                # --- Audit log: logout event ---
+                # --- Audit log: logout event (changes as dict for admin compatibility) ---
                 LogEntry.objects.create(
                     actor=request.user if request.user.is_authenticated else None,
                     action=4,  # Custom action code for logout event
@@ -370,7 +370,7 @@ def logout_view(request):
                     object_id=employee.pk,
                     object_repr=str(employee),
                     remote_addr=getattr(request, 'auditlog_ip', None),
-                    changes=f'User logout: {reason}',
+                    changes={'message': f'User logout: {reason}'},
                 )
                 
                 # Start a BreakSession (ends at next login)
