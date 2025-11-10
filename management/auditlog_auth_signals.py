@@ -8,8 +8,12 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
 @receiver(user_logged_in)
 def log_admin_login(sender, request, user, **kwargs):
+    # Only log if user is staff or superuser
+    if not (user.is_staff or user.is_superuser):
+        return
     LogEntry.objects.create(
         actor=user,
         action=4,  # Custom action code for login event
@@ -21,8 +25,12 @@ def log_admin_login(sender, request, user, **kwargs):
         timestamp=timezone.now(),
     )
 
+
 @receiver(user_logged_out)
 def log_admin_logout(sender, request, user, **kwargs):
+    # Only log if user is staff or superuser
+    if not (user.is_staff or user.is_superuser):
+        return
     LogEntry.objects.create(
         actor=user,
         action=4,  # Custom action code for logout event

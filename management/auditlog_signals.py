@@ -11,12 +11,20 @@ def get_request_from_auditlog_middleware():
     except Exception:
         return None
 
+
 def set_ip_address(sender, instance, action, changes, log_entry, **kwargs):
-    # log_entry is the actual LogEntry instance
+    # Only log if the user is staff or superuser
     request = getattr(instance, '_auditlog_request', None)
     if not request:
         request = get_request_from_auditlog_middleware()
-    if request and hasattr(request, 'auditlog_ip') and log_entry:
+    # If no request or no user, skip logging
+    user = getattr(request, 'user', None)
+    if not user or not (user.is_authenticated and (user.is_staff or user.is_superuser)):
+        # Delete the log entry if it was created for a non-staff/non-superuser
+        if log_entry:
+            log_entry.delete()
+        return
+    if hasattr(request, 'auditlog_ip') and log_entry:
         log_entry.remote_addr = request.auditlog_ip
         log_entry.save(update_fields=['remote_addr'])
 
