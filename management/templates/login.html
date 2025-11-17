@@ -126,7 +126,6 @@
                         </h4>
                     </div>
                     <div class="card-body p-4">
-                        {% if not otp_sent %}
                         <form method="post" novalidate>
                             {% csrf_token %}
                             <div class="mb-3">
@@ -136,31 +135,16 @@
                                     <label class="form-check-label" for="employee">Employee</label>
                                 </div>
                             </div>
-                            <div class="mb-4">
-                                <label for="mobile" class="form-label fw-bold">Mobile Number</label>
-                                <input type="text" name="mobile" class="form-control" id="mobile" placeholder="Enter mobile no." required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">Send OTP</button>
-                        </form>
-                        {% else %}
-                        <p class="text-center text-success">An OTP has been sent to <strong>{{ mobile }}</strong>.</p>
-                        <form method="post">
-                            {% csrf_token %}
-                            <input type="hidden" name="mobile" value="{{ mobile }}">
-                            <input type="hidden" name="user_type" value="{{ user_type }}">
                             <div class="mb-3">
-                                <label for="otp" class="form-label fw-bold">Enter OTP</label>
-                                <input type="text" name="otp" class="form-control" id="otp" placeholder="6-digit OTP" required>
+                                <label for="mobile" class="form-label fw-bold">Mobile Number</label>
+                                <input type="text" name="mobile" class="form-control" id="mobile" placeholder="Enter mobile no." required value="{{ mobile|default:'' }}">
                             </div>
-                            <button type="submit" class="btn btn-primary w-100">Verify OTP</button>
+                            <div class="mb-4">
+                                <label for="password" class="form-label fw-bold">Password</label>
+                                <input type="password" name="password" class="form-control" id="password" placeholder="Enter password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Login</button>
                         </form>
-                        <form method="post" class="mt-2 text-center">
-                            {% csrf_token %}
-                            <input type="hidden" name="mobile" value="{{ mobile }}">
-                            <input type="hidden" name="user_type" value="{{ user_type }}">
-                            <button type="submit" name="resend" class="btn btn-link text-decoration-none">Resend OTP</button>
-                        </form>
-                        {% endif %}
 
                         {% if messages %}
                             {% for message in messages %}
