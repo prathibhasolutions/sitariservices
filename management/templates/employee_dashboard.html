@@ -94,18 +94,11 @@
                                         {% if show_sensitive %}
                                             ₹{{ employee.salary|floatformat:0|intcomma }}
                                         {% else %}
-                                            {% if otp_sent and not otp_verified %}
-                                                <form method="post" class="form-inline">
-                                                    {% csrf_token %}
-                                                    <input type="text" name="otp" class="form-control form-control-sm mr-2" placeholder="Enter OTP" required>
-                                                    <button type="submit" name="verify_otp" class="btn btn-sm btn-primary">Verify</button>
-                                                </form>
-                                            {% else %}
-                                                <form method="post" class="form-inline">
-                                                    {% csrf_token %}
-                                                    <button type="submit" name="send_otp" class="btn btn-sm btn-info">Unlock with OTP</button>
-                                                </form>
-                                            {% endif %}
+                                            <form method="post" class="form-inline">
+                                                {% csrf_token %}
+                                                <input type="password" name="unlock_password" class="form-control form-control-sm mr-2" placeholder="Enter Password" required>
+                                                <button type="submit" name="unlock_sensitive" class="btn btn-sm btn-info">Unlock with Password</button>
+                                            </form>
                                         {% endif %}
                                     </td>
                                 </tr>

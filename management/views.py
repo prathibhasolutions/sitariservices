@@ -394,34 +394,18 @@ def employee_dashboard(request):
         else:
             messages.error(request, 'Error uploading document. Please check the form.')
 
-    # 3. Handle OTP and Session Logic for Sensitive Data (Unchanged)
-    otp_verified = request.session.get('otp_verified', False)
-    show_sensitive = otp_verified
-    otp_sent = request.session.get('otp_sent_flag', False)
+    # 3. Handle Password Unlock for Sensitive Data
+    password_verified = request.session.get('password_verified', False)
+    show_sensitive = password_verified
 
     if request.method == 'POST':
-        # OTP Sending Logic (Unchanged)
-        if 'send_otp' in request.POST:
-            from .utils import generate_otp, send_otp_whatsapp # Assuming you have this utility
-            otp = generate_otp()
-            request.session['emp_otp'] = otp
-            send_otp_whatsapp(employee.mobile_number, otp)
-            request.session['otp_sent_flag'] = True
-            messages.success(request, f"OTP sent to {employee.mobile_number}")
-            return redirect('employee_dashboard')
-
-        # OTP Verification Logic (Unchanged)
-        elif 'verify_otp' in request.POST:
-            entered_otp = request.POST.get('otp')
-            expected_otp = request.session.get('emp_otp')
-            if entered_otp and entered_otp == expected_otp:
-                request.session['otp_verified'] = True
-                messages.success(request, "OTP verified. Sensitive data unlocked.")
-                if 'emp_otp' in request.session:
-                    del request.session['emp_otp']
+        if 'unlock_sensitive' in request.POST:
+            entered_password = request.POST.get('unlock_password')
+            if entered_password == employee.password:
+                request.session['password_verified'] = True
+                messages.success(request, "Password verified. Sensitive data unlocked.")
             else:
-                messages.error(request, "Invalid OTP. Please try again.")
-                request.session['otp_sent_flag'] = True # Keep OTP form visible
+                messages.error(request, "Incorrect password. Please try again.")
             return redirect('employee_dashboard')
 
     # 4. Fetch Data for the Template
@@ -463,24 +447,19 @@ def employee_dashboard(request):
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
-        'otp_sent': otp_sent,
-        'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
         'upload_profile_form': form,
         'attended_meetings': attended_meetings,
-        'attended_trainings': attended_trainings,      # NEW
-        'performance_bonuses': performance_bonuses,    # NEW
-        'extra_days_bonuses': extra_days_bonuses,      # NEW
-        'upload_form': upload_form, # Updated to use the form variable with validation errors
+        'attended_trainings': attended_trainings,
+        'performance_bonuses': performance_bonuses,
+        'extra_days_bonuses': extra_days_bonuses,
+        'upload_form': upload_form,
         'active_announcements': active_announcements,
     }
 
     # 6. Perform Session Cleanup (Unchanged)
-    if 'otp_verified' in request.session:
-        del request.session['otp_verified']
-    if 'otp_sent_flag' in request.session:
-        if 'emp_otp' not in request.session:
-            del request.session['otp_sent_flag']
+    if 'password_verified' in request.session:
+        del request.session['password_verified']
 
     # 7. Render the Template
     return render(request, 'employee_dashboard.html', context)
