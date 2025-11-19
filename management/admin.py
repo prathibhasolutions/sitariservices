@@ -685,6 +685,7 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
     search_fields = ('employee__name', 'service__name', 'description', 'mobile_number')
     readonly_fields = ('uploaded_at',)
     date_hierarchy = 'uploaded_at'
+    fields = ('employee', 'service', 'description', 'file', 'uploaded_at', 'renewal_date', 'mobile_number')
 
     def short_description(self, obj):
         if len(obj.description) > 30:
