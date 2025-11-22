@@ -1,4 +1,44 @@
 from django.utils.deprecation import MiddlewareMixin
+from django.shortcuts import redirect
+from django.urls import reverse
+from management.models import AttendanceSession, Employee
+from django.utils import timezone
+
+class EmployeeAttendanceSessionMiddleware(MiddlewareMixin):
+    """
+    Middleware to ensure employee has an active AttendanceSession for all employee-only pages.
+    If not, logs out the user and redirects to login.
+    """
+    def process_request(self, request):
+        path = request.path
+        # List of URL prefixes for employee-only pages
+        employee_prefixes = [
+            '/employee/dashboard/', '/employee/attendance/', '/employee/attendance_ping/', '/employee/refresh_session/',
+            '/worksheet/', '/notifications/', '/change-password/', '/upload-file/', '/todos/', '/applications/', '/links/',
+            '/assigned-tasks/', '/create-invoice/', '/invoice/'
+        ]
+        # Exclude admin, api, and logout URLs
+        if (
+            not path.startswith('/admin/') and
+            not path.startswith('/api/') and
+            not path.startswith('/logout/') and
+            (
+                path == '/' or
+                any(path.startswith(prefix) for prefix in employee_prefixes)
+            )
+        ):
+            employee_id = request.session.get('employee_id')
+            if employee_id:
+                has_active = AttendanceSession.objects.filter(
+                    employee_id=employee_id,
+                    logout_time__isnull=True,
+                    session_closed=False
+                ).exists()
+                if not has_active:
+                    request.session.flush()
+                    return redirect(reverse('login'))
+        return None
+from django.utils.deprecation import MiddlewareMixin
 
 class AuditlogIPMiddleware(MiddlewareMixin):
     """
