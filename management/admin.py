@@ -1,3 +1,63 @@
+# Monkey-patch admin login view to use custom OTP login
+from django.urls import reverse
+from django.http import HttpResponseRedirect
+from django.utils.deprecation import MiddlewareMixin
+from .admin_otp_login import admin_login_with_otp
+from django.contrib import admin as django_admin
+
+def custom_admin_login(request, extra_context=None):
+    return admin_login_with_otp(request)
+
+django_admin.site.login = custom_admin_login
+from django.contrib.auth.models import User
+from .models import UserProfile
+from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
+from django.contrib import admin
+# Inline for UserProfile
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile (OTP Mobile)'
+    fk_name = 'user'
+
+# Extend User admin to include UserProfile inline
+class UserAdmin(DefaultUserAdmin):
+    inlines = [UserProfileInline]
+
+# Unregister and re-register User with new admin
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
+
+
+# --- Audit Log Admin Registration ---
+from django.contrib import admin
+from .models import LogEntry
+from django.contrib.contenttypes.models import ContentType
+
+@admin.register(LogEntry)
+class LogEntryAdmin(admin.ModelAdmin):
+    list_display = ('remote_addr', 'timestamp', 'actor', 'content_type', 'object_id', 'action', 'changes_display')
+    search_fields = ('actor__username', 'content_type__model', 'object_id', 'remote_addr', 'changes')
+    list_filter = ('action', 'content_type', 'timestamp', 'remote_addr')
+    readonly_fields = [f.name for f in LogEntry._meta.fields]
+    date_hierarchy = 'timestamp'
+
+    def changes_display(self, obj):
+        # Show a short version of changes
+        if obj.changes:
+            return str(obj.changes)[:120] + ('...' if len(str(obj.changes)) > 120 else '')
+        return ''
+    changes_display.short_description = 'Changes'
+
+from django.contrib import admin
+from .models import Announcement
+# Register Announcement in admin
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'active', 'created_at', 'updated_at')
+    list_filter = ('active',)
+    search_fields = ('title', 'description')
+    readonly_fields = ('created_at', 'updated_at')
 
 from django.contrib import admin
 from .models import AccessArea, GeofenceSettings
@@ -40,9 +100,13 @@ from .models import TodoTask
 # Register TodoTask in admin
 @admin.register(TodoTask)
 class TodoTaskAdmin(admin.ModelAdmin):
-    list_display = ('description', 'employee', 'due_time', 'created_at')
+    def short_description(self, obj):
+        return (obj.description[:40] + '...') if len(obj.description) > 40 else obj.description
+    short_description.short_description = 'Description'
+
+    list_display = ('short_description', 'employee', 'due_time', 'created_at', 'completed')
     search_fields = ('description', 'employee__name')
-    list_filter = ('employee',)
+    list_filter = ('employee', 'completed')
     autocomplete_fields = ['employee']
     verbose_name = 'Assign task'
     verbose_name_plural = 'Assign tasks'
@@ -621,6 +685,7 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
     search_fields = ('employee__name', 'service__name', 'description', 'mobile_number')
     readonly_fields = ('uploaded_at',)
     date_hierarchy = 'uploaded_at'
+    fields = ('employee', 'service', 'description', 'file', 'uploaded_at', 'renewal_date', 'mobile_number')
 
     def short_description(self, obj):
         if len(obj.description) > 30:
@@ -667,6 +732,53 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
     
     colored_renewal_date.short_description = 'Renewal Date'
     colored_renewal_date.admin_order_field = 'renewal_date'  # Make it sortable
+
+    actions = ['assign_renewal_task_to_other']
+
+    @admin.action(description='Assign renewal task to another employee')
+    def assign_renewal_task_to_other(self, request, queryset):
+        from .models import TodoTask, Employee
+        from django.utils import timezone
+        from django import forms
+        from django.shortcuts import render, redirect
+
+        class EmployeeChoiceForm(forms.Form):
+            employee = forms.ModelChoiceField(queryset=Employee.objects.all(), label="Assign to employee")
+
+        if 'apply' in request.POST:
+            form = EmployeeChoiceForm(request.POST)
+            if form.is_valid():
+                selected_employee = form.cleaned_data['employee']
+                created = 0
+                for upload in queryset:
+                    if not upload.renewal_date:
+                        continue
+                    file_url = upload.file.url if upload.file else ''
+                    file_name = upload.file.name.split('/')[-1] if upload.file else 'No file'
+                    # HTML link for file
+                    file_link = f'<a href="{file_url}" target="_blank">{file_name}</a>' if file_url else file_name
+                    desc = (
+                        f"Renewal required for: {upload.service.name if upload.service else 'Uncategorized'} | "
+                        f"File: {file_link} | {upload.description[:40]}"
+                    )
+                    due_time = timezone.make_aware(timezone.datetime.combine(upload.renewal_date, timezone.datetime.max.time().replace(hour=23, minute=59, second=0, microsecond=0)))
+                    TodoTask.objects.create(
+                        employee=selected_employee,
+                        description=desc,
+                        due_time=due_time
+                    )
+                    created += 1
+                self.message_user(request, f"{created} renewal task(s) assigned to {selected_employee}.")
+                return None
+        else:
+            form = EmployeeChoiceForm()
+
+        return render(request, 'admin/assign_renewal_task_to_other.html', {
+            'uploads': queryset,
+            'form': form,
+            'title': 'Assign renewal task to another employee',
+            'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+        })
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}

@@ -31,10 +31,12 @@ async function geofenceCheckAndEnforce() {
                 window.location.href = '/';
             }
         } catch (e) {
-            alert('Geofence check failed.');
+            // Geofence check failed: just continue, do not alert
+            // (no-op)
         }
     }, function(err) {
         alert('Location access denied. You cannot proceed.');
+        window.location.href = '/';
     });
 }
 // Only run for logged-in employee pages (not login page)
@@ -175,6 +177,100 @@ if (!window.location.pathname.includes('login')) {
 </head>
 
 <body>
+{% if active_announcements %}
+    {% for announcement in active_announcements %}
+        <div class="modal fade" id="announcementModal{{ forloop.counter }}" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel{{ forloop.counter }}" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="announcementModalLabel{{ forloop.counter }}">{{ announcement.title }}</h5>
+                        <button type="button" class="close close-announcement-modal" data-dismiss="modal" aria-label="Close" data-modal-index="{{ forloop.counter }}">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body text-center">
+                        {% if announcement.image %}
+                            <img src="{{ announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                        {% endif %}
+                        <div style="white-space: pre-line;">{{ announcement.description }}</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary close-announcement-modal" data-dismiss="modal" data-modal-index="{{ forloop.counter }}">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+<!-- Announcement Modals Script: Show all active announcements in sequence -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modals = [];
+    var total = Number('{{ active_announcements|length|default:"0" }}');
+    for (var i = 1; i <= total; i++) {
+        var modal = document.getElementById('announcementModal' + i);
+        if (modal) modals.push(modal);
+    }
+    function showModal(index) {
+        if (index < modals.length) {
+            $(modals[index]).modal('show');
+            // When closed, show next
+            $(modals[index]).on('hidden.bs.modal', function handler() {
+                $(modals[index]).off('hidden.bs.modal', handler);
+                showModal(index + 1);
+            });
+        }
+    }
+    if (modals.length > 0) {
+        showModal(0);
+    }
+});
+</script>
+{% if active_announcement %}
+<!-- Announcement Modal -->
+<div class="modal fade" id="announcementModal" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="announcementModalLabel">{{ active_announcement.title }}</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" id="closeAnnouncementModalBtn">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center">
+                {% if active_announcement.image %}
+                    <img src="{{ active_announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                {% endif %}
+                <div style="white-space: pre-line;">{{ active_announcement.description }}</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal" id="ackAnnouncementBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+<!-- Announcement Modal Script -->
+<script>
+// Show announcement modal if present
+document.addEventListener('DOMContentLoaded', function() {
+    var announcementModal = document.getElementById('announcementModal');
+    if (announcementModal) {
+        $(announcementModal).modal('show');
+        // Optionally, prevent closing by clicking outside
+        $(announcementModal).modal({backdrop: 'static', keyboard: false});
+        // Allow closing with button
+        document.getElementById('closeAnnouncementModalBtn').onclick = function() {
+            $(announcementModal).modal('hide');
+        };
+        document.getElementById('ackAnnouncementBtn').onclick = function() {
+            $(announcementModal).modal('hide');
+        };
+    }
+});
+</script>
+
+
 <!-- Sidebar Backdrop removed -->
 <div class="wrapper">
     <!-- Sidebar -->
@@ -195,12 +291,7 @@ if (!window.location.pathname.includes('login')) {
             {% url 'applications' as applications_url %}
             <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">WorkSheet Applications</a>
 
-            <!-- Blinking Task Button -->
-            {% url 'assigned_tasks' as assigned_tasks_url %}
-            <a id="taskReminderBtn" class="nav-link mb-2 position-relative" href="{{ assigned_tasks_url }}">
-                <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:2px; left:10px; display:none;">0</span>
-                <span style="margin-left:8px;">Assigned tasks</span>
-            </a>
+
 
             <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
 </style>
@@ -238,8 +329,9 @@ if (!window.location.pathname.includes('login')) {
                         <button id="session-timer" data-toggle="tooltip" title="Session Timer" class="btn btn-warning" style="font-weight:bold; min-width:70px; transition:background 0.3s;">15:00</button>
                         <button id="refresh-session-btn" class="btn btn-sm btn-warning ml-2" style="font-weight:600; display:none;" data-toggle="tooltip" title="Refresh Session">Refresh Session</button>
                     </div>
-                    <a href="{% url 'todo_page' %}" class="mr-2" title="Task Reminder" style="flex-shrink:0;">
+                    <a id="taskReminderBtn" href="{% url 'assigned_tasks' %}" class="mr-2 position-relative" title="Task Reminder" style="flex-shrink:0;">
                         <i class="fas fa-list-check navbar-upload-icon" data-toggle="tooltip" title="Task Reminder"></i>
+                        <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:-8px; right:-10px; display:none;">0</span>
                     </a>
                     <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
                         <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>
@@ -369,19 +461,23 @@ document.addEventListener('DOMContentLoaded', function() {
 $(function () {
     $('[data-toggle="tooltip"]').tooltip();
 });
-// --- Session Timer Logic ---
-let sessionDuration = 60 * 60; // 60 minutes in seconds
+
+// --- Session Timer Logic (Revised) ---
+const sessionDuration = 60 * 60; // 60 minutes in seconds
 let timerInterval = null;
 const timerDisplay = document.getElementById('session-timer');
 const refreshBtn = document.getElementById('refresh-session-btn');
-let blinkInterval = null;
+let sessionTimeLeft = null;
 
-// Always reset timer to 60 minutes on page load (prevents stale sessionStorage from old logins)
+// Only set timer if not already set (do not reset on reload)
 function setSessionTimeLeft(val) {
     sessionStorage.setItem('sessionTimeLeft', val);
 }
-let sessionTimeLeft = sessionDuration;
-setSessionTimeLeft(sessionTimeLeft);
+function getSessionTimeLeft() {
+    let val = parseInt(sessionStorage.getItem('sessionTimeLeft'));
+    if (isNaN(val) || val <= 0) return null;
+    return val;
+}
 
 function updateTimerDisplay() {
     const min = Math.floor(sessionTimeLeft / 60).toString().padStart(2, '0');
@@ -392,17 +488,18 @@ function updateTimerDisplay() {
         timerDisplay.classList.add('btn-danger');
         timerDisplay.style.animation = 'blinker 1s linear infinite';
         refreshBtn.style.display = '';
+        refreshBtn.disabled = false;
     } else {
         timerDisplay.classList.remove('btn-danger');
         timerDisplay.classList.add('btn-warning');
         timerDisplay.style.animation = '';
         refreshBtn.style.display = 'none';
+        refreshBtn.disabled = true;
     }
 }
 
 function startSessionTimer() {
     if (timerInterval) clearInterval(timerInterval);
-    updateTimerDisplay();
     timerInterval = setInterval(() => {
         sessionTimeLeft--;
         setSessionTimeLeft(sessionTimeLeft);
@@ -416,15 +513,20 @@ function startSessionTimer() {
 }
 
 function refreshSession() {
-    sessionTimeLeft = sessionDuration;
-    setSessionTimeLeft(sessionTimeLeft);
-    updateTimerDisplay();
-    // Optionally, send an AJAX call to backend to refresh session expiry
-    fetch('/employee/refresh_session/', {method:'POST', headers:{'X-CSRFToken': getCSRFToken()}});
+    // Only allow refresh if in last 2 minutes
+    if (sessionTimeLeft > 120) return;
+    fetch('/employee/refresh_session/', {method:'POST', headers:{'X-CSRFToken': getCSRFToken()}})
+        .then(resp => resp.json())
+        .then(data => {
+            if (data.status === 'refreshed' && data.expires_at) {
+                sessionTimeLeft = sessionDuration;
+                setSessionTimeLeft(sessionTimeLeft);
+                updateTimerDisplay();
+            }
+        });
 }
 
 function autoLogoutSession() {
-    // Optionally, send an AJAX call to backend to end session
     fetch('/logout/', {
         method: 'POST',
         headers: { 'X-CSRFToken': getCSRFToken() },
@@ -439,7 +541,13 @@ refreshBtn.addEventListener('click', function(e) {
     refreshSession();
 });
 
-// Start timer on page load, but don't reset unless first time
+// On first login, set timer; on reload, use existing value
+sessionTimeLeft = getSessionTimeLeft();
+if (sessionTimeLeft === null) {
+    sessionTimeLeft = sessionDuration;
+    setSessionTimeLeft(sessionTimeLeft);
+}
+updateTimerDisplay();
 startSessionTimer();
 
 // --- Blinker animation ---

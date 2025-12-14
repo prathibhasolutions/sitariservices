@@ -26,6 +26,102 @@
             <h4>Add New Entry for {{ today|date:"d M Y" }}</h4>
         </div>
         <div class="card-body">
+                        <!-- Attendance and Breaks tables moved to print-only section below -->
+                <!-- Hidden print-only section for attendance and break sessions -->
+                <div class="d-none" id="attendance-breaks-for-print">
+                    <!-- Today's Attendance Sessions Table -->
+                    <div class="mb-4">
+                        <h5>Today's Attendance Sessions</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Login Time</th>
+                                        <th>Logout Time</th>
+                                        <th>Duration</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in todays_sessions %}
+                                    <tr>
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{{ session.login_time|date:'h:i A' }}</td>
+                                        <td>
+                                            {% if session.logout_time %}
+                                                {{ session.logout_time|date:'h:i A' }}
+                                            {% else %}
+                                                <span class="text-warning">Active</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ session.duration_str|default:"-" }}
+                                        </td>
+                                        <td>{{ session.logout_reason|default:'-' }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="5" class="text-center">No attendance sessions for today.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Today's Break Sessions Table -->
+                    <div class="mb-4">
+                        <h5>Today's Break Sessions</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Start Time</th>
+                                        <th>End Time</th>
+                                        <th>Duration</th>
+                                        <th>Reason</th>
+                                        <th>Approved</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for break in todays_breaks %}
+                                    <tr>
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{{ break.start_time|date:'h:i A' }}</td>
+                                        <td>
+                                            {% if break.end_time %}
+                                                {{ break.end_time|date:'h:i A' }}
+                                            {% else %}
+                                                <span class="text-warning">Active</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% with duration=break.duration %}
+                                                {% if duration %}
+                                                    {% with total_seconds=duration.total_seconds %}
+                                                        {% widthratio total_seconds 3600 1 as hours %}
+                                                        {% widthratio total_seconds|floatformat:0|add:'-1' 60 1 as minutes %}
+                                                        {{ hours }}h {{ minutes }}m
+                                                    {% endwith %}
+                                                {% else %}-{% endif %}
+                                            {% endwith %}
+                                        </td>
+                                        <td>{{ break.logout_reason|default:'-' }}</td>
+                                        <td>
+                                            {% if break.approved %}
+                                                <span class="badge badge-success">Yes</span>
+                                            {% else %}
+                                                <span class="badge badge-danger">No</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center">No break sessions for today.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="worksheet_entry">
@@ -115,6 +211,7 @@
                     <thead class="thead-dark">
                         <tr>
                             <th>Sl.No</th>
+                            <th>Timestamp</th>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
                                 <th>T.K No</th><th>Customer Name</th><th>Customer Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment</th>
                             {% elif department.name == "Aadhaar" %}
@@ -135,6 +232,7 @@
                         {% for entry in todays_entries %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
+                            <td>{% if entry.created_at %}{{ entry.created_at|date:'h:i A' }}{% else %}-{% endif %}</td>
                             {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Aadhaar" %}
@@ -156,9 +254,21 @@
                     </tbody>
                     <tfoot>
                         <tr class="font-weight-bold bg-light">
-                            <td colspan="{% if department.name == 'Mee Seva' or department.name == 'Online Hub' %}7{% elif department.name == 'Aadhaar' %}7{% elif department.name == 'Bhu Bharathi' %}5{% elif department.name == 'Forms' %}1{% elif department.name == 'Xerox' %}0{% elif department.name == 'Notary and Bonds' %}5{% endif %}" class="text-right">Total</td>
-                            {% if department.name != 'Forms' and department.name != 'Xerox' %}
-                                <td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                            <td></td>
+                            <td></td>
+                            {# Insert empty cells for each data column before payment/amount #}
+                            {% if department.name == 'Mee Seva' or department.name == 'Online Hub' %}
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                            {% elif department.name == 'Aadhaar' %}
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                            {% elif department.name == 'Bhu Bharathi' %}
+                                <td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                            {% elif department.name == 'Forms' %}
+                                <td class="text-right">Total</td>
+                            {% elif department.name == 'Xerox' %}
+                                <td class="text-right">Total</td>
+                            {% elif department.name == 'Notary and Bonds' %}
+                                <td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
                             {% endif %}
                             <td>₹{{ todays_total_amount|floatformat:2 }}</td>
                         </tr>
@@ -354,11 +464,13 @@
         // This prevents the "reading 'innerHTML' of null" error.
         const headerHTML = headerEl ? headerEl.innerHTML : '';
         const worksheetHTML = worksheetTableEl ? worksheetTableEl.innerHTML : '';
-        const repairHTML = repairReportEl ? repairReportEl.innerHTML : ''; // The crucial fix is here
+        const repairHTML = repairReportEl ? repairReportEl.innerHTML : '';
         const salaryHTML = salarySummaryEl ? salarySummaryEl.innerHTML : '';
+        const attendanceBreaksEl = document.getElementById('attendance-breaks-for-print');
+        const attendanceBreaksHTML = attendanceBreaksEl ? attendanceBreaksEl.innerHTML : '';
 
-        // 3. Assemble the final content for printing.
-        const printContent = headerHTML + worksheetHTML + repairHTML + salaryHTML;
+        // 3. Assemble the final content for printing (worksheet table first, then attendance/breaks).
+        const printContent = headerHTML + worksheetHTML + attendanceBreaksHTML + repairHTML + salaryHTML;
         
         // 4. Open a new window and write the content to it.
         const printWindow = window.open('', '', 'height=800,width=800');

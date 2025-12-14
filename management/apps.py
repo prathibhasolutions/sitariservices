@@ -25,4 +25,22 @@ class ManagementConfig(AppConfig):
         scheduler.start()
         atexit.register(lambda: scheduler.shutdown())
 
+        # Import auditlog signal handlers for IP logging
+        import management.auditlog_signals
+        import management.auditlog_auth_signals
+
+        # Register models with auditlog for tracking
+        from auditlog.registry import auditlog
+        from . import models
+
+        # List all model classes to register for audit logging
+        # Automatically register all models in management.models with auditlog
+        import inspect
+        model_classes = []
+        for name, obj in inspect.getmembers(models):
+            if inspect.isclass(obj) and issubclass(obj, models.models.Model) and obj.__module__ == models.__name__:
+                model_classes.append(obj)
+        for model in model_classes:
+            auditlog.register(model)
+
 

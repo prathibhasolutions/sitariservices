@@ -2,19 +2,71 @@
 {% block content %}
 <style>
 .task-card {
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    border-radius: 12px;
-    margin-bottom: 1.5rem;
-    border: none;
-    transition: box-shadow 0.2s;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    margin-bottom: 2rem;
+    border: 1px solid #e3e6f0;
+    transition: box-shadow 0.18s, border 0.18s;
+    padding: 0;
+    overflow: hidden;
 }
 .task-card:hover {
-    box-shadow: 0 4px 24px rgba(0,0,0,0.16);
+    box-shadow: 0 8px 32px rgba(25, 118, 210, 0.13);
+    border: 1.5px solid #1976d2;
+}
+.task-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 1.5rem 1.7rem 1.2rem 1.7rem;
+}
+.task-title {
+    font-size: 1.18rem;
+    font-weight: 600;
+    color: #222;
+    margin-bottom: 0.2rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.task-title .fa-file-alt {
+    color: #1976d2;
+    font-size: 1.1em;
+}
+.task-desc {
+    color: #444;
+    font-size: 1.01rem;
+    margin-bottom: 0.2rem;
+    word-break: break-word;
 }
 .task-deadline {
-    color: #dc3545;
+    color: #d32f2f;
     font-weight: 500;
     font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.task-actions {
+    margin-top: 0.7rem;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.complete-task-btn {
+    background: #43a047;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 18px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.18s;
+}
+.complete-task-btn:hover {
+    background: #2e7031;
 }
 .task-empty {
     text-align: center;
@@ -25,6 +77,23 @@
 </style>
 <div class="container mt-4" style="max-width: 700px;">
     <h2 class="mb-4 text-center">Assigned Tasks</h2>
+    <!-- Assign Task to Self Form -->
+    <form id="selfAssignTaskForm" class="mb-4 card p-3 shadow-sm" method="post" action="{% url 'assign_task_to_self' %}">
+        {% csrf_token %}
+        <div class="form-row align-items-end">
+            <div class="col-md-8">
+                <label for="taskDescription">Task Description</label>
+                <input type="text" class="form-control" id="taskDescription" name="description" placeholder="Describe your task..." required>
+            </div>
+            <div class="col-md-4">
+                <label for="dueTime">Due Time</label>
+                <input type="datetime-local" class="form-control" id="dueTime" name="due_time" required>
+            </div>
+        </div>
+        <div class="mt-3 text-right">
+            <button type="submit" class="btn btn-success">Assign Task to Myself</button>
+        </div>
+    </form>
     <div id="assignedTaskList">
         <div class="task-empty">Loading tasks...</div>
     </div>
@@ -43,18 +112,28 @@
                     data.todos.forEach(task => {
                         const taskDate = new Date(task.due_time);
                         const card = document.createElement('div');
-                        card.className = 'card task-card';
+                        card.className = 'task-card';
                         card.innerHTML = `
-                            <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center">
-                                <div>
-                                    <div class="h5 mb-2">${task.description}</div>
-                                </div>
-                                <div class="task-deadline text-md-right mt-2 mt-md-0">
-                                    <i class="far fa-clock mr-1"></i>Deadline: ${taskDate.toLocaleString()}
+                            <div class="task-card-body">
+                                <div class="task-title"><i class="fas fa-file-alt"></i> Task</div>
+                                <div class="task-desc">${task.description}</div>
+                                <div class="task-actions">
+                                    <span class="task-deadline"><i class="far fa-clock"></i> Deadline: ${taskDate.toLocaleString()}</span>
+                                    <button class="complete-task-btn" data-task-id="${task.id}">Completed</button>
                                 </div>
                             </div>
                         `;
                         taskList.appendChild(card);
+                    });
+                    // Add event listeners for complete buttons
+                    document.querySelectorAll('.complete-task-btn').forEach(btn => {
+                        btn.addEventListener('click', async function() {
+                            const taskId = this.getAttribute('data-task-id');
+                            if (confirm('Mark this task as completed?')) {
+                                await fetch(`/api/todos/delete/${taskId}/`, { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' } });
+                                loadTasks();
+                            }
+                        });
                     });
                 }
             } catch (error) {

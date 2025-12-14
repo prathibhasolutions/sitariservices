@@ -1,3 +1,43 @@
+from django.db import models
+from django.contrib.auth.models import User
+
+# --- UserProfile for Admin/Staff OTP Login ---
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    mobile_number = models.CharField(max_length=15, blank=True, null=True, unique=True, help_text="Optional. If set, enables OTP login for this admin/staff user.")
+
+    def __str__(self):
+        return f"Profile for {self.user.username} ({self.mobile_number or 'No mobile'})"
+
+# --- Audit Log Proxy Model for Centralized Logging ---
+from django.utils.translation import gettext_lazy as _
+from django.contrib.contenttypes.models import ContentType
+
+def get_auditlog_logentry():
+    from auditlog.models import LogEntry as AuditlogLogEntry
+    return AuditlogLogEntry
+
+class LogEntry(get_auditlog_logentry()):
+    """
+    Proxy model to allow custom admin and filtering for audit logs.
+    """
+    class Meta:
+        proxy = True
+        verbose_name = _('Audit Log Entry')
+        verbose_name_plural = _('Audit Log Entries')
+
+from django.db import models
+# --- Announcement Modal Model ---
+class Announcement(models.Model):
+    title = models.CharField(max_length=200)
+    image = models.ImageField(upload_to='announcements/', blank=True, null=True)
+    description = models.TextField()
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
 
 from django.db import models
 from django.utils import timezone
@@ -31,6 +71,8 @@ class GeofenceSettings(models.Model):
     class Meta:
         verbose_name = "Geofencing Settings"
         verbose_name_plural = "Geofencing Settings"
+
+
 from django.db import models
 from django.utils import timezone
 from django.db.models import Sum, Q
@@ -131,10 +173,10 @@ class Employee(models.Model):
 
 # In models.py, inside the Employee class
 
+
     def get_daily_attendance_summary(self, year, month):
         """
-        Generates a day-by-day attendance summary with a cap on the daily wage,
-        ensuring it does not exceed the base daily wage.
+        Generates a day-by-day attendance summary with earliest login, latest logout, and break sessions.
         """
         from .models import AttendanceSession, BreakSession
         from django.utils import timezone
@@ -149,26 +191,15 @@ class Employee(models.Model):
         start_work_time = self.working_start_time or time(9, 0)
         end_work_time = self.working_end_time or time(17, 0)
         
-        start_dt_base = datetime.combine(datetime.today(), start_work_time)
-        end_dt_base = datetime.combine(datetime.today(), end_work_time)
-        if end_dt_base < start_dt_base:
-            end_dt_base += timedelta(days=1)
-        
-        scheduled_work_seconds = (end_dt_base - start_dt_base).total_seconds()
-        wage_target_seconds = scheduled_work_seconds - (2 * 3600)
-        
-        if wage_target_seconds <= 0:
-            wage_target_seconds = scheduled_work_seconds
-
         base_daily_wage = self.salary / Decimal(days_in_month) if self.salary and days_in_month > 0 else Decimal('0.00')
 
         all_attendance_sessions = list(AttendanceSession.objects.filter(
             employee=self,
             login_time__year=year,
             login_time__month=month,
-            session_status__in=["active", "refreshed", "ended"]  # Only count sessions that were valid
+            session_status__in=["active", "refreshed", "ended"]
         ).order_by('login_time'))
-        
+
         all_break_sessions = list(BreakSession.objects.filter(
             employee=self, start_time__year=year, start_time__month=month
         ).order_by('start_time'))
@@ -178,11 +209,36 @@ class Employee(models.Model):
             work_start_datetime = timezone.make_aware(datetime.combine(current_date, start_work_time))
             work_end_datetime = timezone.make_aware(datetime.combine(current_date, end_work_time))
 
+            # Attendance sessions for the day within working hours
             day_attendance = [
                 s for s in all_attendance_sessions
                 if timezone.localtime(s.login_time).date() == current_date and s.login_time < work_end_datetime
             ]
 
+            # Find earliest login after working start time
+            login_time = None
+            if day_attendance:
+                login_candidates = [s.login_time for s in day_attendance if s.login_time >= work_start_datetime]
+                if login_candidates:
+                    login_time = min(login_candidates)
+                else:
+                    login_time = min(s.login_time for s in day_attendance)
+
+            # Find latest logout before working end time
+            logout_time = None
+            if day_attendance:
+                logout_candidates = [s.logout_time for s in day_attendance if s.logout_time and s.logout_time <= work_end_datetime]
+                if logout_candidates:
+                    logout_time = max(logout_candidates)
+                else:
+                    # If no session has logout_time, use latest session_expires_at or working end
+                    session_ends = [s.session_expires_at for s in day_attendance if s.session_expires_at]
+                    if session_ends:
+                        logout_time = max(session_ends)
+                    else:
+                        logout_time = None
+
+            # Break sessions for the day
             day_breaks = []
             for b in all_break_sessions:
                 if timezone.localtime(b.start_time).date() == current_date:
@@ -190,12 +246,9 @@ class Employee(models.Model):
                     if b.start_time < work_end_datetime and break_end > work_start_datetime:
                         day_breaks.append(b)
 
-            login_time = None
-            logout_time = None
+            # Calculate total active seconds (same as before)
             total_active_seconds = 0
-            
             if day_attendance:
-                # Merge overlapping attendance sessions for the day
                 intervals = []
                 for s in day_attendance:
                     session_end = s.logout_time or s.session_expires_at or work_end_datetime
@@ -222,18 +275,20 @@ class Employee(models.Model):
 
                 total_active_seconds = work_seconds + approved_break_seconds
 
-            # --- This is your existing, correct logic for capping the wage ---
+            wage_target_seconds = (work_end_datetime - work_start_datetime).total_seconds() - (2 * 3600)
+            if wage_target_seconds <= 0:
+                wage_target_seconds = (work_end_datetime - work_start_datetime).total_seconds()
+
             capped_active_seconds = min(total_active_seconds, wage_target_seconds)
             daily_wage = Decimal('0.00')
             if wage_target_seconds > 0:
                 work_ratio = Decimal(capped_active_seconds) / Decimal(wage_target_seconds)
                 daily_wage = base_daily_wage * work_ratio
                 daily_wage = max(Decimal('0.00'), daily_wage)
-            # --- End of existing logic ---
 
             total_monthly_wage += daily_wage
 
-            # Formatting logic (remains the same)
+            # Formatting for break sessions
             break_details = []
             for b in day_breaks:
                 duration_str = "Ongoing"
@@ -242,9 +297,8 @@ class Employee(models.Model):
                     h, rem = divmod(td.total_seconds(), 3600)
                     m, _ = divmod(rem, 60)
                     duration_str = f"{int(h)}h {int(m)}m"
-                
                 break_details.append({
-                    'timings': f"{timezone.localtime(b.start_time).strftime('%H:%M')} - {timezone.localtime(b.end_time).strftime('%H:%M') if b.end_time else 'Active'}",
+                    'timings': f"{timezone.localtime(b.start_time).strftime('%I:%M %p')} - {timezone.localtime(b.end_time).strftime('%I:%M %p') if b.end_time else 'Active'}",
                     'reason': b.logout_reason, 'duration': duration_str, 'approved': b.approved
                 })
 
@@ -253,15 +307,15 @@ class Employee(models.Model):
             total_duration_str = f"{int(h)}h {int(m)}m"
 
             daily_records.append({
-                'sl_no': day, 'date': current_date,
+                'sl_no': day,
+                'date': current_date,
                 'login_time': timezone.localtime(login_time) if login_time else None,
                 'logout_time': timezone.localtime(logout_time) if logout_time else None,
-                'break_sessions': break_details, 'total_duration': total_duration_str,
+                'break_sessions': break_details,
+                'total_duration': total_duration_str,
                 'daily_wage': round(daily_wage, 2),
             })
 
-        # ### THE FINAL, CORRECTED RETURN STATEMENT ###
-        # This now returns all three values that the worksheet_view is expecting.
         return daily_records, round(total_monthly_wage, 2), round(base_daily_wage, 2)
 
 
@@ -655,6 +709,7 @@ class Worksheet(models.Model):
     # Common fields
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='worksheet_entries')
     date = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)  # Timestamp for entry creation
     payment = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     department_name = models.CharField(max_length=50, editable=False)
@@ -677,7 +732,7 @@ class Worksheet(models.Model):
     bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
 
     class Meta:
-        ordering = ['-date']
+        ordering = ['-created_at']
 
     def __str__(self):
         approval_status = "Approved" if self.approved else "Pending"
@@ -812,10 +867,12 @@ class TodoTask(models.Model):
     class Meta:
         verbose_name = 'Assign task'
         verbose_name_plural = 'Assign tasks'
+
     employee = models.ForeignKey("Employee", on_delete=models.CASCADE, related_name="personal_todos")
     description = models.CharField(max_length=255)
     due_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    completed = models.BooleanField(default=False, help_text="Task completed status")
 
     def __str__(self):
         return self.description

@@ -1,0 +1,35 @@
+/* Custom admin CSS for TodoTask table column widths */
+/* Target the change list table for TodoTask only */
+body.change-list.model-todotask table#result_list {
+    table-layout: fixed;
+    width: 100%;
+    min-width: unset;
+    max-width: 100vw;
+}
+body.change-list.model-todotask table#result_list th:not(.action-checkbox-column),
+body.change-list.model-todotask table#result_list td:not(.action-checkbox) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+body.change-list.model-todotask table#result_list th.column-description,
+body.change-list.model-todotask table#result_list td.field-description {
+    max-width: 220px;
+}
+body.change-list.model-todotask table#result_list th.column-employee,
+body.change-list.model-todotask table#result_list td.field-employee {
+    max-width: 120px;
+}
+body.change-list.model-todotask table#result_list th.column-due_time,
+body.change-list.model-todotask table#result_list td.field-due_time {
+    max-width: 120px;
+}
+body.change-list.model-todotask table#result_list th.column-created_at,
+body.change-list.model-todotask table#result_list td.field-created_at {
+    max-width: 120px;
+}
+body.change-list.model-todotask table#result_list th.column-completed,
+body.change-list.model-todotask table#result_list td.field-completed {
+    max-width: 80px;
+    text-align: center;
+}

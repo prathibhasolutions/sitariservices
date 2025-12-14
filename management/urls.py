@@ -1,11 +1,13 @@
 
 
 from django.urls import path
+
 from . import views
 
 urlpatterns = [
     path('assigned-tasks/', views.assigned_tasks_view, name='assigned_tasks'),
-    path('', views.login_with_otp, name='login'),
+    path('assigned-tasks/self/', views.assign_task_to_self, name='assign_task_to_self'),
+    path('', views.employee_login, name='login'),
     path('employee/dashboard/', views.employee_dashboard, name='employee_dashboard'),
     path('employee/attendance/', views.attendance_view, name='attendance'),
     path('logout/', views.logout_view, name='logout'),
@@ -28,5 +30,8 @@ urlpatterns = [
     path('api/todos/add/', views.add_employee_todo, name='todos_add'),
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
     path('api/geofence_check/', views.geofence_check, name='geofence_check'),
+
+    # Admin print event logging endpoint
+    path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),
 ]
 

@@ -1,3 +1,56 @@
+from django.http import JsonResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from auditlog.models import LogEntry
+from django.utils import timezone
+
+# --- Admin Print Event Logging Endpoint ---
+from django.views.decorators.csrf import csrf_exempt
+@csrf_exempt
+@staff_member_required
+def admin_print_event(request):
+    """
+    Log a print event in the audit log for the current admin user.
+    """
+    if request.method == 'POST' and request.user.is_authenticated:
+        from django.contrib.auth import get_user_model
+        from django.contrib.contenttypes.models import ContentType
+        User = get_user_model()
+        LogEntry.objects.create(
+            actor=request.user,
+            action=4,  # Custom action code for print event
+            content_type=ContentType.objects.get_for_model(User),
+            object_id=request.user.pk,
+            object_repr='Admin Print Event',
+            remote_addr=getattr(request, 'auditlog_ip', None),
+            changes={'message': 'Admin triggered print (Ctrl+P or afterprint) in admin interface.'},
+            timestamp=timezone.now(),
+        )
+        return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'forbidden'}, status=403)
+from .models import TodoTask
+
+from django.views.decorators.http import require_POST
+
+def assign_task_to_self(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        messages.error(request, "Your session has expired. Please log in again.")
+        return redirect('login')
+    if request.method == 'POST':
+        description = request.POST.get('description')
+        due_time = request.POST.get('due_time')
+        if not description or not due_time:
+            messages.error(request, "Please provide both description and due time.")
+            return redirect('assigned_tasks')
+        try:
+            employee = Employee.objects.get(employee_id=employee_id)
+            TodoTask.objects.create(employee=employee, description=description, due_time=due_time)
+            messages.success(request, "Task assigned to yourself successfully.")
+        except Exception as e:
+            messages.error(request, f"Could not assign task: {e}")
+        return redirect('assigned_tasks')
+    else:
+        return redirect('assigned_tasks')
 
 from django.views.decorators.csrf import csrf_exempt
 from .models import AccessArea
@@ -94,98 +147,77 @@ from .models import UserNotificationStatus,Notification
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-def login_with_otp(request):
+
+# Password-based employee login (replaces OTP login)
+def employee_login(request):
+    from auditlog.models import LogEntry
+    from django.contrib.contenttypes.models import ContentType
     if request.method == 'POST':
         mobile = request.POST.get('mobile')
-        otp_entered = request.POST.get('otp')
-        resend = request.POST.get('resend')
+        password = request.POST.get('password')
+        try:
+            employee = Employee.objects.get(mobile_number=mobile)
+        except Employee.DoesNotExist:
+            messages.error(request, "Employee with this mobile number not found.")
+            return render(request, 'login.html')
 
-        if resend and mobile:
-            otp = generate_otp()
-            request.session['otp'] = otp
-            request.session['mobile'] = mobile
-            send_otp_whatsapp(mobile, otp)
-            messages.success(request, f"OTP resent to {mobile}")
-            return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
+        if password == employee.password:
+            request.session['employee_id'] = employee.employee_id
+            now = timezone.now()
 
-        if otp_entered and mobile:
-            expected_otp = request.session.get('otp')
-            expected_mobile = request.session.get('mobile')
+            # 1. Find and close any still-open AttendanceSession for this employee (single device enforcement)
+            open_attendance_sessions = AttendanceSession.objects.filter(
+                employee=employee,
+                logout_time__isnull=True,
+                session_closed=False
+            )
+            for old_session in open_attendance_sessions:
+                old_session.logout_time = now
+                old_session.logout_reason = "New Login Override (Logged in from another device)"
+                old_session.session_closed = True
+                old_session.session_status = "ended"
+                old_session.save(update_fields=["logout_time", "logout_reason", "session_closed", "session_status"])
 
-            if mobile != expected_mobile:
-                messages.error(request, "Mobile number mismatch. Please request OTP again.")
-                return redirect('login')
+            # --- Audit log: login event (changes as dict for admin compatibility) ---
+            LogEntry.objects.create(
+                actor=request.user if request.user.is_authenticated else None,
+                action=4,  # Custom action code for login event
+                content_type=ContentType.objects.get_for_model(Employee),
+                object_id=employee.pk,
+                object_repr=str(employee),
+                remote_addr=getattr(request, 'auditlog_ip', None),
+                changes={'message': 'User login via password'},
+            )
 
-            if otp_entered == expected_otp:
-                try:
-                    employee = Employee.objects.get(mobile_number=mobile)
-                    request.session['employee_id'] = employee.employee_id
+            # If a break session is still open (from idle/tab close/previous logout), end it NOW
+            last_break = BreakSession.objects.filter(
+                employee=employee,
+                end_time__isnull=True
+            ).order_by('-start_time').first()
+            if last_break:
+                last_break.end_time = now
+                last_break.ended_by_login = True  # optional for tracking
+                last_break.save()
 
-                    now = timezone.now()
+            # Create a new attendance session for this login (60-min session)
+            new_session = AttendanceSession.objects.create(
+                employee=employee,
+                login_time=now,
+                logout_time=None,
+                logout_reason="",
+                session_closed=False,
+                session_expires_at=now + timedelta(minutes=60),
+                refreshed_at=now,
+                session_status="active"
+            )
+            request.session['attendance_session_id'] = new_session.id
 
-                    # 1. Find and close any still-open AttendanceSession for this employee (single device enforcement)
-                    open_attendance_sessions = AttendanceSession.objects.filter(
-                        employee=employee,
-                        logout_time__isnull=True,
-                        session_closed=False
-                    )
-                    for old_session in open_attendance_sessions:
-                        old_session.logout_time = now
-                        old_session.logout_reason = "New Login Override (Logged in from another device)"
-                        old_session.session_closed = True
-                        old_session.session_status = "ended"
-                        old_session.save(update_fields=["logout_time", "logout_reason", "session_closed", "session_status"])
+            return redirect('employee_dashboard')
+        else:
+            messages.error(request, "Incorrect password. Please try again.")
+            return render(request, 'login.html', {'mobile': mobile})
 
-                    # If a break session is still open (from idle/tab close/previous logout), end it NOW
-                    last_break = BreakSession.objects.filter(
-                        employee=employee,
-                        end_time__isnull=True
-                    ).order_by('-start_time').first()
-                    if last_break:
-                        last_break.end_time = now
-                        last_break.ended_by_login = True  # optional for tracking
-                        last_break.save()
-
-                    # Create a new attendance session for this login (60-min session)
-
-                    new_session = AttendanceSession.objects.create(
-                        employee=employee,
-                        login_time=now,
-                        logout_time=None,
-                        logout_reason="",
-                        session_closed=False,
-                        session_expires_at=now + timedelta(minutes=60),
-                        refreshed_at=now,
-                        session_status="active"
-                    )
-                    request.session['attendance_session_id'] = new_session.id
-
-                    request.session.pop('otp', None)
-                    request.session.pop('mobile', None)
-
-                    return redirect('employee_dashboard')
-                except Employee.DoesNotExist:
-                    messages.error(request, "Employee with this mobile number not found.")
-                    return redirect('login')
-            else:
-                messages.error(request, "Invalid OTP. Please try again.")
-                return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
-
-        if mobile and not otp_entered:
-            try:
-                Employee.objects.get(mobile_number=mobile)
-            except Employee.DoesNotExist:
-                messages.error(request, "Employee with this mobile number not found.")
-                return render(request, 'login.html', {'otp_sent': False})
-
-            otp = generate_otp()
-            request.session['otp'] = otp
-            request.session['mobile'] = mobile
-            send_otp_whatsapp(mobile, otp)
-            messages.success(request, f"OTP sent to {mobile}")
-            return render(request, 'login.html', {'otp_sent': True, 'mobile': mobile})
-
-    return render(request, 'login.html', {'otp_sent': False})
+    return render(request, 'login.html')
 
 
 
@@ -193,7 +225,7 @@ def login_with_otp(request):
 def change_password_request(request):
     employee_id = request.session.get('employee_id')
     if not employee_id:
-        return redirect('login')  # Or your login page
+        return redirect('login')
 
     try:
         employee = Employee.objects.get(employee_id=employee_id)
@@ -201,75 +233,40 @@ def change_password_request(request):
         return redirect('login')
 
     if request.method == 'POST':
-        mobile = employee.mobile_number
-        otp = generate_otp()
-        request.session['change_pwd_otp'] = otp
-        request.session['change_pwd_mobile'] = mobile
-        send_otp_whatsapp(mobile, otp)
-        messages.success(request, f"OTP sent to your registered mobile ({mobile}). Please verify to change password.")
-        return redirect('change_password_verify')
+        old_password = request.POST.get('old_password')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        if old_password != employee.password:
+            messages.error(request, "Old password is incorrect.")
+            return render(request, 'change_password_request.html', {'employee': employee})
+
+        if not new_password:
+            messages.error(request, "New password cannot be empty.")
+            return render(request, 'change_password_request.html', {'employee': employee})
+
+        if new_password != confirm_password:
+            messages.error(request, "New passwords do not match.")
+            return render(request, 'change_password_request.html', {'employee': employee})
+
+        employee.password = new_password
+        employee.save()
+        messages.success(request, "Password changed successfully! You can now use the new password.")
+        return redirect('employee_dashboard')
 
     return render(request, 'change_password_request.html', {'employee': employee})
 
 
 def change_password_verify(request):
-    mobile = request.session.get('change_pwd_mobile')
-    if not mobile:
-        messages.error(request, "Please start the password change process again.")
-        return redirect('change_password_request')
-
-    otp_verified = request.session.get('otp_verified_for_pwd_change', False)
-
-    if request.method == 'POST':
-        if not otp_verified:
-            # Verify OTP
-            otp_entered = request.POST.get('otp')
-            expected_otp = request.session.get('change_pwd_otp')
-
-            if otp_entered != expected_otp:
-                messages.error(request, "Invalid OTP. Please try again.")
-                return render(request, 'change_password_verify.html')
-
-            request.session['otp_verified_for_pwd_change'] = True
-            messages.success(request, "OTP verified. Please set your new password.")
-            return render(request, 'change_password_verify.html', {'otp_verified': True})
-
-        else:
-            # OTP already verified, set new password
-            new_password = request.POST.get('new_password')
-            confirm_password = request.POST.get('confirm_password')
-
-            if not new_password:
-                messages.error(request, "Password cannot be empty.")
-                return render(request, 'change_password_verify.html', {'otp_verified': True})
-
-            if new_password != confirm_password:
-                messages.error(request, "Passwords do not match.")
-                return render(request, 'change_password_verify.html', {'otp_verified': True})
-
-            try:
-                employee = Employee.objects.get(mobile_number=mobile)
-                employee.password = new_password  # Optionally hash here
-                employee.save()
-            except Employee.DoesNotExist:
-                messages.error(request, "Employee not found during password update.")
-                return redirect('change_password_request')
-
-            # Clear session flags after password change
-            request.session.pop('change_pwd_otp', None)
-            request.session.pop('change_pwd_mobile', None)
-            request.session.pop('otp_verified_for_pwd_change', None)
-
-            messages.success(request, "Password changed successfully! You can now use the new password.")
-            return redirect('employee_dashboard')
-
-    # GET request
-    return render(request, 'change_password_verify.html', {'otp_verified': otp_verified})
+    # This view is deprecated; redirect to change_password_request
+    return redirect('change_password_request')
 
 
 
 @csrf_exempt
 def logout_view(request):
+    from auditlog.models import LogEntry
+    from django.contrib.contenttypes.models import ContentType
     employee_id = request.session.get('employee_id')
     logout_reason = ""
     if request.method == 'POST':
@@ -293,6 +290,17 @@ def logout_view(request):
                 active_session.logout_reason = reason
                 active_session.session_closed = True
                 active_session.save()
+
+                # --- Audit log: logout event (changes as dict for admin compatibility) ---
+                LogEntry.objects.create(
+                    actor=request.user if request.user.is_authenticated else None,
+                    action=4,  # Custom action code for logout event
+                    content_type=ContentType.objects.get_for_model(Employee),
+                    object_id=employee.pk,
+                    object_repr=str(employee),
+                    remote_addr=getattr(request, 'auditlog_ip', None),
+                    changes={'message': f'User logout: {reason}'},
+                )
                 
                 # Start a BreakSession (ends at next login)
                 BreakSession.objects.create(
@@ -386,34 +394,18 @@ def employee_dashboard(request):
         else:
             messages.error(request, 'Error uploading document. Please check the form.')
 
-    # 3. Handle OTP and Session Logic for Sensitive Data (Unchanged)
-    otp_verified = request.session.get('otp_verified', False)
-    show_sensitive = otp_verified
-    otp_sent = request.session.get('otp_sent_flag', False)
+    # 3. Handle Password Unlock for Sensitive Data
+    password_verified = request.session.get('password_verified', False)
+    show_sensitive = password_verified
 
     if request.method == 'POST':
-        # OTP Sending Logic (Unchanged)
-        if 'send_otp' in request.POST:
-            from .utils import generate_otp, send_otp_whatsapp # Assuming you have this utility
-            otp = generate_otp()
-            request.session['emp_otp'] = otp
-            send_otp_whatsapp(employee.mobile_number, otp)
-            request.session['otp_sent_flag'] = True
-            messages.success(request, f"OTP sent to {employee.mobile_number}")
-            return redirect('employee_dashboard')
-
-        # OTP Verification Logic (Unchanged)
-        elif 'verify_otp' in request.POST:
-            entered_otp = request.POST.get('otp')
-            expected_otp = request.session.get('emp_otp')
-            if entered_otp and entered_otp == expected_otp:
-                request.session['otp_verified'] = True
-                messages.success(request, "OTP verified. Sensitive data unlocked.")
-                if 'emp_otp' in request.session:
-                    del request.session['emp_otp']
+        if 'unlock_sensitive' in request.POST:
+            entered_password = request.POST.get('unlock_password')
+            if entered_password == employee.password:
+                request.session['password_verified'] = True
+                messages.success(request, "Password verified. Sensitive data unlocked.")
             else:
-                messages.error(request, "Invalid OTP. Please try again.")
-                request.session['otp_sent_flag'] = True # Keep OTP form visible
+                messages.error(request, "Incorrect password. Please try again.")
             return redirect('employee_dashboard')
 
     # 4. Fetch Data for the Template
@@ -447,27 +439,27 @@ def employee_dashboard(request):
         employee=employee, date__year=now.year, date__month=now.month
     ).order_by('-date')
 
-    # 5. Build the Context Dictionary (Now includes new bonus lists)
+    # 5. Fetch all active announcements (if any)
+    from .models import Announcement
+    active_announcements = Announcement.objects.filter(active=True).order_by('-created_at')
+
+    # 5. Build the Context Dictionary (Now includes new bonus lists and all announcements)
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
-        'otp_sent': otp_sent,
-        'otp_verified': otp_verified,
         'current_month_earnings': earnings_data,
         'upload_profile_form': form,
         'attended_meetings': attended_meetings,
-        'attended_trainings': attended_trainings,      # NEW
-        'performance_bonuses': performance_bonuses,    # NEW
-        'extra_days_bonuses': extra_days_bonuses,      # NEW
-        'upload_form': upload_form, # Updated to use the form variable with validation errors
+        'attended_trainings': attended_trainings,
+        'performance_bonuses': performance_bonuses,
+        'extra_days_bonuses': extra_days_bonuses,
+        'upload_form': upload_form,
+        'active_announcements': active_announcements,
     }
 
     # 6. Perform Session Cleanup (Unchanged)
-    if 'otp_verified' in request.session:
-        del request.session['otp_verified']
-    if 'otp_sent_flag' in request.session:
-        if 'emp_otp' not in request.session:
-            del request.session['otp_sent_flag']
+    if 'password_verified' in request.session:
+        del request.session['password_verified']
 
     # 7. Render the Template
     return render(request, 'employee_dashboard.html', context)
@@ -967,6 +959,25 @@ def worksheet_view(request, employee):
     
     # ### END OF THE DEBUGGING FIX ###
 
+    # All attendance and break sessions for today (not just active), with duration_str for template
+    raw_sessions = AttendanceSession.objects.filter(employee=employee, login_time__date=today).order_by('login_time')
+    todays_sessions = []
+    for session in raw_sessions:
+        duration = session.duration()
+        total_seconds = duration.total_seconds() if duration else 0
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        todays_sessions.append({
+            'id': session.uuid.hex[:6],
+            'login_time': timezone.localtime(session.login_time),
+            'logout_time': timezone.localtime(session.logout_time) if session.logout_time else None,
+            'duration_str': f"{hours}h {minutes}m",
+            'logout_reason': session.logout_reason,
+        })
+
+    # For breaks, you can add similar logic if needed
+    todays_breaks = BreakSession.objects.filter(employee=employee, start_time__date=today).order_by('start_time')
+
     context = {
         'employee': employee,
         'form': worksheet_form,
@@ -980,6 +991,8 @@ def worksheet_view(request, employee):
         'today': today,
         'todays_attendance_wage': todays_attendance_wage,
         'max_daily_wage': max_daily_wage,
+        'todays_sessions': todays_sessions,
+        'todays_breaks': todays_breaks,
     }
     return render(request, 'worksheet.html', context)
 
@@ -1111,7 +1124,7 @@ def get_employee_todos(request):
     if not employee_id:
         return JsonResponse({"error": "Unauthorized"}, status=401)
     
-    tasks = TodoTask.objects.filter(employee_id=employee_id).order_by('due_time')
+    tasks = TodoTask.objects.filter(employee_id=employee_id, completed=False).order_by('due_time')
     data = {
         "todos": [
             {"id": task.id, "description": task.description, "due_time": task.due_time.isoformat()}
@@ -1152,7 +1165,8 @@ def delete_employee_todo(request, task_id):
         return JsonResponse({"error": "Unauthorized"}, status=401)
     
     task = get_object_or_404(TodoTask, id=task_id, employee_id=employee_id)
-    task.delete()
+    task.completed = True
+    task.save(update_fields=["completed"])
     return JsonResponse({"status": "success"})
 
 
