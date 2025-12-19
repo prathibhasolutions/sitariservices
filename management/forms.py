@@ -18,11 +18,27 @@ from django import forms
 from .models import Worksheet
 
 class MeesevaWorksheetForm(forms.ModelForm):
+    from .models import ServiceType
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.all(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
     class Meta:
         model = Worksheet
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'transaction_num', 'certificate_number','payment', 'amount']
 
 class AadharWorksheetForm(forms.ModelForm):
+    from .models import ServiceType
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.all(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
     class Meta:
         model = Worksheet
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount']
@@ -46,6 +62,14 @@ class XeroxWorksheetForm(forms.ModelForm):
 
 # NEW form for 'Notary and Bonds' department
 class NotaryAndBondsWorksheetForm(forms.ModelForm):
+    from .models import ServiceType
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.all(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
     class Meta:
         model = Worksheet
         fields = ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount']

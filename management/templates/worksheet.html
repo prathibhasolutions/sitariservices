@@ -125,24 +125,32 @@
             <form method="post">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="worksheet_entry">
-                <div class="form-row align-items-end">
+                <div class="form-row align-items-end g-3">
                     {% for field in form %}
-                        <div class="col">
+                        <div class="col mb-2">
                             <div class="form-group mb-0">
                                 {{ field.label_tag }}
-                                <input type="{{ field.field.widget.input_type }}" 
-                                       name="{{ field.name }}" 
-                                       class="form-control" 
-                                       {% if field.field.required %}required{% endif %}>
+                                {% if field.name == 'service' %}
+                                    <select name="service" class="form-control service-dropdown">
+                                        <option value="">-- Select a Service --</option>
+                                        {% for st in field.field.queryset %}
+                                            <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
                                 {% if field.errors %}
                                     <div class="text-danger small">{{ field.errors.as_text }}</div>
                                 {% endif %}
                             </div>
                         </div>
                     {% endfor %}
-                    <div class="col-auto">
-                        <div class="form-group mb-0">
-                            <button type="submit" class="btn btn-success">Add Entry</button>
+                    <script src="{% static 'management/service_amount.js' %}"></script>
+                    <div class="col-auto mb-2 d-flex align-items-end">
+                        <div class="form-group mb-0 w-100">
+                            <button type="submit" class="btn btn-success w-100">Add Entry</button>
                         </div>
                     </div>
                 </div>
@@ -272,6 +280,21 @@
                             {% endif %}
                             <td>₹{{ todays_total_amount|floatformat:2 }}</td>
                         </tr>
+                        <tr class="font-weight-bold bg-light">
+                            {% if department.name == 'Mee Seva' or department.name == 'Online Hub' or department.name == 'Aadhaar' %}
+                                <td colspan="9" class="text-right">Today's Worksheet Commission (5%):</td>
+                            {% elif department.name == 'Bhu Bharathi' %}
+                                <td colspan="7" class="text-right">Today's Worksheet Commission (5%):</td>
+                            {% elif department.name == 'Notary and Bonds' %}
+                                <td colspan="6" class="text-right">Today's Worksheet Commission (5%):</td>
+                            {% elif department.name == 'Forms' or department.name == 'Xerox' %}
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                            {% else %}
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                            {% endif %}
+                            <td>₹{{ todays_commission|floatformat:2 }}</td>
+                        </tr>
+                        </tr>
                     </tfoot>
                 </table>
                 
@@ -310,6 +333,9 @@
                 <p class="text-center" style="font-size: 1.1em;">
                     <strong>Calculated Attendance Salary for Today:</strong> ₹{{ todays_attendance_wage|floatformat:2 }}
                 </p>
+                    <p class="text-center" style="font-size: 1.1em;">
+                        <strong>Today's Worksheet Commission (5%):</strong> ₹{{ todays_commission|floatformat:2 }}
+                    </p>
             </div>
         </div>
         </div>

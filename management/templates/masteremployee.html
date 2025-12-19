@@ -180,7 +180,7 @@ if (!window.location.pathname.includes('login')) {
 {% if active_announcements %}
     {% for announcement in active_announcements %}
         <div class="modal fade" id="announcementModal{{ forloop.counter }}" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel{{ forloop.counter }}" aria-hidden="true" data-backdrop="static" data-keyboard="false">
-            <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
                         <h5 class="modal-title" id="announcementModalLabel{{ forloop.counter }}">{{ announcement.title }}</h5>
@@ -188,11 +188,11 @@ if (!window.location.pathname.includes('login')) {
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
-                    <div class="modal-body text-center">
+                    <div class="modal-body text-center" style="min-height:300px; font-size:1.25rem;">
                         {% if announcement.image %}
-                            <img src="{{ announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                            <img src="{{ announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:350px;">
                         {% endif %}
-                        <div style="white-space: pre-line;">{{ announcement.description }}</div>
+                        <div style="white-space: pre-line; max-width:900px; margin:auto;">{{ announcement.description }}</div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-primary close-announcement-modal" data-dismiss="modal" data-modal-index="{{ forloop.counter }}">OK</button>
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if active_announcement %}
 <!-- Announcement Modal -->
 <div class="modal fade" id="announcementModal" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="announcementModalLabel">{{ active_announcement.title }}</h5>
@@ -237,11 +237,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body text-center">
+            <div class="modal-body text-center" style="min-height:300px; font-size:1.25rem;">
                 {% if active_announcement.image %}
-                    <img src="{{ active_announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:200px;">
+                    <img src="{{ active_announcement.image.url }}" alt="Announcement Image" class="img-fluid mb-3" style="max-height:350px;">
                 {% endif %}
-                <div style="white-space: pre-line;">{{ active_announcement.description }}</div>
+                <div style="white-space: pre-line; max-width:900px; margin:auto;">{{ active_announcement.description }}</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" data-dismiss="modal" id="ackAnnouncementBtn">OK</button>

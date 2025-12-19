@@ -198,7 +198,8 @@ class EmployeeAdmin(admin.ModelAdmin):
                 'name', 
                 'mobile_number', 
                 'department', 
-                'joining_date'
+                'joining_date',
+                'locked',
             )
         }),
         ('Salary & Compensation', {
@@ -801,7 +802,7 @@ from .models import Application, ApplicationAssignment,ServiceType # Make sure t
 # from .inlines import ApplicationAssignmentInline 
 @admin.register(ServiceType)
 class ServiceTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'referee_commission_percentage', 'partner_commission_percentage')
+    list_display = ('name', 'amount')
     search_fields = ('name',)
     
     change_list_template = "admin/service_type_changelist.html"

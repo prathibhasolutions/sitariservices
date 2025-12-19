@@ -122,6 +122,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 
 class Employee(models.Model):
+    locked = models.BooleanField(default=False, help_text="If checked, this employee is locked and cannot access the system.")
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
     profile_picture = models.ImageField(
@@ -559,6 +560,13 @@ class ServiceType(models.Model):
     Defines a type of service with pre-defined commission splits for sharing.
     """
     name = models.CharField(max_length=255, unique=True)
+    amount = models.DecimalField(
+        "Amount",
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Default amount for this service type."
+    )
     
     # These fields represent the percentage split for shared applications
     referee_commission_percentage = models.DecimalField(

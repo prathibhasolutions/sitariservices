@@ -161,6 +161,10 @@ def employee_login(request):
             messages.error(request, "Employee with this mobile number not found.")
             return render(request, 'login.html')
 
+        if employee.locked:
+            messages.error(request, "Your account is locked. Please contact the admin.")
+            return render(request, 'login.html', {'mobile': mobile})
+
         if password == employee.password:
             request.session['employee_id'] = employee.employee_id
             now = timezone.now()
@@ -893,7 +897,7 @@ def worksheet_view(request, employee):
     }
     WorksheetForm = form_map.get(department.name)
     worksheet_form = WorksheetForm() if WorksheetForm else None
-    today = timezone.now().date()
+    today = timezone.localtime(timezone.now()).date()
     todays_repair_report = ResourceRepairReport.objects.filter(employee=employee, date=today).first()
     repair_form = None
     if not todays_repair_report:
@@ -919,6 +923,7 @@ def worksheet_view(request, employee):
     todays_entries = Worksheet.objects.filter(employee=employee, date=today)
     todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
     todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
+    todays_commission = (todays_total_amount * Decimal('0.05')).quantize(Decimal('0.01'))
     
     all_entries = Worksheet.objects.filter(employee=employee)
     start_date_str = request.GET.get('start_date'); end_date_str = request.GET.get('end_date')
@@ -986,6 +991,7 @@ def worksheet_view(request, employee):
         'todays_entries': todays_entries,
         'todays_total_amount': todays_total_amount,
         'todays_total_payment': todays_total_payment,
+        'todays_commission': todays_commission,
         'todays_repair_report': todays_repair_report,
         'all_entries': all_entries.order_by('-date'),
         'today': today,
