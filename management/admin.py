@@ -395,6 +395,8 @@ class EmployeeAdmin(admin.ModelAdmin):
     def salary_report_view(self, request):
         employee_id = request.GET.get('employee')
         month_str = request.GET.get('month')
+        year_param = request.GET.get('year')
+        month_param = request.GET.get('month_select')
 
         selected_employee = None
         earnings_data = {}
@@ -406,7 +408,15 @@ class EmployeeAdmin(admin.ModelAdmin):
         
         all_employees = Employee.objects.all().order_by('name')
 
-        if month_str:
+        # Support both old format (month="YYYY-MM") and new format (year & month_select)
+        if year_param and month_param:
+            try:
+                year = int(year_param)
+                month = int(month_param)
+            except (ValueError, TypeError):
+                now = timezone.now()
+                year, month = now.year, now.month
+        elif month_str:
             try:
                 dt = datetime.strptime(month_str, "%Y-%m")
                 year, month = dt.year, dt.month
@@ -445,6 +455,10 @@ class EmployeeAdmin(admin.ModelAdmin):
             except Employee.DoesNotExist:
                 pass
 
+        # Generate list of years for dropdown (from 2020 to current year + 1)
+        current_year = timezone.now().year
+        available_years = list(range(2020, current_year + 2))
+
         context = {
             **self.admin_site.each_context(request),
             'title': 'Employee Salary Report',
@@ -452,6 +466,9 @@ class EmployeeAdmin(admin.ModelAdmin):
             'selected_employee': selected_employee,
             'selected_month_str': f"{year}-{month:02d}",
             'selected_date': selected_date_object,
+            'selected_year': year,
+            'selected_month': month,
+            'available_years': available_years,
             'current_month_earnings': earnings_data,
             'attended_meetings': attended_meetings,
             'attended_trainings': attended_trainings,
@@ -508,6 +525,21 @@ class WorksheetAdmin(admin.ModelAdmin):
     
     # Add date hierarchy for easy date navigation
     date_hierarchy = 'date'
+    
+    # Add custom actions
+    actions = ['approve_worksheets']
+    
+    def approve_worksheets(self, request, queryset):
+        """
+        Bulk action to approve selected worksheets.
+        """
+        updated_count = queryset.update(approved=True)
+        self.message_user(
+            request,
+            f"{updated_count} worksheet(s) successfully approved.",
+            messages.SUCCESS
+        )
+    approve_worksheets.short_description = "Approve selected worksheets"
 
     # --- Your existing custom methods remain unchanged ---
     
