@@ -78,7 +78,7 @@
 
     <!-- Filter Form (Hidden in Print) -->
     <form method="get" id="changelist-search" class="mb-4">
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center flex-wrap">
             <div class="form-group mr-3">
                 <label for="employee-select" class="mr-2">Select Employee:</label>
                 <select name="employee" id="employee-select" class="form-control" onchange="this.form.submit()">
@@ -91,8 +91,31 @@
                 </select>
             </div>
             <div class="form-group mr-3">
+                <label for="year-select" class="mr-2">Select Year:</label>
+                <select name="year" id="year-select" class="form-control">
+                    {% for y in available_years %}
+                        <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>
+                            {{ y }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group mr-3">
                 <label for="month-select" class="mr-2">Select Month:</label>
-                <input type="month" id="month-select" name="month" value="{{ selected_month_str }}" class="form-control">
+                <select name="month_select" id="month-select" class="form-control">
+                    <option value="1" {% if selected_month == 1 %}selected{% endif %}>January</option>
+                    <option value="2" {% if selected_month == 2 %}selected{% endif %}>February</option>
+                    <option value="3" {% if selected_month == 3 %}selected{% endif %}>March</option>
+                    <option value="4" {% if selected_month == 4 %}selected{% endif %}>April</option>
+                    <option value="5" {% if selected_month == 5 %}selected{% endif %}>May</option>
+                    <option value="6" {% if selected_month == 6 %}selected{% endif %}>June</option>
+                    <option value="7" {% if selected_month == 7 %}selected{% endif %}>July</option>
+                    <option value="8" {% if selected_month == 8 %}selected{% endif %}>August</option>
+                    <option value="9" {% if selected_month == 9 %}selected{% endif %}>September</option>
+                    <option value="10" {% if selected_month == 10 %}selected{% endif %}>October</option>
+                    <option value="11" {% if selected_month == 11 %}selected{% endif %}>November</option>
+                    <option value="12" {% if selected_month == 12 %}selected{% endif %}>December</option>
+                </select>
             </div>
             <button type="submit" class="btn btn-primary">View Report</button>
             {% if selected_employee %}
