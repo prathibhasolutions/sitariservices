@@ -295,33 +295,63 @@ class EmployeeAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def worksheet_report_view(self, request):
-        from datetime import datetime
+        from datetime import date
+        from calendar import monthrange
+
         employee_id = request.GET.get('employee')
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
+        month_str = request.GET.get('month')
+
+        if not month_str:
+            now = timezone.now()
+            month_str = now.strftime('%Y-%m')
+
         employee = None
-        worksheets = []
+        daily_rows = []
+        total_month_amount = Decimal('0.00')
+        total_month_commission = Decimal('0.00')
         error_message = None
+
         if employee_id:
             try:
                 employee = Employee.objects.get(pk=employee_id)
-                qs = Worksheet.objects.filter(employee=employee)
-                # Only filter if a date is actually selected
-                if start_date and end_date:
-                    qs = qs.filter(date__gte=start_date, date__lte=end_date)
-                elif start_date:
-                    qs = qs.filter(date__gte=start_date)
-                elif end_date:
-                    qs = qs.filter(date__lte=end_date)
-                worksheets = qs.order_by('-date')
+
+                if month_str:
+                    year, month = map(int, month_str.split('-'))
+                    qs = Worksheet.objects.filter(
+                        employee=employee,
+                        date__year=year,
+                        date__month=month,
+                    )
+
+                    totals_by_date = {
+                        entry['date']: entry['total_amount'] or Decimal('0.00')
+                        for entry in qs.values('date').annotate(total_amount=Sum('amount'))
+                    }
+
+                    days_in_month = monthrange(year, month)[1]
+                    for day in range(1, days_in_month + 1):
+                        day_date = date(year, month, day)
+                        total_amount = totals_by_date.get(day_date, Decimal('0.00'))
+                        commission = total_amount * Decimal('0.05')
+                        daily_rows.append({
+                            'date': day_date,
+                            'total_amount': total_amount,
+                            'commission': commission,
+                        })
+                        total_month_amount += total_amount
+                        total_month_commission += commission
             except Employee.DoesNotExist:
                 error_message = "Employee not found."
+            except ValueError:
+                error_message = "Invalid month format. Please select a valid month."
+
         context = {
             **self.admin_site.each_context(request),
             'employee': employee,
-            'worksheets': worksheets,
-            'start_date': start_date,
-            'end_date': end_date,
+            'selected_month_str': month_str,
+            'daily_rows': daily_rows,
+            'total_month_amount': total_month_amount,
+            'total_month_commission': total_month_commission,
             'error_message': error_message,
         }
         return render(request, 'admin/employee_worksheet_report.html', context)

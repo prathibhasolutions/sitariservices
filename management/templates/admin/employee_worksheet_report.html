@@ -7,114 +7,74 @@
         <div class="alert alert-danger">{{ error_message }}</div>
     {% endif %}
     {% if employee %}
-    <h2>Worksheets for {{ employee.name }}</h2>
-    <form method="get" class="form-inline mb-3">
-    <input type="hidden" name="employee" value="{{ employee.id|default:request.GET.employee }}">
-        <label for="start_date" class="mr-2">From:</label>
-        <input type="date" id="start_date" name="start_date" class="form-control mr-3" value="{{ start_date|default:'' }}">
-        <label for="end_date" class="mr-2">To:</label>
-        <input type="date" id="end_date" name="end_date" class="form-control mr-3" value="{{ end_date|default:'' }}">
-        <button type="submit" class="btn btn-primary mr-2">Filter</button>
-        <button type="button" class="btn btn-secondary" onclick="window.print()">Print Table</button>
+    <h2>Worksheet Report for {{ employee.name }}</h2>
+    <form method="get" id="report-form" class="form-inline mb-3">
+        <input type="hidden" name="employee" value="{{ employee.id|default:request.GET.employee }}">
+        <label for="month" class="mr-2">Select Month:</label>
+        <input type="month" id="month" name="month" class="form-control mr-3" value="{{ selected_month_str }}">
+        <button type="submit" class="btn btn-primary mr-2">Generate Report</button>
+        <button type="button" class="btn btn-secondary" onclick="printReport()">Print Report</button>
     </form>
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped">
-            <thead class="thead-dark">
-                <tr>
-                    <th>Date</th>
-                    {% if employee.department.name == "Mee Seva" or employee.department.name == "Online Hub" %}
-                        <th>Token No</th>
-                        <th>Customer Name</th>
-                        <th>Customer Mobile</th>
-                        <th>Service</th>
-                        <th>Transaction No</th>
-                        <th>Certificate Number</th>
-                        <th>Payment</th>
-                        <th>Amount</th>
-                    {% elif employee.department.name == "Aadhaar" %}
-                        <th>Token No</th>
-                        <th>Customer Name</th>
-                        <th>Customer Mobile</th>
-                        <th>Service</th>
-                        <th>Enrollment No</th>
-                        <th>Certificate Number</th>
-                        <th>Payment</th>
-                        <th>Amount</th>
-                    {% elif employee.department.name == "Bhu Bharathi" %}
-                        <th>Token No</th>
-                        <th>Customer Name</th>
-                        <th>Login Mobile No</th>
-                        <th>Application No</th>
-                        <th>Status</th>
-                        <th>Payment</th>
-                        <th>Amount</th>
-                    {% elif employee.department.name == "Forms" %}
-                        <th>Particulars</th>
-                        <th>Amount</th>
-                    {% elif employee.department.name == "Xerox" %}
-                        <th>Amount</th>
-                    {% elif employee.department.name == "Notary and Bonds" %}
-                        <th>Token No</th>
-                        <th>Customer Name</th>
-                        <th>Service</th>
-                        <th>Bonds Sl. No</th>
-                        <th>Payment</th>
-                        <th>Amount</th>
-                    {% endif %}
-                    <th>Approved</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for ws in worksheets %}
-                <tr>
-                    <td>{{ ws.date|date:"d M Y" }}</td>
-                    {% if employee.department.name == "Mee Seva" or employee.department.name == "Online Hub" %}
-                        <td>{{ ws.token_no|default:"-" }}</td>
-                        <td>{{ ws.customer_name|default:"-" }}</td>
-                        <td>{{ ws.customer_mobile|default:"-" }}</td>
-                        <td>{{ ws.service|default:"-" }}</td>
-                        <td>{{ ws.transaction_num|default:"-" }}</td>
-                        <td>{{ ws.certificate_number|default:"-" }}</td>
-                        <td>{{ ws.payment|floatformat:2 }}</td>
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% elif employee.department.name == "Aadhaar" %}
-                        <td>{{ ws.token_no|default:"-" }}</td>
-                        <td>{{ ws.customer_name|default:"-" }}</td>
-                        <td>{{ ws.customer_mobile|default:"-" }}</td>
-                        <td>{{ ws.service|default:"-" }}</td>
-                        <td>{{ ws.enrollment_no|default:"-" }}</td>
-                        <td>{{ ws.certificate_number|default:"-" }}</td>
-                        <td>{{ ws.payment|floatformat:2 }}</td>
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% elif employee.department.name == "Bhu Bharathi" %}
-                        <td>{{ ws.token_no|default:"-" }}</td>
-                        <td>{{ ws.customer_name|default:"-" }}</td>
-                        <td>{{ ws.login_mobile_no|default:"-" }}</td>
-                        <td>{{ ws.application_no|default:"-" }}</td>
-                        <td>{{ ws.status|default:"-" }}</td>
-                        <td>{{ ws.payment|floatformat:2 }}</td>
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% elif employee.department.name == "Forms" %}
-                        <td>{{ ws.particulars|default:"-" }}</td>
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% elif employee.department.name == "Xerox" %}
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% elif employee.department.name == "Notary and Bonds" %}
-                        <td>{{ ws.token_no|default:"-" }}</td>
-                        <td>{{ ws.customer_name|default:"-" }}</td>
-                        <td>{{ ws.service|default:"-" }}</td>
-                        <td>{{ ws.bonds_sno|default:"-" }}</td>
-                        <td>{{ ws.payment|floatformat:2 }}</td>
-                        <td>{{ ws.amount|floatformat:2 }}</td>
-                    {% endif %}
-                    <td>{% if ws.approved %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-warning">No</span>{% endif %}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="20" class="text-center">No worksheet entries found for this employee and date range.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+
+    <div id="printable-report">
+        <div id="print-header" style="display: none;" class="mb-3 text-center">
+            <img src="{% static 'management/img/logo.jpg' %}" alt="Company Logo" style="max-height: 80px; margin-bottom: 10px;" />
+            <h3>Worksheet Report</h3>
+            <p class="mb-1"><strong>Employee:</strong> {{ employee.name }}</p>
+            <p class="mb-0"><strong>Month:</strong> {{ selected_month_str }}</p>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Sl.No</th>
+                        <th>Date</th>
+                        <th>Total Amount (₹)</th>
+                        <th>Commission 5% (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in daily_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ row.date|date:"d M Y" }}</td>
+                        <td>{{ row.total_amount|floatformat:2 }}</td>
+                        <td>{{ row.commission|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center">No worksheet entries found for this employee and month.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="font-weight-bold">
+                        <td colspan="2" class="text-right">Grand Total:</td>
+                        <td>{{ total_month_amount|floatformat:2 }}</td>
+                        <td>{{ total_month_commission|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </div>
     {% endif %}
 </div>
+
+<script>
+function printReport() {
+    var printHeader = document.getElementById('print-header');
+    var reportContent = document.getElementById('printable-report');
+    var originalContent = document.body.innerHTML;
+
+    printHeader.style.display = 'block';
+    document.getElementById('report-form').style.display = 'none';
+    document.querySelector('h1').style.display = 'none';
+
+    document.body.innerHTML = reportContent.innerHTML;
+
+    window.print();
+
+    document.body.innerHTML = originalContent;
+    window.location.reload();
+}
+</script>
 {% endblock %}
