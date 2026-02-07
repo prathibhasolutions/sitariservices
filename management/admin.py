@@ -291,6 +291,11 @@ class EmployeeAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.worksheet_report_view),
                 name='employee-worksheet-report'
             ),
+            path(
+                'worksheet-summary-report/',
+                self.admin_site.admin_view(self.worksheet_summary_report_view),
+                name='employee-worksheet-summary-report'
+            ),
         ]
         return custom_urls + urls
 
@@ -355,6 +360,54 @@ class EmployeeAdmin(admin.ModelAdmin):
             'error_message': error_message,
         }
         return render(request, 'admin/employee_worksheet_report.html', context)
+
+    def worksheet_summary_report_view(self, request):
+        month_str = request.GET.get('month')
+
+        if not month_str:
+            now = timezone.now()
+            month_str = now.strftime('%Y-%m')
+
+        rows = []
+        total_amount_all = Decimal('0.00')
+        total_commission_all = Decimal('0.00')
+        error_message = None
+
+        try:
+            year, month = map(int, month_str.split('-'))
+            worksheet_totals = (
+                Worksheet.objects.filter(date__year=year, date__month=month)
+                .values('employee_id')
+                .annotate(total_amount=Sum('amount'))
+            )
+            totals_by_employee = {
+                entry['employee_id']: entry['total_amount'] or Decimal('0.00')
+                for entry in worksheet_totals
+            }
+
+            for employee in Employee.objects.filter(locked=False).order_by('employee_id'):
+                total_amount = totals_by_employee.get(employee.employee_id, Decimal('0.00'))
+                commission = total_amount * Decimal('0.05')
+                rows.append({
+                    'employee_id': employee.employee_id,
+                    'employee_name': employee.name,
+                    'total_amount': total_amount,
+                    'commission': commission,
+                })
+                total_amount_all += total_amount
+                total_commission_all += commission
+        except ValueError:
+            error_message = "Invalid month format. Please select a valid month."
+
+        context = {
+            **self.admin_site.each_context(request),
+            'selected_month_str': month_str,
+            'rows': rows,
+            'total_amount_all': total_amount_all,
+            'total_commission_all': total_commission_all,
+            'error_message': error_message,
+        }
+        return render(request, 'admin/employee_worksheet_summary_report.html', context)
 
     from datetime import datetime
 

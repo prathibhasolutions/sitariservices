@@ -1,0 +1,80 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    {% if error_message %}
+        <div class="alert alert-danger">{{ error_message }}</div>
+    {% endif %}
+
+    <h2>Employee Worksheet Summary</h2>
+    <form method="get" id="report-form" class="form-inline mb-3">
+        <label for="month" class="mr-2">Select Month:</label>
+        <input type="month" id="month" name="month" class="form-control mr-3" value="{{ selected_month_str }}">
+        <button type="submit" class="btn btn-primary mr-2">Generate Report</button>
+        <button type="button" class="btn btn-secondary" onclick="printReport()">Print Report</button>
+    </form>
+
+    <div id="printable-report">
+        <div id="print-header" style="display: none;" class="mb-3 text-center">
+            <img src="{% static 'management/img/logo.jpg' %}" alt="Company Logo" style="max-height: 80px; margin-bottom: 10px;" />
+            <h3>Employee Worksheet Summary</h3>
+            <p class="mb-0"><strong>Month:</strong> {{ selected_month_str }}</p>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Employee Name</th>
+                        <th>Total Amount (₹)</th>
+                        <th>Commission 5% (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ row.employee_id }}</td>
+                        <td>{{ row.employee_name }}</td>
+                        <td>{{ row.total_amount|floatformat:2 }}</td>
+                        <td>{{ row.commission|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center">No employees found.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="font-weight-bold">
+                        <td colspan="2" class="text-right">Grand Total:</td>
+                        <td>{{ total_amount_all|floatformat:2 }}</td>
+                        <td>{{ total_commission_all|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function printReport() {
+    var printHeader = document.getElementById('print-header');
+    var reportContent = document.getElementById('printable-report');
+    var originalContent = document.body.innerHTML;
+
+    printHeader.style.display = 'block';
+    document.getElementById('report-form').style.display = 'none';
+    var pageTitle = document.querySelector('h1');
+    if (pageTitle) {
+        pageTitle.style.display = 'none';
+    }
+
+    document.body.innerHTML = reportContent.innerHTML;
+
+    window.print();
+
+    document.body.innerHTML = originalContent;
+    window.location.reload();
+}
+</script>
+{% endblock %}
