@@ -1,5 +1,12 @@
 {% extends "admin/change_list.html" %}
 
+{% block result_list %}
+<div class="d-flex justify-content-end mb-2">
+    <a href="#" id="print-button" class="btn btn-primary">Print Table</a>
+</div>
+{{ block.super }}
+{% endblock %}
+
 {% block extrahead %}
     {{ block.super }}
     <style>
@@ -51,4 +58,49 @@
             overflow-x: hidden !important;
         }
     </style>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const printBtn = document.getElementById('print-button');
+        if (!printBtn) {
+            return;
+        }
+
+        printBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+
+            const table = document.getElementById('result_list').cloneNode(true);
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+                if (row.cells.length > 0) {
+                    row.deleteCell(0);
+                }
+            });
+
+            table.classList.add('table', 'table-bordered');
+
+            const printWindow = window.open('', '', 'height=600,width=900');
+            printWindow.document.write('<html><head><title>Employee Uploads</title>');
+            printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+            printWindow.document.write(`
+                <style>
+                    body { color: #000; }
+                    th, .action-checkbox-column a, #result_list a { color: #000 !important; text-decoration: none !important; }
+                    td { font-weight: normal; }
+                    td:first-child { font-weight: bold; }
+                </style>
+            `);
+            printWindow.document.write('</head><body class="p-4">');
+            printWindow.document.write('<h1 class="mb-4">Employee Uploads</h1>');
+            printWindow.document.body.appendChild(table);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        });
+    });
+    </script>
 {% endblock %}
