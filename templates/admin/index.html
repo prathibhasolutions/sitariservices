@@ -83,14 +83,65 @@
                 {% endfor %}
             </div>
             
-            <p style="margin-top: 15px; margin-bottom: 0;">
+            <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <a href="{% url 'admin:management_employeeupload_changelist' %}?renewal_date__lte={{ today|date:'Y-m-d' }}" 
                    class="btn btn-primary" style="color: white; text-decoration: none; padding: 8px 15px; background-color: #007cba; border-radius: 4px;">
                     📋 View All Expired Uploads
                 </a>
-            </p>
+                <button type="button" class="btn btn-secondary" onclick="printRenewalAlert()" style="padding: 8px 15px;">
+                    🖨️ Print
+                </button>
+            </div>
+
+            <div id="renewal-printable" style="display: none;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <img src="{% static 'management/img/logo.jpg' %}" alt="Company Logo" style="max-height: 80px; margin-bottom: 10px;" />
+                    <h3>Document Renewal Alert</h3>
+                    <p style="margin: 0;"><strong>Date:</strong> {{ today|date:"M j, Y" }}</p>
+                </div>
+                <table style="width: 100%; border-collapse: collapse;" border="1">
+                    <thead>
+                        <tr>
+                            <th style="padding: 6px;">Employee</th>
+                            <th style="padding: 6px;">Service</th>
+                            <th style="padding: 6px;">Description</th>
+                            <th style="padding: 6px;">Mobile</th>
+                            <th style="padding: 6px;">Renewal Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for upload in expired_uploads %}
+                        <tr>
+                            <td style="padding: 6px;">{{ upload.employee.name }}</td>
+                            <td style="padding: 6px;">{{ upload.service.name|default:"No Service" }}</td>
+                            <td style="padding: 6px;">{{ upload.description }}</td>
+                            <td style="padding: 6px;">{{ upload.mobile_number|default:"-" }}</td>
+                            <td style="padding: 6px;">{{ upload.renewal_date|date:"M j, Y" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     {% endif %}
     
     {{ block.super }}
+{% endblock %}
+
+{% block footer %}
+    {{ block.super }}
+    <script>
+    function printRenewalAlert() {
+        var printable = document.getElementById('renewal-printable');
+        var originalContent = document.body.innerHTML;
+
+        printable.style.display = 'block';
+        document.body.innerHTML = printable.innerHTML;
+
+        window.print();
+
+        document.body.innerHTML = originalContent;
+        window.location.reload();
+    }
+    </script>
 {% endblock %}
