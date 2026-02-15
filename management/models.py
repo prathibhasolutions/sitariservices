@@ -576,21 +576,6 @@ class ServiceType(models.Model):
         help_text="Default amount for this service type."
     )
     
-    # These fields represent the percentage split for shared applications
-    referee_commission_percentage = models.DecimalField(
-        "Referee Commission (%)",
-        max_digits=5,
-        decimal_places=2,
-        default=50.00,
-        help_text="Percentage of the total commission for the employee creating the application when it is shared."
-    )
-    partner_commission_percentage = models.DecimalField(
-        "Partner Commission (%)",
-        max_digits=5,
-        decimal_places=2,
-        default=50.00,
-        help_text="Percentage of the total commission for the employee the application is shared with."
-    )
 
     def __str__(self):
         return self.name
