@@ -902,7 +902,11 @@ from .models import Application, ApplicationAssignment,ServiceType # Make sure t
 # from .inlines import ApplicationAssignmentInline 
 @admin.register(ServiceType)
 class ServiceTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'amount', 'department')
+    list_display = ('name', 'amount', 'get_departments')
+
+    def get_departments(self, obj):
+        return ", ".join([d.name for d in obj.departments.all()])
+    get_departments.short_description = 'Departments'
     search_fields = ('name',)
     
     change_list_template = "admin/service_type_changelist.html"
