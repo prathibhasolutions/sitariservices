@@ -560,6 +560,14 @@ class ServiceType(models.Model):
     Defines a type of service with pre-defined commission splits for sharing.
     """
     name = models.CharField(max_length=255, unique=True)
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='service_types',
+        help_text='Department to which this service type belongs.'
+    )
     amount = models.DecimalField(
         "Amount",
         max_digits=10,

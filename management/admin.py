@@ -917,7 +917,7 @@ from .models import Application, ApplicationAssignment,ServiceType # Make sure t
 # from .inlines import ApplicationAssignmentInline 
 @admin.register(ServiceType)
 class ServiceTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'amount')
+    list_display = ('name', 'amount', 'department')
     search_fields = ('name',)
     
     change_list_template = "admin/service_type_changelist.html"
