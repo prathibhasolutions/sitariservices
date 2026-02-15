@@ -31,23 +31,8 @@ admin.site.register(User, UserAdmin)
 
 # --- Audit Log Admin Registration ---
 from django.contrib import admin
-from .models import LogEntry
 from django.contrib.contenttypes.models import ContentType
 
-@admin.register(LogEntry)
-class LogEntryAdmin(admin.ModelAdmin):
-    list_display = ('remote_addr', 'timestamp', 'actor', 'content_type', 'object_id', 'action', 'changes_display')
-    search_fields = ('actor__username', 'content_type__model', 'object_id', 'remote_addr', 'changes')
-    list_filter = ('action', 'content_type', 'timestamp', 'remote_addr')
-    readonly_fields = [f.name for f in LogEntry._meta.fields]
-    date_hierarchy = 'timestamp'
-
-    def changes_display(self, obj):
-        # Show a short version of changes
-        if obj.changes:
-            return str(obj.changes)[:120] + ('...' if len(str(obj.changes)) > 120 else '')
-        return ''
-    changes_display.short_description = 'Changes'
 
 from django.contrib import admin
 from .models import Announcement
