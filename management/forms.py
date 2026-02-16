@@ -74,9 +74,24 @@ class BhuBharathiWorksheetForm(forms.ModelForm):
 
 # RENAMED from XeroxWorksheetForm
 class FormsWorksheetForm(forms.ModelForm):
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.none(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
+
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if employee and employee.department:
+            self.fields['service'].queryset = ServiceType.objects.filter(departments=employee.department)
+        else:
+            self.fields['service'].queryset = ServiceType.objects.none()
+
     class Meta:
         model = Worksheet
-        fields = ['particulars', 'amount']
+        fields = ['service', 'amount']
 
 # NEW form for the new 'Xerox' department (without 'particulars')
 class XeroxWorksheetForm(forms.ModelForm):
@@ -97,7 +112,7 @@ class XeroxWorksheetForm(forms.ModelForm):
 
     class Meta:
         model = Worksheet
-        fields = ['service', 'amount']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'payment', 'amount']
 
 # NEW form for 'Notary and Bonds' department
 class NotaryAndBondsWorksheetForm(forms.ModelForm):

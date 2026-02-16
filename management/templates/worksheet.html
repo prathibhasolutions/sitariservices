@@ -227,9 +227,9 @@
                             {% elif department.name == "Bhu Bharathi" %}
                                 <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>Application No</th><th>Status</th><th>Payment</th>
                             {% elif department.name == "Forms" %}
-                                <th>Particulars</th>
-                            {% elif department.name == "Xerox" %}
                                 <th>Service</th>
+                            {% elif department.name == "Xerox" %}
+                                <th>Token No</th><th>Customer Name</th><th>Mobile No.</th><th>Service</th><th>Payment</th>
                             {% elif department.name == "Notary and Bonds" %}
                                 <th>Token No</th><th>Customer Name</th><th>Service</th><th>Bonds Sl. No</th><th>Payment</th>
                             {% endif %}
@@ -248,9 +248,9 @@
                             {% elif department.name == "Bhu Bharathi" %}
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Forms" %}
-                                <td>{{ entry.particulars|default:"-" }}</td>
-                            {% elif department.name == "Xerox" %}
                                 <td>{{ entry.service|default:"-" }}</td>
+                            {% elif department.name == "Xerox" %}
+                                <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% elif department.name == "Notary and Bonds" %}
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% endif %}
