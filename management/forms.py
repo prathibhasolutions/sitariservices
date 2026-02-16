@@ -68,6 +68,10 @@ class AadharWorksheetForm(forms.ModelForm):
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount', 'particulars']
 
 class BhuBharathiWorksheetForm(forms.ModelForm):
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # employee is ignored, just for compatibility
+
     class Meta:
         model = Worksheet
         fields = ['token_no', 'customer_name',  'login_mobile_no', 'application_no', 'status','payment',  'amount', 'particulars']
