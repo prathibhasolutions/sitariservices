@@ -229,7 +229,7 @@
                             {% elif department.name == "Forms" %}
                                 <th>Particulars</th>
                             {% elif department.name == "Xerox" %}
-                                <!-- No extra columns -->
+                                <th>Service</th>
                             {% elif department.name == "Notary and Bonds" %}
                                 <th>Token No</th><th>Customer Name</th><th>Service</th><th>Bonds Sl. No</th><th>Payment</th>
                             {% endif %}
@@ -250,7 +250,7 @@
                             {% elif department.name == "Forms" %}
                                 <td>{{ entry.particulars|default:"-" }}</td>
                             {% elif department.name == "Xerox" %}
-                                <!-- No extra columns -->
+                                <td>{{ entry.service|default:"-" }}</td>
                             {% elif department.name == "Notary and Bonds" %}
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% endif %}
