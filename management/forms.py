@@ -47,7 +47,7 @@ class MeesevaWorksheetForm(forms.ModelForm):
             self.fields['service'].queryset = ServiceType.objects.none()
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'transaction_num', 'certificate_number','payment', 'amount', 'particulars']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'transaction_num', 'certificate_number','payment', 'amount']
 
 class AadharWorksheetForm(forms.ModelForm):
     service = forms.ModelChoiceField(
@@ -65,7 +65,7 @@ class AadharWorksheetForm(forms.ModelForm):
             self.fields['service'].queryset = ServiceType.objects.none()
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount', 'particulars']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'enrollment_no', 'certificate_number', 'payment', 'amount']
 
 class BhuBharathiWorksheetForm(forms.ModelForm):
     def __init__(self, *args, employee=None, **kwargs):
@@ -95,7 +95,7 @@ class FormsWorksheetForm(forms.ModelForm):
 
     class Meta:
         model = Worksheet
-        fields = ['service', 'amount', 'particulars']
+        fields = ['service', 'particulars', 'amount']
 
 # NEW form for the new 'Xerox' department (without 'particulars')
 class XeroxWorksheetForm(forms.ModelForm):
@@ -116,7 +116,7 @@ class XeroxWorksheetForm(forms.ModelForm):
 
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'payment', 'amount', 'particulars']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'payment', 'amount']
 
 # NEW form for 'Notary and Bonds' department
 class NotaryAndBondsWorksheetForm(forms.ModelForm):
@@ -135,7 +135,7 @@ class NotaryAndBondsWorksheetForm(forms.ModelForm):
             self.fields['service'].queryset = ServiceType.objects.none()
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount', 'particulars']
+        fields = ['token_no', 'customer_name', 'service', 'particulars', 'bonds_sno', 'payment', 'amount']
 
 # Form specifically for editing the certificate number
 class WorksheetEntryEditForm(forms.ModelForm):
