@@ -31,23 +31,8 @@ admin.site.register(User, UserAdmin)
 
 # --- Audit Log Admin Registration ---
 from django.contrib import admin
-from .models import LogEntry
 from django.contrib.contenttypes.models import ContentType
 
-@admin.register(LogEntry)
-class LogEntryAdmin(admin.ModelAdmin):
-    list_display = ('remote_addr', 'timestamp', 'actor', 'content_type', 'object_id', 'action', 'changes_display')
-    search_fields = ('actor__username', 'content_type__model', 'object_id', 'remote_addr', 'changes')
-    list_filter = ('action', 'content_type', 'timestamp', 'remote_addr')
-    readonly_fields = [f.name for f in LogEntry._meta.fields]
-    date_hierarchy = 'timestamp'
-
-    def changes_display(self, obj):
-        # Show a short version of changes
-        if obj.changes:
-            return str(obj.changes)[:120] + ('...' if len(str(obj.changes)) > 120 else '')
-        return ''
-    changes_display.short_description = 'Changes'
 
 from django.contrib import admin
 from .models import Announcement
@@ -291,40 +276,123 @@ class EmployeeAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.worksheet_report_view),
                 name='employee-worksheet-report'
             ),
+            path(
+                'worksheet-summary-report/',
+                self.admin_site.admin_view(self.worksheet_summary_report_view),
+                name='employee-worksheet-summary-report'
+            ),
         ]
         return custom_urls + urls
 
     def worksheet_report_view(self, request):
-        from datetime import datetime
+        from datetime import date
+        from calendar import monthrange
+
         employee_id = request.GET.get('employee')
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
+        month_str = request.GET.get('month')
+
+        if not month_str:
+            now = timezone.now()
+            month_str = now.strftime('%Y-%m')
+
         employee = None
-        worksheets = []
+        daily_rows = []
+        total_month_amount = Decimal('0.00')
+        total_month_commission = Decimal('0.00')
         error_message = None
+
         if employee_id:
             try:
                 employee = Employee.objects.get(pk=employee_id)
-                qs = Worksheet.objects.filter(employee=employee)
-                # Only filter if a date is actually selected
-                if start_date and end_date:
-                    qs = qs.filter(date__gte=start_date, date__lte=end_date)
-                elif start_date:
-                    qs = qs.filter(date__gte=start_date)
-                elif end_date:
-                    qs = qs.filter(date__lte=end_date)
-                worksheets = qs.order_by('-date')
+
+                if month_str:
+                    year, month = map(int, month_str.split('-'))
+                    qs = Worksheet.objects.filter(
+                        employee=employee,
+                        date__year=year,
+                        date__month=month,
+                    )
+
+                    totals_by_date = {
+                        entry['date']: entry['total_amount'] or Decimal('0.00')
+                        for entry in qs.values('date').annotate(total_amount=Sum('amount'))
+                    }
+
+                    days_in_month = monthrange(year, month)[1]
+                    for day in range(1, days_in_month + 1):
+                        day_date = date(year, month, day)
+                        total_amount = totals_by_date.get(day_date, Decimal('0.00'))
+                        commission = total_amount * Decimal('0.05')
+                        daily_rows.append({
+                            'date': day_date,
+                            'total_amount': total_amount,
+                            'commission': commission,
+                        })
+                        total_month_amount += total_amount
+                        total_month_commission += commission
             except Employee.DoesNotExist:
                 error_message = "Employee not found."
+            except ValueError:
+                error_message = "Invalid month format. Please select a valid month."
+
         context = {
             **self.admin_site.each_context(request),
             'employee': employee,
-            'worksheets': worksheets,
-            'start_date': start_date,
-            'end_date': end_date,
+            'selected_month_str': month_str,
+            'daily_rows': daily_rows,
+            'total_month_amount': total_month_amount,
+            'total_month_commission': total_month_commission,
             'error_message': error_message,
         }
         return render(request, 'admin/employee_worksheet_report.html', context)
+
+    def worksheet_summary_report_view(self, request):
+        month_str = request.GET.get('month')
+
+        if not month_str:
+            now = timezone.now()
+            month_str = now.strftime('%Y-%m')
+
+        rows = []
+        total_amount_all = Decimal('0.00')
+        total_commission_all = Decimal('0.00')
+        error_message = None
+
+        try:
+            year, month = map(int, month_str.split('-'))
+            worksheet_totals = (
+                Worksheet.objects.filter(date__year=year, date__month=month)
+                .values('employee_id')
+                .annotate(total_amount=Sum('amount'))
+            )
+            totals_by_employee = {
+                entry['employee_id']: entry['total_amount'] or Decimal('0.00')
+                for entry in worksheet_totals
+            }
+
+            for employee in Employee.objects.filter(locked=False).order_by('employee_id'):
+                total_amount = totals_by_employee.get(employee.employee_id, Decimal('0.00'))
+                commission = total_amount * Decimal('0.05')
+                rows.append({
+                    'employee_id': employee.employee_id,
+                    'employee_name': employee.name,
+                    'total_amount': total_amount,
+                    'commission': commission,
+                })
+                total_amount_all += total_amount
+                total_commission_all += commission
+        except ValueError:
+            error_message = "Invalid month format. Please select a valid month."
+
+        context = {
+            **self.admin_site.each_context(request),
+            'selected_month_str': month_str,
+            'rows': rows,
+            'total_amount_all': total_amount_all,
+            'total_commission_all': total_commission_all,
+            'error_message': error_message,
+        }
+        return render(request, 'admin/employee_worksheet_summary_report.html', context)
 
     from datetime import datetime
 
@@ -834,7 +902,11 @@ from .models import Application, ApplicationAssignment,ServiceType # Make sure t
 # from .inlines import ApplicationAssignmentInline 
 @admin.register(ServiceType)
 class ServiceTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'amount')
+    list_display = ('name', 'amount', 'get_departments')
+
+    def get_departments(self, obj):
+        return ", ".join([d.name for d in obj.departments.all()])
+    get_departments.short_description = 'Departments'
     search_fields = ('name',)
     
     change_list_template = "admin/service_type_changelist.html"

@@ -10,21 +10,22 @@ class UserProfile(models.Model):
         return f"Profile for {self.user.username} ({self.mobile_number or 'No mobile'})"
 
 # --- Audit Log Proxy Model for Centralized Logging ---
-from django.utils.translation import gettext_lazy as _
-from django.contrib.contenttypes.models import ContentType
 
-def get_auditlog_logentry():
-    from auditlog.models import LogEntry as AuditlogLogEntry
-    return AuditlogLogEntry
-
-class LogEntry(get_auditlog_logentry()):
-    """
-    Proxy model to allow custom admin and filtering for audit logs.
-    """
-    class Meta:
-        proxy = True
-        verbose_name = _('Audit Log Entry')
-        verbose_name_plural = _('Audit Log Entries')
+# from django.utils.translation import gettext_lazy as _
+# from django.contrib.contenttypes.models import ContentType
+#
+# def get_auditlog_logentry():
+#     from auditlog.models import LogEntry as AuditlogLogEntry
+#     return AuditlogLogEntry
+#
+# class LogEntry(get_auditlog_logentry()):
+#     """
+#     Proxy model to allow custom admin and filtering for audit logs.
+#     """
+#     class Meta:
+#         proxy = True
+#         verbose_name = _('Audit Log Entry')
+#         verbose_name_plural = _('Audit Log Entries')
 
 from django.db import models
 # --- Announcement Modal Model ---
@@ -560,6 +561,12 @@ class ServiceType(models.Model):
     Defines a type of service with pre-defined commission splits for sharing.
     """
     name = models.CharField(max_length=255, unique=True)
+    departments = models.ManyToManyField(
+        'Department',
+        blank=True,
+        related_name='service_types',
+        help_text='Departments to which this service type belongs.'
+    )
     amount = models.DecimalField(
         "Amount",
         max_digits=10,
@@ -568,35 +575,10 @@ class ServiceType(models.Model):
         help_text="Default amount for this service type."
     )
     
-    # These fields represent the percentage split for shared applications
-    referee_commission_percentage = models.DecimalField(
-        "Referee Commission (%)",
-        max_digits=5,
-        decimal_places=2,
-        default=50.00,
-        help_text="Percentage of the total commission for the employee creating the application when it is shared."
-    )
-    partner_commission_percentage = models.DecimalField(
-        "Partner Commission (%)",
-        max_digits=5,
-        decimal_places=2,
-        default=50.00,
-        help_text="Percentage of the total commission for the employee the application is shared with."
-    )
 
     def __str__(self):
         return self.name
 
-    def clean(self):
-        """
-        VALIDATION UPDATED:
-        Ensures the sum of employee commissions does not exceed 100%.
-        """
-        total_employee_commission = self.referee_commission_percentage + self.partner_commission_percentage
-        
-        # Check if the total percentage is greater than 100
-        if total_employee_commission > Decimal('100.00'):
-            raise ValidationError("The sum of referee and partner commission percentages cannot exceed 100%.")
 
 # --- MODIFIED MODEL: Application ---
 class Application(models.Model):

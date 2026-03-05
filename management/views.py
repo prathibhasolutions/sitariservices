@@ -896,7 +896,7 @@ def worksheet_view(request, employee):
         'Xerox': XeroxWorksheetForm, 'Notary and Bonds': NotaryAndBondsWorksheetForm,
     }
     WorksheetForm = form_map.get(department.name)
-    worksheet_form = WorksheetForm() if WorksheetForm else None
+    worksheet_form = WorksheetForm(employee=employee) if WorksheetForm else None
     today = timezone.localtime(timezone.now()).date()
     todays_repair_report = ResourceRepairReport.objects.filter(employee=employee, date=today).first()
     repair_form = None
@@ -906,7 +906,7 @@ def worksheet_view(request, employee):
     if request.method == 'POST':
         form_type = request.POST.get('form_type')
         if form_type == 'worksheet_entry' and WorksheetForm:
-            worksheet_form = WorksheetForm(request.POST)
+            worksheet_form = WorksheetForm(request.POST, employee=employee)
             if worksheet_form.is_valid():
                 entry = worksheet_form.save(commit=False); entry.employee = employee; entry.department_name = department.name; entry.save()
                 messages.success(request, "Worksheet entry added successfully.")

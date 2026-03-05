@@ -1,6 +1,10 @@
+
+
+
 from django import forms
 from .models import Invoice, Particular
-from django.forms import inlineformset_factory,formset_factory
+from django.forms import inlineformset_factory, formset_factory
+
 
 
 class InvoiceForm(forms.ModelForm):
@@ -9,70 +13,129 @@ class InvoiceForm(forms.ModelForm):
         model = Invoice
         fields = ['date', 'customer_name']
 
+
 ParticularFormSet = inlineformset_factory(
     Invoice, Particular, fields=('description', 'amount'), extra=1, can_delete=True
 )
 
 
-from django import forms
+
 from .models import Worksheet
 
+from .models import Worksheet, ServiceType
+
 class MeesevaWorksheetForm(forms.ModelForm):
-    from .models import ServiceType
     service = forms.ModelChoiceField(
-        queryset=ServiceType.objects.all(),
+        queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
         required=False,
         label="Service (with Amount)",
         widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
     )
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        import logging
+        logger = logging.getLogger("worksheet_form")
+        logger.warning(f"Employee: {employee}")
+        logger.warning(f"Department: {getattr(employee, 'department', None)}")
+        if employee and employee.department:
+            qs = ServiceType.objects.filter(departments=employee.department)
+            logger.warning(f"ServiceType queryset: {list(qs)}")
+            self.fields['service'].queryset = qs
+        else:
+            logger.warning("No department or employee provided, empty queryset.")
+            self.fields['service'].queryset = ServiceType.objects.none()
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'transaction_num', 'certificate_number','payment', 'amount']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'transaction_num', 'certificate_number','payment', 'amount']
 
 class AadharWorksheetForm(forms.ModelForm):
-    from .models import ServiceType
     service = forms.ModelChoiceField(
-        queryset=ServiceType.objects.all(),
+        queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
         required=False,
         label="Service (with Amount)",
         widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
     )
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if employee and employee.department:
+            self.fields['service'].queryset = ServiceType.objects.filter(departments=employee.department)
+        else:
+            self.fields['service'].queryset = ServiceType.objects.none()
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'enrollment_no', 'certificate_number', 'payment', 'amount']
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'enrollment_no', 'certificate_number', 'payment', 'amount']
 
 class BhuBharathiWorksheetForm(forms.ModelForm):
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # employee is ignored, just for compatibility
+
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name',  'login_mobile_no', 'application_no', 'status','payment',  'amount']
+        fields = ['token_no', 'customer_name',  'login_mobile_no', 'application_no', 'status','payment',  'amount', 'particulars']
 
 # RENAMED from XeroxWorksheetForm
 class FormsWorksheetForm(forms.ModelForm):
-    class Meta:
-        model = Worksheet
-        fields = ['particulars', 'amount']
-
-# NEW form for the new 'Xerox' department (without 'particulars')
-class XeroxWorksheetForm(forms.ModelForm):
-    class Meta:
-        model = Worksheet
-        fields = ['amount']
-
-# NEW form for 'Notary and Bonds' department
-class NotaryAndBondsWorksheetForm(forms.ModelForm):
-    from .models import ServiceType
     service = forms.ModelChoiceField(
-        queryset=ServiceType.objects.all(),
+        queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
         required=False,
         label="Service (with Amount)",
         widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
     )
+
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if employee and employee.department:
+            self.fields['service'].queryset = ServiceType.objects.filter(departments=employee.department)
+        else:
+            self.fields['service'].queryset = ServiceType.objects.none()
+
     class Meta:
         model = Worksheet
-        fields = ['token_no', 'customer_name', 'service', 'bonds_sno', 'payment', 'amount']
+        fields = ['service', 'particulars', 'amount']
+
+# NEW form for the new 'Xerox' department (without 'particulars')
+class XeroxWorksheetForm(forms.ModelForm):
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.none(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
+
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if employee and employee.department:
+            self.fields['service'].queryset = ServiceType.objects.filter(departments=employee.department)
+        else:
+            self.fields['service'].queryset = ServiceType.objects.none()
+
+    class Meta:
+        model = Worksheet
+        fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'payment', 'amount']
+
+# NEW form for 'Notary and Bonds' department
+class NotaryAndBondsWorksheetForm(forms.ModelForm):
+    service = forms.ModelChoiceField(
+        queryset=ServiceType.objects.none(),
+        empty_label="-- Select a Service --",
+        required=False,
+        label="Service (with Amount)",
+        widget=forms.Select(attrs={'class': 'form-control service-dropdown'})
+    )
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if employee and employee.department:
+            self.fields['service'].queryset = ServiceType.objects.filter(departments=employee.department)
+        else:
+            self.fields['service'].queryset = ServiceType.objects.none()
+    class Meta:
+        model = Worksheet
+        fields = ['token_no', 'customer_name', 'service', 'particulars', 'bonds_sno', 'payment', 'amount']
 
 # Form specifically for editing the certificate number
 class WorksheetEntryEditForm(forms.ModelForm):
@@ -85,7 +148,7 @@ class WorksheetEntryEditForm(forms.ModelForm):
         self.fields['certificate_number'].widget.attrs.update({'class': 'form-control'})
 
 
-from django import forms
+
 from .models import Worksheet, ResourceRepairReport
 
 
@@ -110,8 +173,7 @@ class ResourceRepairForm(forms.ModelForm):
 
 
 
-# management/forms.py
-from django import forms
+
 from .models import EmployeeUpload, UploadService
 
 class EmployeeUploadForm(forms.ModelForm):
@@ -154,9 +216,7 @@ class EmployeeUploadForm(forms.ModelForm):
 
 
 
-# your_app/forms.py
 
-from django import forms
 from .models import Employee, ManagedLink
 
 class EmployeeLinksForm(forms.ModelForm):
@@ -177,9 +237,7 @@ class EmployeeLinksForm(forms.ModelForm):
         self.fields['assigned_links'].queryset = ManagedLink.objects.all().order_by('description')
 
 
-# your_app/forms.py
 
-from django import forms
 from .models import Employee
 
 class EmployeeProfilePictureForm(forms.ModelForm):
@@ -196,7 +254,7 @@ class EmployeeProfilePictureForm(forms.ModelForm):
         }
 
 
-from django import forms
+
 from .models import Employee
 
 class EmployeeAdminForm(forms.ModelForm):
@@ -209,7 +267,7 @@ class EmployeeAdminForm(forms.ModelForm):
         }
 
 
-from django import forms
+
 from .models import Employee, Department 
     
 class WorksheetFilterForm(forms.Form):
@@ -236,4 +294,5 @@ class WorksheetFilterForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+
 

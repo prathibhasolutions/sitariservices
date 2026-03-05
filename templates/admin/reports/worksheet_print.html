@@ -29,17 +29,17 @@
                     <th>Sl.No</th>
                     <th>Date</th>
                     {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment</th>
+                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Particulars</th><th>Transaction Num</th><th>Certificate Num</th><th>Payment</th>
                     {% elif department.name == "Aadhaar" %}
-                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment</th>
+                        <th>T.K No</th><th>Customer Name</th><th>Mobile</th><th>Service</th><th>Particulars</th><th>Enrollment No</th><th>Certificate Num</th><th>Payment</th>
                     {% elif department.name == "Bhu Bharathi" %}
                         <th>Token No</th><th>Customer Name</th><th>Login Mobile</th><th>App No</th><th>Status</th><th>Payment</th>
                     {% elif department.name == "Forms" %}
-                        <th>Particulars</th>
+                        <th>Service</th><th>Particulars</th>
                     {% elif department.name == "Xerox" %}
                         <!-- No extra columns for Xerox -->
                     {% elif department.name == "Notary and Bonds" %}
-                        <th>Token No</th><th>Customer Name</th><th>Service</th><th>Bonds Sl. No</th><th>Payment</th>
+                        <th>Token No</th><th>Customer Name</th><th>Service</th><th>Particulars</th><th>Bonds Sl. No</th><th>Payment</th>
                     {% endif %}
                     <th>Amount (&#8377;)</th>
                 </tr>
@@ -50,17 +50,17 @@
                     <td>{{ forloop.counter }}</td>
                     <td>{{ entry.date|date:"d M Y" }}</td>
                     {% if department.name == "Mee Seva" or department.name == "Online Hub" %}
-                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td><td>{{ entry.transaction_num|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                     {% elif department.name == "Aadhaar" %}
-                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.customer_mobile|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td><td>{{ entry.enrollment_no|default:"-" }}</td><td>{{ entry.certificate_number|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                     {% elif department.name == "Bhu Bharathi" %}
                         <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.login_mobile_no|default:"-" }}</td><td>{{ entry.application_no|default:"-" }}</td><td>{{ entry.status|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                     {% elif department.name == "Forms" %}
-                        <td>{{ entry.particulars|default:"-" }}</td>
+                        <td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td>
                     {% elif department.name == "Xerox" %}
                         <!-- No extra columns for Xerox -->
                     {% elif department.name == "Notary and Bonds" %}
-                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
+                        <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                     {% endif %}
                     <td>{{ entry.amount|floatformat:2 }}</td>
                 </tr>
