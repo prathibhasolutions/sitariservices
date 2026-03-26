@@ -92,8 +92,79 @@ from collections import defaultdict
 
 class Department(models.Model):
     name = models.CharField(max_length=50, unique=True)
+    department_head = models.ForeignKey(
+        'Employee',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='headed_departments',
+        help_text='Select the existing employee who is the head/manager of this department.',
+    )
+
     def __str__(self):
         return self.name
+
+
+class DepartmentTopUp(models.Model):
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='topups')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"TopUp {self.amount} for {self.department.name} on {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class DepartmentInventoryEntry(models.Model):
+    BOND_TYPE_100 = '100'
+    BOND_TYPE_50 = '50'
+    BOND_TYPE_20 = '20'
+    BOND_TYPE_CHOICES = (
+        (BOND_TYPE_100, '100 RPS BONDS'),
+        (BOND_TYPE_50, '50 RPS BONDS'),
+        (BOND_TYPE_20, '20 RPS BONDS'),
+    )
+
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='inventory_entries')
+    bond_type = models.CharField(max_length=3, choices=BOND_TYPE_CHOICES)
+    quantity = models.IntegerField()
+    note = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_bond_type_display()} x {self.quantity} for {self.department.name}"
+
+
+class EmployeeNextDayAvailability(models.Model):
+    RESPONSE_SOURCE_MANUAL = 'manual'
+    RESPONSE_SOURCE_AUTO = 'auto'
+    RESPONSE_SOURCE_CHOICES = (
+        (RESPONSE_SOURCE_MANUAL, 'Manual'),
+        (RESPONSE_SOURCE_AUTO, 'Auto'),
+    )
+
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='next_day_availability_records')
+    target_date = models.DateField(help_text='The date for which the employee confirmed availability.')
+    will_come = models.BooleanField(default=False)
+    response_source = models.CharField(max_length=10, choices=RESPONSE_SOURCE_CHOICES, default=RESPONSE_SOURCE_MANUAL)
+    responded_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-target_date', '-responded_at']
+        unique_together = ('employee', 'target_date')
+        verbose_name = 'Employee Next Day Availability'
+        verbose_name_plural = 'Employee Next Day Availability'
+
+    def __str__(self):
+        status = 'Yes' if self.will_come else 'No'
+        return f"{self.employee.name} - {self.target_date:%Y-%m-%d} - {status}"
 
 
 class ManagedLink(models.Model):
@@ -124,6 +195,10 @@ from calendar import monthrange
 
 class Employee(models.Model):
     locked = models.BooleanField(default=False, help_text="If checked, this employee is locked and cannot access the system.")
+    worksheet_entry_force_unlock = models.BooleanField(
+        default=False,
+        help_text="If enabled, this employee can add worksheet entries even after the daily 4:00 PM lock.",
+    )
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
     profile_picture = models.ImageField(

@@ -40,6 +40,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'management.middleware.SingleDeviceSessionMiddleware',
+    'management.middleware.EmployeeNextDayAvailabilityMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -63,6 +64,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'management.context_processors.notifications_context',
+                'management.context_processors.employee_next_day_alert_context',
                 'management.context_processors_renewal.renewal_alerts_processor',
             ],
         },
@@ -88,6 +90,11 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Asia/Kolkata'
+
+# Worksheet entry cutoff in 24-hour format. 17 means 5:00 PM.
+WORKSHEET_ENTRY_CUTOFF_HOUR = 17
+EMPLOYEE_NEXT_DAY_ALERT_START_HOUR = 18
+EMPLOYEE_NEXT_DAY_ALERT_END_HOUR = 19
 
 USE_I18N = True
 
@@ -141,6 +148,17 @@ JAZZMIN_SETTINGS = {
 
     # Copyright on the footer
     "copyright": "Sitari Solutions Ltd",
+
+    "custom_links": {
+        "management": [
+            {
+                "name": "Worksheet Management",
+                "url": "admin_worksheet_management",
+                "icon": "fas fa-table",
+                "permissions": ["auth.view_user"],
+            }
+        ]
+    },
 
     "custom_css": "css/jazzmin_custom.css",
 }

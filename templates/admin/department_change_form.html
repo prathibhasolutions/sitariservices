@@ -1,0 +1,244 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .dept-panel {
+        margin-top: 16px;
+        clear: both;
+        width: 100%;
+        border: 1px solid #e4e7eb;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+    }
+    .dept-panel h2 {
+        margin: 0;
+        padding: 12px 14px;
+        font-size: 16px;
+        border-bottom: 1px solid #e4e7eb;
+        background: #f8fafc;
+    }
+    .dept-panel .panel-body {
+        padding: 12px;
+    }
+    .dept-table-wrap {
+        overflow-x: auto;
+    }
+    .dept-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .dept-table th,
+    .dept-table td {
+        padding: 10px;
+        border-bottom: 1px solid #edf2f7;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    .dept-table thead th {
+        background: #f8fafc;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #4b5563;
+    }
+    .dept-table tbody tr:nth-child(even) {
+        background: #fcfdff;
+    }
+    .muted-note {
+        color: #6b7280;
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+    .topup-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .topup-row .topup-field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .topup-row .topup-field input {
+        min-width: 220px;
+        padding: 6px 8px;
+    }
+</style>
+{% endblock %}
+
+{% block after_field_sets %}
+{{ block.super }}
+<div class="dept-panel">
+    <h2>{% if is_notary_bonds %}Inventory Balance{% else %}Department Top Up{% endif %}</h2>
+    <div class="panel-body">
+        {% if is_notary_bonds %}
+            <div class="topup-row" style="margin-bottom:10px;">
+                <div class="topup-field"><strong>100 RPS BONDS:</strong> {{ inventory_balance.100 }}</div>
+                <div class="topup-field"><strong>50 RPS BONDS:</strong> {{ inventory_balance.50 }}</div>
+                <div class="topup-field"><strong>20 RPS BONDS:</strong> {{ inventory_balance.20 }}</div>
+            </div>
+            <div class="topup-row">
+                <div class="topup-field">
+                    <label for="id_bond_type">Bond Type</label>
+                    <select id="id_bond_type" name="bond_type">
+                        <option value="100">100 RPS BONDS</option>
+                        <option value="50">50 RPS BONDS</option>
+                        <option value="20">20 RPS BONDS</option>
+                    </select>
+                </div>
+                <div class="topup-field">
+                    <label for="id_inventory_quantity">Quantity</label>
+                    <input id="id_inventory_quantity" type="number" step="1" min="1" name="inventory_quantity" placeholder="Enter quantity">
+                </div>
+                <div class="topup-field">
+                    <label for="id_inventory_note">Note (Optional)</label>
+                    <input id="id_inventory_note" type="text" name="inventory_note" placeholder="Reason or note">
+                </div>
+                <div class="topup-field">
+                    <button type="submit" name="_add_inventory" value="1" class="button default">Add Inventory</button>
+                </div>
+            </div>
+        {% else %}
+            <div class="topup-row">
+                <div class="topup-field">
+                    <label for="id_topup_amount">Top Up Amount</label>
+                    <input id="id_topup_amount" type="number" step="0.01" min="0.01" name="topup_amount" placeholder="Enter amount">
+                </div>
+                <div class="topup-field">
+                    <label for="id_topup_note">Note (Optional)</label>
+                    <input id="id_topup_note" type="text" name="topup_note" placeholder="Reason or note">
+                </div>
+                <div class="topup-field">
+                    <button type="submit" name="_add_topup" value="1" class="button default">Add Top Up</button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block after_related_objects %}
+{{ block.super }}
+
+<div class="dept-panel">
+    <h2>{% if is_notary_bonds %}Inventory History{% else %}Top Up History{% endif %}</h2>
+    <div class="panel-body dept-table-wrap">
+        <table class="dept-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    {% if is_notary_bonds %}
+                        <th>Bond Type</th>
+                        <th>Action</th>
+                        <th>Quantity</th>
+                    {% else %}
+                        <th>Type</th>
+                        <th>Amount</th>
+                    {% endif %}
+                    <th>Note</th>
+                    <th>Date/Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if is_notary_bonds %}
+                    {% for item in inventory_history %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.get_bond_type_display }}</td>
+                        <td>
+                            {% if item.quantity < 0 %}
+                                <span style="color:#c0392b;font-weight:600;">Deduction</span>
+                            {% else %}
+                                <span style="color:#27ae60;font-weight:600;">Added</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.quantity < 0 %}
+                                <span style="color:#c0392b;font-weight:600;">{{ item.quantity }}</span>
+                            {% else %}
+                                <span style="color:#27ae60;font-weight:600;">{{ item.quantity }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.note|default:'-' }}</td>
+                        <td>{{ item.created_at|date:"d M Y h:i:s A" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">No inventory history found for this department.</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    {% for topup in topup_history %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>
+                            {% if topup.amount < 0 %}
+                                <span style="color:#c0392b;font-weight:600;">Deduction</span>
+                            {% else %}
+                                <span style="color:#27ae60;font-weight:600;">Top Up</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if topup.amount < 0 %}
+                                <span style="color:#c0392b;font-weight:600;">₹ {{ topup.amount }}</span>
+                            {% else %}
+                                <span style="color:#27ae60;font-weight:600;">₹ {{ topup.amount }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ topup.note|default:'-' }}</td>
+                        <td>{{ topup.created_at|date:"d M Y h:i:s A" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">No top up history found for this department.</td>
+                    </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="dept-panel">
+    <h2>Department Overview</h2>
+    <div class="panel-body">
+        <div class="muted-note" style="margin-bottom:10px;">
+            <strong>Department Head:</strong>
+            {% if department_head %}
+                {{ department_head.name }} (ID: {{ department_head.employee_id }})
+            {% else %}
+                Not assigned
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="dept-panel">
+    <h2>Department Employees</h2>
+    <div class="panel-body dept-table-wrap">
+        <table class="dept-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for employee in department_employees %}
+                <tr>
+                    <td>{{ employee.name }} (ID: {{ employee.employee_id }})</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td>No employees found in this department.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

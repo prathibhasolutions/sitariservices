@@ -173,10 +173,91 @@ if (!window.location.pathname.includes('login')) {
             height: 80px; 
             object-fit: cover; 
         }
+
+        .employee-alert-lock #sidebar,
+        .employee-alert-lock #content {
+            pointer-events: none;
+            user-select: none;
+            filter: blur(2px);
+        }
+
+        .employee-alert-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(14, 22, 34, 0.72);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .employee-alert-card {
+            width: 100%;
+            max-width: 520px;
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+            overflow: hidden;
+        }
+
+        .employee-alert-card-header {
+            padding: 18px 22px;
+            background: linear-gradient(135deg, #c0392b 0%, #e67e22 100%);
+            color: #fff;
+        }
+
+        .employee-alert-card-body {
+            padding: 22px;
+        }
+
+        .employee-alert-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .employee-alert-actions form {
+            flex: 1;
+        }
+
+        .employee-alert-actions button {
+            width: 100%;
+            padding: 12px 14px;
+            border: 0;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        .employee-alert-yes {
+            background: #1e8449;
+            color: #fff;
+        }
+
+        .employee-alert-no {
+            background: #c0392b;
+            color: #fff;
+        }
+
+        .employee-alert-meta {
+            margin-top: 12px;
+            color: #6c757d;
+            font-size: 0.95rem;
+        }
+
+        .employee-alert-badge {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #fff3cd;
+            color: #856404;
+            font-weight: 600;
+        }
     </style>
 </head>
 
-<body>
+<body class="{% if employee_next_day_alert_pending %}employee-alert-lock{% endif %}">
 {% if active_announcements %}
     {% for announcement in active_announcements %}
         <div class="modal fade" id="announcementModal{{ forloop.counter }}" tabindex="-1" role="dialog" aria-labelledby="announcementModalLabel{{ forloop.counter }}" aria-hidden="true" data-backdrop="static" data-keyboard="false">
@@ -358,6 +439,33 @@ document.addEventListener('DOMContentLoaded', function() {
         </main>
     </div>
 </div>
+
+{% if employee_next_day_alert_pending %}
+<div class="employee-alert-overlay" id="employee-next-day-alert-overlay">
+    <div class="employee-alert-card" role="dialog" aria-modal="true" aria-labelledby="employee-next-day-alert-title">
+        <div class="employee-alert-card-header">
+            <h4 id="employee-next-day-alert-title" style="margin:0; font-weight:700;">Tomorrow Attendance Confirmation</h4>
+        </div>
+        <div class="employee-alert-card-body">
+            <p style="font-size:1.05rem; margin-bottom:8px;">Will you come tomorrow, on {{ employee_next_day_alert_target_date|date:"d M Y" }}?</p>
+            <div class="employee-alert-badge">This alert is active from {{ employee_next_day_alert_start_label }} to {{ employee_next_day_alert_end_label }}.</div>
+            <p class="employee-alert-meta">Until you select an answer, all employee features stay disabled. If you do not answer by {{ employee_next_day_alert_end_label }}, the system will automatically mark <strong>No</strong>.</p>
+            <div class="employee-alert-actions">
+                <form method="post" action="{% url 'submit_next_day_availability' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="will_come" value="yes">
+                    <button type="submit" class="employee-alert-yes">Yes, I Will Come</button>
+                </form>
+                <form method="post" action="{% url 'submit_next_day_availability' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="will_come" value="no">
+                    <button type="submit" class="employee-alert-no">No, I Will Not Come</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- All Your Modals and JavaScript (Unchanged) -->
 <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
@@ -712,6 +820,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkAllOverdueTasks();
 });
 </script>
+
+{% if employee_next_day_alert_pending %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    window.setTimeout(function() {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "submit_next_day_availability" %}';
+
+        var csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = getCSRFToken();
+        form.appendChild(csrf);
+
+        var choice = document.createElement('input');
+        choice.type = 'hidden';
+        choice.name = 'will_come';
+        choice.value = 'no';
+        form.appendChild(choice);
+
+        document.body.appendChild(form);
+        form.submit();
+    }, {{ employee_next_day_alert_ms_until_auto_no }});
+});
+</script>
+{% endif %}
 
 </body>
 </html>

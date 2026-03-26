@@ -24,7 +24,17 @@ from .models import Worksheet
 
 from .models import Worksheet, ServiceType
 
-class MeesevaWorksheetForm(forms.ModelForm):
+
+class TokenRequiredWorksheetMixin:
+    token_required_message = "Token number is required for this department."
+
+    def clean_token_no(self):
+        token_no = (self.cleaned_data.get('token_no') or '').strip()
+        if not token_no:
+            raise forms.ValidationError(self.token_required_message)
+        return token_no
+
+class MeesevaWorksheetForm(TokenRequiredWorksheetMixin, forms.ModelForm):
     service = forms.ModelChoiceField(
         queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
@@ -49,7 +59,7 @@ class MeesevaWorksheetForm(forms.ModelForm):
         model = Worksheet
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'transaction_num', 'certificate_number','payment', 'amount']
 
-class AadharWorksheetForm(forms.ModelForm):
+class AadharWorksheetForm(TokenRequiredWorksheetMixin, forms.ModelForm):
     service = forms.ModelChoiceField(
         queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
@@ -67,7 +77,7 @@ class AadharWorksheetForm(forms.ModelForm):
         model = Worksheet
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'enrollment_no', 'certificate_number', 'payment', 'amount']
 
-class BhuBharathiWorksheetForm(forms.ModelForm):
+class BhuBharathiWorksheetForm(TokenRequiredWorksheetMixin, forms.ModelForm):
     def __init__(self, *args, employee=None, **kwargs):
         super().__init__(*args, **kwargs)
         # employee is ignored, just for compatibility
@@ -77,7 +87,7 @@ class BhuBharathiWorksheetForm(forms.ModelForm):
         fields = ['token_no', 'customer_name',  'login_mobile_no', 'application_no', 'status','payment',  'amount', 'particulars']
 
 # RENAMED from XeroxWorksheetForm
-class FormsWorksheetForm(forms.ModelForm):
+class FormsWorksheetForm(TokenRequiredWorksheetMixin, forms.ModelForm):
     service = forms.ModelChoiceField(
         queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",
@@ -95,7 +105,7 @@ class FormsWorksheetForm(forms.ModelForm):
 
     class Meta:
         model = Worksheet
-        fields = ['service', 'particulars', 'amount']
+        fields = ['token_no', 'service', 'particulars', 'amount']
 
 # NEW form for the new 'Xerox' department (without 'particulars')
 class XeroxWorksheetForm(forms.ModelForm):
@@ -119,7 +129,7 @@ class XeroxWorksheetForm(forms.ModelForm):
         fields = ['token_no', 'customer_name', 'customer_mobile', 'service', 'particulars', 'payment', 'amount']
 
 # NEW form for 'Notary and Bonds' department
-class NotaryAndBondsWorksheetForm(forms.ModelForm):
+class NotaryAndBondsWorksheetForm(TokenRequiredWorksheetMixin, forms.ModelForm):
     service = forms.ModelChoiceField(
         queryset=ServiceType.objects.none(),
         empty_label="-- Select a Service --",

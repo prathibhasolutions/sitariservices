@@ -102,6 +102,8 @@ from .models import (
     Meeting, 
     MeetingAttendance,
     Department,
+    DepartmentInventoryEntry,
+    DepartmentTopUp,
     BreakSession,
     Application,
     ApplicationAssignment,
@@ -961,7 +963,7 @@ class ApplicationAdmin(admin.ModelAdmin):
         extra_context['is_chat_active'] = is_shared and not application.approved
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 # In admin.py
 
@@ -1047,7 +1049,127 @@ class BreakSessionAdmin(admin.ModelAdmin):
 
 
 # --- Register All Other Models with Default Admin ---
-admin.site.register(Department)
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'department_head_name', 'employee_count')
+    search_fields = ('name', 'department_head__name')
+    change_form_template = 'admin/department_change_form.html'
+    save_on_top = True
+    fields = ('name', 'department_head', 'balance_remaining_display')
+    readonly_fields = ('balance_remaining_display',)
+
+    @admin.display(description='Department Head')
+    def department_head_name(self, obj):
+        return obj.department_head.name if obj.department_head else '-'
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'department_head':
+            object_id = request.resolver_match.kwargs.get('object_id') if request.resolver_match else None
+            if object_id:
+                kwargs['queryset'] = Employee.objects.filter(department_id=object_id).order_by('name')
+            else:
+                kwargs['queryset'] = Employee.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    @admin.display(description='Employees')
+    def employee_count(self, obj):
+        return obj.employees.count()
+
+    @admin.display(description='Balance Remaining')
+    def balance_remaining_display(self, obj):
+        if not obj or not obj.pk:
+            return 'Save department first to view balance.'
+
+        if obj.name == 'Notary and Bonds':
+            inventory_entries = DepartmentInventoryEntry.objects.filter(department=obj)
+            total_100 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0
+            total_50 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0
+            total_20 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0
+            return f"100 RPS: {total_100} | 50 RPS: {total_50} | 20 RPS: {total_20}"
+
+        total = obj.topups.aggregate(total=Sum('amount'))['total'] or 0
+        return f"Balance: ₹ {total}"
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        department = self.get_object(request, object_id)
+
+        if department:
+            employees = Employee.objects.filter(department=department).order_by('name')
+            topup_history = DepartmentTopUp.objects.filter(department=department).order_by('-created_at')
+            inventory_history = DepartmentInventoryEntry.objects.filter(department=department).order_by('-created_at')
+
+            inventory_balance = {
+                '100': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0,
+                '50': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0,
+                '20': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0,
+            }
+            is_notary_bonds = department.name == 'Notary and Bonds'
+
+            extra_context.update({
+                'department_employees': employees,
+                'department_head': department.department_head,
+                'topup_history': topup_history,
+                'inventory_history': inventory_history,
+                'inventory_balance': inventory_balance,
+                'is_notary_bonds': is_notary_bonds,
+            })
+
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def response_change(self, request, obj):
+        if '_add_inventory' in request.POST:
+            if obj.name != 'Notary and Bonds':
+                self.message_user(request, 'Inventory is available only for Notary and Bonds department.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
+
+            bond_type = (request.POST.get('bond_type') or '').strip()
+            raw_qty = (request.POST.get('inventory_quantity') or '').strip()
+            note = (request.POST.get('inventory_note') or '').strip()
+
+            valid_types = {
+                DepartmentInventoryEntry.BOND_TYPE_100,
+                DepartmentInventoryEntry.BOND_TYPE_50,
+                DepartmentInventoryEntry.BOND_TYPE_20,
+            }
+            if bond_type not in valid_types:
+                self.message_user(request, 'Please select a valid bond type.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
+
+            try:
+                quantity = int(raw_qty)
+                if quantity <= 0:
+                    raise ValueError
+            except ValueError:
+                self.message_user(request, 'Please enter a valid inventory quantity greater than 0.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
+
+            DepartmentInventoryEntry.objects.create(
+                department=obj,
+                bond_type=bond_type,
+                quantity=quantity,
+                note=note or None,
+            )
+            self.message_user(request, 'Inventory added successfully.', messages.SUCCESS)
+            return HttpResponseRedirect(request.get_full_path())
+
+        if '_add_topup' in request.POST:
+            raw_amount = (request.POST.get('topup_amount') or '').strip()
+            note = (request.POST.get('topup_note') or '').strip()
+
+            try:
+                amount = Decimal(raw_amount)
+                if amount <= 0:
+                    raise ValueError
+            except (InvalidOperation, ValueError):
+                self.message_user(request, 'Please enter a valid top up amount greater than 0.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
+
+            DepartmentTopUp.objects.create(department=obj, amount=amount, note=note or None)
+            self.message_user(request, f'Top up of {amount} added for {obj.name}.', messages.SUCCESS)
+            return HttpResponseRedirect(request.get_full_path())
+
+        return super().response_change(request, obj)
 # your_app/admin.py
 
 from django.contrib import admin

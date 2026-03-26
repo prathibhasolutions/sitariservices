@@ -1,0 +1,251 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .worksheet-admin {
+        --wa-border: #d8dee8;
+        --wa-border-soft: #e8edf4;
+        --wa-head-bg: linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+        --wa-text-main: #1f2a37;
+        --wa-text-muted: #5c6b7d;
+        --wa-accent: #0b5cab;
+        --wa-accent-hover: #084989;
+        --wa-danger: #ad1f1f;
+        --wa-danger-hover: #881717;
+        --wa-success: #166534;
+        --wa-surface: #ffffff;
+        --wa-shadow: 0 8px 20px rgba(20, 43, 74, 0.08);
+    }
+
+    .worksheet-admin .meta-note {
+        margin-bottom: 18px;
+        color: var(--wa-text-muted);
+    }
+
+    .worksheet-table-wrap {
+        border: 1px solid var(--wa-border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--wa-surface);
+        box-shadow: var(--wa-shadow);
+    }
+
+    .worksheet-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .worksheet-table thead th {
+        text-align: left;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--wa-border);
+        background: var(--wa-head-bg);
+        color: var(--wa-text-main);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+    }
+
+    .worksheet-table tbody td {
+        border-bottom: 1px solid var(--wa-border-soft);
+        padding: 12px 14px;
+        color: var(--wa-text-main);
+        vertical-align: middle;
+    }
+
+    .worksheet-table tbody tr:nth-child(even) {
+        background: #fbfcfe;
+    }
+
+    .worksheet-table tbody tr:hover {
+        background: #f3f7fc;
+    }
+
+    .worksheet-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.4;
+        border: 1px solid transparent;
+    }
+
+    .status-pill.is-locked {
+        color: var(--wa-danger);
+        background: #fdecec;
+        border-color: #f5c9c9;
+    }
+
+    .status-pill.is-open {
+        color: var(--wa-success);
+        background: #eaf8ef;
+        border-color: #bfe7cb;
+    }
+
+    .status-note {
+        color: var(--wa-accent);
+        margin-left: 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .action-form {
+        margin: 0;
+        display: inline;
+    }
+
+    .action-stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .worksheet-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid #c4d0df;
+        background: #fff;
+        color: #1c2e43;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .worksheet-btn:hover {
+        border-color: #9eb1c8;
+        background: #f6f9fd;
+    }
+
+    .worksheet-btn:focus {
+        outline: 2px solid #8ab4e6;
+        outline-offset: 1px;
+    }
+
+    .worksheet-btn.approve {
+        color: #fff;
+        border-color: var(--wa-accent);
+        background: var(--wa-accent);
+    }
+
+    .worksheet-btn.approve:hover {
+        border-color: var(--wa-accent-hover);
+        background: var(--wa-accent-hover);
+    }
+
+    .worksheet-btn.revoke {
+        color: #fff;
+        border-color: var(--wa-danger);
+        background: var(--wa-danger);
+    }
+
+    .worksheet-btn.revoke:hover {
+        border-color: var(--wa-danger-hover);
+        background: var(--wa-danger-hover);
+    }
+
+    .worksheet-btn.print {
+        color: #fff;
+        border-color: #3f4d63;
+        background: #3f4d63;
+        text-decoration: none;
+    }
+
+    .worksheet-btn.print:hover {
+        border-color: #313c4f;
+        background: #313c4f;
+        color: #fff;
+    }
+
+    @media (max-width: 1024px) {
+        .worksheet-table-wrap {
+            overflow-x: auto;
+        }
+
+        .worksheet-table {
+            min-width: 860px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="worksheet-admin">
+    <h1>Worksheet Management</h1>
+    <p><strong>Server time:</strong> {{ now_local|date:"d M Y h:i:s A" }}</p>
+    <p class="meta-note">Daily lock starts at {{ cutoff_time_label }}. If an employee shows locked, click Approve Access to allow entry immediately.</p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <ul class="messagelist">
+                <li class="{{ message.tags }}">{{ message }}</li>
+            </ul>
+        {% endfor %}
+    {% endif %}
+
+    <h2>Employees Entry Status</h2>
+    <div class="worksheet-table-wrap">
+        <table class="worksheet-table" style="margin-bottom: 24px;">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Total Amount (Today)</th>
+                    <th>Total Payment (Today)</th>
+                    <th>Worksheet Entry Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in employee_rows %}
+                    <tr>
+                        <td>{{ row.employee.name }} (ID: {{ row.employee.employee_id }})</td>
+                        <td>{{ row.employee.department.name|default:"-" }}</td>
+                        <td>{{ row.total_amount }}</td>
+                        <td>{{ row.total_payment }}</td>
+                        <td>
+                            {% if row.worksheet_locked %}
+                                <span class="status-pill is-locked">Locked</span>
+                            {% else %}
+                                <span class="status-pill is-open">Open</span>
+                            {% endif %}
+                            {% if row.employee.worksheet_entry_force_unlock %}
+                                <span class="status-note">(Admin Override)</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-stack">
+                                <form method="post" class="action-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="toggle_entry_access">
+                                    <input type="hidden" name="target_employee_id" value="{{ row.employee.employee_id }}">
+                                    {% if row.worksheet_locked %}
+                                        <button type="submit" class="worksheet-btn approve">Approve Access</button>
+                                    {% else %}
+                                        <button type="submit" class="worksheet-btn revoke">Revoke Access</button>
+                                    {% endif %}
+                                </form>
+                                <a class="worksheet-btn print" href="{% url 'admin_employee_daily_worksheet_pdf' row.employee.employee_id %}" target="_blank" rel="noopener">Print Worksheet</a>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6">No employees found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -150,11 +150,12 @@
                     <script src="{% static 'management/service_amount.js' %}"></script>
                     <div class="col-auto mb-2 d-flex align-items-end">
                         <div class="form-group mb-0 w-100">
-                            <button type="submit" class="btn btn-success w-100">Add Entry</button>
+                            <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success w-100" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
                         </div>
                     </div>
                 </div>
             </form>
+            <small id="worksheet-cutoff-message" class="text-danger d-block mt-2 {% if not is_worksheet_entry_locked %}d-none{% endif %}">Daily worksheet entry is closed after {{ cutoff_time_label }}.</small>
         </div>
     </div>
 
@@ -549,6 +550,35 @@
                 .catch(err => console.error('Failed to load edit form:', err));
         }
     });
+
+    function lockWorksheetEntryUI() {
+        const addBtn = document.getElementById('worksheet-add-entry-btn');
+        const cutoffMsg = document.getElementById('worksheet-cutoff-message');
+        if (addBtn) {
+            addBtn.disabled = true;
+            addBtn.title = 'Daily worksheet entry is closed after {{ cutoff_time_label }}';
+        }
+        if (cutoffMsg) {
+            cutoffMsg.classList.remove('d-none');
+        }
+    }
+
+    function scheduleWorksheetCutoff() {
+        const shouldAutoLock = '{{ should_auto_lock_after_cutoff|yesno:"true,false" }}' === 'true';
+        if (!shouldAutoLock) {
+            return;
+        }
+
+        const msUntilCutoff = Number('{{ milliseconds_until_worksheet_cutoff|default:0 }}');
+        if (!Number.isFinite(msUntilCutoff) || msUntilCutoff <= 0) {
+            lockWorksheetEntryUI();
+            return;
+        }
+
+        window.setTimeout(lockWorksheetEntryUI, msUntilCutoff);
+    }
+
+    document.addEventListener('DOMContentLoaded', scheduleWorksheetCutoff);
 </script>
 
 

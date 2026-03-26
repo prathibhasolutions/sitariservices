@@ -1,4 +1,5 @@
 from django.http import JsonResponse
+from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from auditlog.models import LogEntry
 from django.utils import timezone
@@ -137,7 +138,7 @@ from django.db import models
 from .models import Invoice
 from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet,WorksheetEntryEditForm
-from .utils import generate_otp, send_otp_whatsapp
+from .utils import generate_otp, send_otp_whatsapp, get_employee_next_day_alert_state
 from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission,Worksheet
 from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
@@ -605,6 +606,34 @@ def require_employee(view_func):
         return view_func(request, employee, *args, **kwargs)
     return wrapped_view
 
+
+@require_employee
+def submit_next_day_availability(request, employee):
+    if request.method != 'POST':
+        return redirect('employee_dashboard')
+
+    state = get_employee_next_day_alert_state(employee)
+    if not state['pending']:
+        messages.error(request, 'Tomorrow availability confirmation is not pending right now.')
+        return redirect(request.META.get('HTTP_REFERER') or 'employee_dashboard')
+
+    decision = (request.POST.get('will_come') or '').strip().lower()
+    if decision not in ('yes', 'no'):
+        messages.error(request, 'Please choose Yes or No.')
+        return redirect(request.META.get('HTTP_REFERER') or 'employee_dashboard')
+
+    EmployeeNextDayAvailability.objects.update_or_create(
+        employee=employee,
+        target_date=state['target_date'],
+        defaults={
+            'will_come': decision == 'yes',
+            'response_source': EmployeeNextDayAvailability.RESPONSE_SOURCE_MANUAL,
+            'responded_at': timezone.now(),
+        },
+    )
+    messages.success(request, 'Tomorrow availability saved successfully.')
+    return redirect(request.META.get('HTTP_REFERER') or 'employee_dashboard')
+
 # --- Main Views ---
 
 # management/views.py
@@ -857,7 +886,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.db.models import Sum, Q
 from django.utils import timezone
-from .models import Employee, Worksheet, Department, ResourceRepairReport
+from .models import Employee, Worksheet, Department, ResourceRepairReport, DepartmentTopUp, DepartmentInventoryEntry, EmployeeNextDayAvailability
 from .forms import (
     MeesevaWorksheetForm, AadharWorksheetForm, BhuBharathiWorksheetForm, 
     FormsWorksheetForm, XeroxWorksheetForm, NotaryAndBondsWorksheetForm, 
@@ -882,12 +911,70 @@ from .models import Worksheet, ResourceRepairReport, Employee
 
 from decimal import Decimal
 
+
+def is_worksheet_entry_locked_now(employee=None, now_local=None, cutoff_hour=None):
+    if now_local is None:
+        now_local = timezone.localtime(timezone.now())
+    if cutoff_hour is None:
+        cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+
+    base_locked = now_local.hour >= cutoff_hour
+    if not base_locked:
+        return False
+
+    if employee and employee.worksheet_entry_force_unlock:
+        return False
+
+    return True
+
+
+def format_cutoff_time_label(cutoff_hour):
+    hour_12 = ((cutoff_hour - 1) % 12) + 1
+    am_pm = 'AM' if cutoff_hour < 12 else 'PM'
+    return f"{hour_12}:00 {am_pm}"
+
+def resolve_notary_bond_type(service_value):
+    if not service_value:
+        return None
+
+    if hasattr(service_value, 'name'):
+        service_text = service_value.name or ''
+    else:
+        service_text = str(service_value)
+
+    normalized_text = ' '.join(service_text.upper().split())
+    if 'BOND' not in normalized_text:
+        return None
+
+    if '100' in normalized_text:
+        return DepartmentInventoryEntry.BOND_TYPE_100
+    if '50' in normalized_text:
+        return DepartmentInventoryEntry.BOND_TYPE_50
+    if '20' in normalized_text:
+        return DepartmentInventoryEntry.BOND_TYPE_20
+
+    return None
+
 @require_employee
 def worksheet_view(request, employee):
     department = employee.department
     if not department:
         messages.error(request, "You are not assigned to a department. Cannot access worksheet.")
         return redirect('employee_dashboard')
+
+    now_local = timezone.localtime(timezone.now())
+    worksheet_cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+    cutoff_time_label = format_cutoff_time_label(worksheet_cutoff_hour)
+    worksheet_cutoff_at = now_local.replace(hour=worksheet_cutoff_hour, minute=0, second=0, microsecond=0)
+    milliseconds_until_worksheet_cutoff = max(
+        int((worksheet_cutoff_at - now_local).total_seconds() * 1000),
+        0,
+    )
+    is_worksheet_entry_locked = is_worksheet_entry_locked_now(
+        employee=employee,
+        now_local=now_local,
+        cutoff_hour=worksheet_cutoff_hour,
+    )
 
     # --- Form Handling (No changes needed) ---
     form_map = {
@@ -906,9 +993,30 @@ def worksheet_view(request, employee):
     if request.method == 'POST':
         form_type = request.POST.get('form_type')
         if form_type == 'worksheet_entry' and WorksheetForm:
+            if is_worksheet_entry_locked:
+                messages.error(request, f"Daily worksheet entry is closed after {cutoff_time_label}.")
+                return redirect('worksheet')
             worksheet_form = WorksheetForm(request.POST, employee=employee)
             if worksheet_form.is_valid():
                 entry = worksheet_form.save(commit=False); entry.employee = employee; entry.department_name = department.name; entry.save()
+                # Auto-deduct payment from department top-up (skip Notary and Bonds)
+                if entry.payment and entry.payment > 0 and department.name != 'Notary and Bonds':
+                    DepartmentTopUp.objects.create(
+                        department=department,
+                        amount=-entry.payment,
+                        note=f"Auto-deducted: worksheet entry by {employee.name} on {entry.date}",
+                    )
+                # Auto-deduct bond inventory for Notary and Bonds
+                if department.name == 'Notary and Bonds':
+                    selected_service = worksheet_form.cleaned_data.get('service')
+                    matched_bond = resolve_notary_bond_type(selected_service) or resolve_notary_bond_type(entry.service)
+                    if matched_bond:
+                        DepartmentInventoryEntry.objects.create(
+                            department=department,
+                            bond_type=matched_bond,
+                            quantity=-1,
+                            note=f"Auto-deducted: worksheet entry by {employee.name} on {entry.date} (service: {entry.service})",
+                        )
                 messages.success(request, "Worksheet entry added successfully.")
                 return redirect('worksheet')
         elif form_type == 'repair_report':
@@ -999,8 +1107,242 @@ def worksheet_view(request, employee):
         'max_daily_wage': max_daily_wage,
         'todays_sessions': todays_sessions,
         'todays_breaks': todays_breaks,
+        'is_worksheet_entry_locked': is_worksheet_entry_locked,
+        'milliseconds_until_worksheet_cutoff': milliseconds_until_worksheet_cutoff,
+        'should_auto_lock_after_cutoff': not employee.worksheet_entry_force_unlock,
+        'cutoff_time_label': cutoff_time_label,
     }
     return render(request, 'worksheet.html', context)
+
+
+@staff_member_required
+def admin_worksheet_management(request):
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
+    cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+    cutoff_time_label = format_cutoff_time_label(cutoff_hour)
+
+    if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
+        employee_id = request.POST.get('target_employee_id')
+        target_employee = get_object_or_404(Employee, employee_id=employee_id)
+        target_employee.worksheet_entry_force_unlock = not target_employee.worksheet_entry_force_unlock
+        target_employee.save(update_fields=['worksheet_entry_force_unlock'])
+        state = 'enabled' if target_employee.worksheet_entry_force_unlock else 'disabled'
+        messages.success(request, f'Worksheet entry override {state} for {target_employee.name}.')
+
+        return redirect(request.path)
+
+    employees = Employee.objects.select_related('department').order_by('name')
+
+    todays_totals_map = {
+        row['employee_id']: {
+            'total_amount': row['total_amount'] or 0,
+            'total_payment': row['total_payment'] or 0,
+        }
+        for row in Worksheet.objects.filter(date=today)
+        .values('employee_id')
+        .annotate(
+            total_amount=models.Sum('amount'),
+            total_payment=models.Sum('payment'),
+        )
+    }
+
+    employee_rows = []
+    for emp in employees:
+        is_locked = is_worksheet_entry_locked_now(employee=emp, now_local=now_local, cutoff_hour=cutoff_hour)
+        employee_totals = todays_totals_map.get(emp.employee_id, {})
+        employee_rows.append({
+            'employee': emp,
+            'worksheet_locked': is_locked,
+            'total_amount': employee_totals.get('total_amount', 0),
+            'total_payment': employee_totals.get('total_payment', 0),
+        })
+
+    context = {
+        'employee_rows': employee_rows,
+        'now_local': now_local,
+        'today': today,
+        'cutoff_hour': cutoff_hour,
+        'cutoff_time_label': cutoff_time_label,
+    }
+    admin_context = admin.site.each_context(request)
+    admin_context.update(context)
+    return render(request, 'admin/worksheet_management.html', admin_context)
+
+
+@staff_member_required
+def admin_employee_daily_worksheet_pdf(request, employee_id):
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
+
+    employee = get_object_or_404(Employee, employee_id=employee_id)
+    department = employee.department
+    department_name = department.name if department else ''
+
+    todays_entries = Worksheet.objects.filter(employee=employee, date=today).order_by('created_at', 'id')
+    totals = todays_entries.aggregate(total_payment=models.Sum('payment'), total_amount=models.Sum('amount'))
+    total_payment = totals.get('total_payment') or Decimal('0.00')
+    total_amount = totals.get('total_amount') or Decimal('0.00')
+    todays_commission = total_amount * Decimal('0.05')
+
+    def _display(value):
+        return '-' if value in (None, '') else str(value)
+
+    def _money(value):
+        if value is None:
+            value = Decimal('0.00')
+        return f"{Decimal(value):.2f}"
+
+    def _entry_timestamp(value):
+        if not value:
+            return '-'
+        return timezone.localtime(value).strftime('%I:%M %p')
+
+    dynamic_columns = []
+    has_payment_column = False
+
+    if department_name in ('Mee Seva', 'Online Hub'):
+        dynamic_columns = [
+            ('T.K No', lambda e: _display(e.token_no)),
+            ('Customer Name', lambda e: _display(e.customer_name)),
+            ('Customer Mobile', lambda e: _display(e.customer_mobile)),
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+            ('Transaction Num', lambda e: _display(e.transaction_num)),
+            ('Certificate Num', lambda e: _display(e.certificate_number)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+    elif department_name == 'Aadhaar':
+        dynamic_columns = [
+            ('T.K No', lambda e: _display(e.token_no)),
+            ('Customer Name', lambda e: _display(e.customer_name)),
+            ('Customer Mobile', lambda e: _display(e.customer_mobile)),
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+            ('Enrollment No', lambda e: _display(e.enrollment_no)),
+            ('Certificate Num', lambda e: _display(e.certificate_number)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+    elif department_name == 'Bhu Bharathi':
+        dynamic_columns = [
+            ('Token No', lambda e: _display(e.token_no)),
+            ('Customer Name', lambda e: _display(e.customer_name)),
+            ('Login Mobile', lambda e: _display(e.login_mobile_no)),
+            ('Application No', lambda e: _display(e.application_no)),
+            ('Status', lambda e: _display(e.status)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+    elif department_name == 'Forms':
+        dynamic_columns = [
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+        ]
+    elif department_name == 'Xerox':
+        dynamic_columns = [
+            ('Token No', lambda e: _display(e.token_no)),
+            ('Customer Name', lambda e: _display(e.customer_name)),
+            ('Mobile No.', lambda e: _display(e.customer_mobile)),
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+    elif department_name == 'Notary and Bonds':
+        dynamic_columns = [
+            ('Token No', lambda e: _display(e.token_no)),
+            ('Customer Name', lambda e: _display(e.customer_name)),
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+            ('Bonds Sl. No', lambda e: _display(e.bonds_sno)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+    else:
+        dynamic_columns = [
+            ('Service', lambda e: _display(e.service)),
+            ('Particulars', lambda e: _display(e.particulars)),
+            ('Payment', lambda e: _money(e.payment)),
+        ]
+        has_payment_column = True
+
+    headers = ['Sl.No', 'Timestamp'] + [col[0] for col in dynamic_columns] + ['Amount (Rs)']
+    table_data = [headers]
+
+    for idx, entry in enumerate(todays_entries, start=1):
+        row = [str(idx), _entry_timestamp(entry.created_at)]
+        for _, extractor in dynamic_columns:
+            row.append(extractor(entry))
+        row.append(_money(entry.amount))
+        table_data.append(row)
+
+    if len(table_data) == 1:
+        empty_row = ['No entries for today.'] + [''] * (len(headers) - 1)
+        table_data.append(empty_row)
+
+    summary_row = [''] * len(headers)
+    if len(headers) >= 2:
+        summary_row[-2] = 'Total' if has_payment_column else ''
+        summary_row[-1] = _money(total_amount)
+        if has_payment_column:
+            summary_row[-2] = _money(total_payment)
+            summary_row[-3] = 'Total'
+    table_data.append(summary_row)
+
+    commission_row = [''] * len(headers)
+    commission_row[-2] = 'Commission (5%)'
+    commission_row[-1] = _money(todays_commission)
+    table_data.append(commission_row)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="worksheet_{employee.employee_id}_{today.isoformat()}.pdf"'
+
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=landscape(A4),
+        leftMargin=18,
+        rightMargin=18,
+        topMargin=20,
+        bottomMargin=20,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = [
+        Paragraph('Worksheet Report', styles['Title']),
+        Spacer(1, 8),
+        Paragraph(f'Employee: {employee.name} (ID: {employee.employee_id})', styles['Normal']),
+        Paragraph(f'Department: {department_name or "-"}', styles['Normal']),
+        Paragraph(f'Date: {today.strftime("%d %b %Y")}', styles['Normal']),
+        Spacer(1, 12),
+    ]
+
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 7),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#d1d5db')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -3), [colors.white, colors.HexColor('#f8fafc')]),
+        ('BACKGROUND', (0, -2), (-1, -2), colors.HexColor('#eef2f7')),
+        ('FONTNAME', (0, -2), (-1, -1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e5ebf3')),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+    return response
 
 
 

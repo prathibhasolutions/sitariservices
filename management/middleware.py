@@ -1,7 +1,10 @@
+from django.contrib import messages
+from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.shortcuts import redirect
 from django.urls import reverse
 from management.models import AttendanceSession, Employee
+from management.utils import get_employee_next_day_alert_state
 from django.utils import timezone
 
 class EmployeeAttendanceSessionMiddleware(MiddlewareMixin):
@@ -91,4 +94,43 @@ class SingleDeviceSessionMiddleware(MiddlewareMixin):
             request.session['attendance_session_id'] = latest_session.id
         elif open_sessions.count() == 1:
             request.session['attendance_session_id'] = open_sessions[0].id
+        return None
+
+
+class EmployeeNextDayAvailabilityMiddleware(MiddlewareMixin):
+    def process_request(self, request):
+        employee_id = request.session.get('employee_id')
+        if not employee_id:
+            return None
+
+        path = request.path
+        exempt_prefixes = [
+            reverse('login'),
+            reverse('logout'),
+            reverse('refresh_session'),
+            reverse('attendance_ping'),
+            reverse('submit_next_day_availability'),
+            '/api/geofence_check/',
+            '/static/',
+            '/media/',
+            '/admin/',
+        ]
+        if any(path.startswith(prefix) for prefix in exempt_prefixes):
+            return None
+
+        try:
+            employee = Employee.objects.get(employee_id=employee_id)
+        except Employee.DoesNotExist:
+            return None
+
+        state = get_employee_next_day_alert_state(employee)
+        request.employee_next_day_alert_state = state
+
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and state['pending']:
+            message = 'Please answer the tomorrow availability alert before using other features.'
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'status': 'blocked', 'message': message}, status=403)
+            messages.error(request, message)
+            return redirect(request.META.get('HTTP_REFERER') or reverse('employee_dashboard'))
+
         return None
