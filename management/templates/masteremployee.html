@@ -416,6 +416,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-align-left"></i>
                     <span>Dashboard</span>
                 </button>
+                <!-- Daily stats widget (centre) -->
+                <div class="d-flex align-items-center" style="gap:1rem; flex-shrink:0;">
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Target</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#ffd700;">
+                            {% if navbar_daily_target is not None %}₹{{ navbar_daily_target|floatformat:0 }}{% else %}<span style="color:rgba(255,255,255,0.4);">—</span>{% endif %}
+                        </div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Collected</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#5cb85c;">₹{{ navbar_daily_collected|floatformat:0 }}</div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Balance</div>
+                        <div style="font-size:0.9rem; font-weight:700;
+                            {% if navbar_daily_balance is not None %}
+                                {% if navbar_daily_balance <= 0 %}color:#5cb85c;{% else %}color:#d9534f;{% endif %}
+                            {% else %}color:rgba(255,255,255,0.4);{% endif %}">
+                            {% if navbar_daily_balance is not None %}₹{{ navbar_daily_balance|floatformat:0 }}{% else %}—{% endif %}
+                        </div>
+                    </div>
+                </div>
                 <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
                     <!-- Session Timer Widget (unchanged, but no mobile stacking) -->
                     <div id="session-timer-container" class="mr-2" style="flex-shrink:0;">

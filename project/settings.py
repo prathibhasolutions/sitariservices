@@ -65,6 +65,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'management.context_processors.notifications_context',
                 'management.context_processors.employee_next_day_alert_context',
+                'management.context_processors.employee_daily_stats_context',
                 'management.context_processors_renewal.renewal_alerts_processor',
             ],
         },
@@ -167,6 +168,12 @@ JAZZMIN_SETTINGS = {
                 "name": "Daily Targets",
                 "url": "admin_employee_targets",
                 "icon": "fas fa-bullseye",
+                "permissions": ["auth.view_user"],
+            },
+            {
+                "name": "Worksheet Data",
+                "url": "admin_worksheet_data",
+                "icon": "fas fa-folder-open",
                 "permissions": ["auth.view_user"],
             },
         ]

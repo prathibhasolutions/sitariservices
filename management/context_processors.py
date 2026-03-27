@@ -1,6 +1,7 @@
+from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Department, Employee, UserNotificationStatus
+from .models import Department, Employee, EmployeeTarget, UserNotificationStatus, Worksheet
 from .utils import format_hour_label, get_employee_next_day_alert_state
 
 def notifications_context(request):
@@ -51,4 +52,30 @@ def employee_next_day_alert_context(request):
         'employee_next_day_alert_end_hour': state['end_hour'],
         'employee_next_day_alert_ms_until_auto_no': ms_until_auto_no,
         'employee_next_day_alert_auto_marked': state['auto_marked'],
+    }
+
+
+def employee_daily_stats_context(request):
+    """
+    Provides today's target, total worksheet amount collected, and balance for the navbar.
+    """
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return {'navbar_daily_target': None, 'navbar_daily_collected': None, 'navbar_daily_balance': None}
+
+    today = timezone.localtime(timezone.now()).date()
+
+    target_obj = EmployeeTarget.objects.filter(employee__employee_id=employee_id, date=today).first()
+    target = (target_obj.target_amount + target_obj.carry_forward) if target_obj else None
+
+    collected = Worksheet.objects.filter(
+        employee__employee_id=employee_id, date=today
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    balance = (target - collected) if target is not None else None
+
+    return {
+        'navbar_daily_target': target,
+        'navbar_daily_collected': collected,
+        'navbar_daily_balance': balance,
     }

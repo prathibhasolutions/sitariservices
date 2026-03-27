@@ -1,0 +1,305 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .wd-root {
+        --wd-bg: #f4f6fa;
+        --wd-card: #ffffff;
+        --wd-border: #dce3ef;
+        --wd-accent: #0b5cab;
+        --wd-accent-light: #e8f0fb;
+        --wd-text: #1f2a37;
+        --wd-muted: #5c6b7d;
+        --wd-success: #166534;
+        --wd-folder-yellow: #f59e0b;
+        --wd-shadow: 0 4px 14px rgba(20, 43, 74, 0.08);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .wd-root h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--wd-text);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+    }
+
+    .wd-root h1 i { color: var(--wd-folder-yellow); }
+
+    .wd-empty {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--wd-muted);
+        font-size: 1.1rem;
+    }
+
+    /* ── Date accordion ── */
+    .wd-date-block { margin-bottom: 1rem; border-radius: 10px; border: 1px solid var(--wd-border); overflow: hidden; box-shadow: var(--wd-shadow); }
+
+    .wd-date-header {
+        background: linear-gradient(135deg, #1a3a6b 0%, #0b5cab 100%);
+        color: #fff;
+        padding: .75rem 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        user-select: none;
+        gap: .5rem;
+    }
+
+    .wd-date-header:hover { background: linear-gradient(135deg, #142e57 0%, #0a4e9a 100%); }
+
+    .wd-date-header .wd-date-label {
+        font-weight: 700;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .wd-date-header .wd-date-label i { color: #ffd166; font-size: 1.1rem; }
+
+    .wd-date-header .wd-badge {
+        background: rgba(255,255,255,.18);
+        border-radius: 20px;
+        padding: .15rem .65rem;
+        font-size: .78rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .wd-date-header .wd-chevron {
+        transition: transform .25s;
+        font-size: .9rem;
+        opacity: .8;
+    }
+
+    .wd-date-header.collapsed .wd-chevron { transform: rotate(-90deg); }
+
+    .wd-date-body {
+        background: var(--wd-bg);
+        padding: 1rem 1.2rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    /* ── Employee card ── */
+    .wd-emp-card {
+        background: var(--wd-card);
+        border: 1px solid var(--wd-border);
+        border-radius: 8px;
+        overflow: hidden;
+        min-width: 220px;
+        flex: 1 1 220px;
+        max-width: 320px;
+        box-shadow: 0 2px 8px rgba(20,43,74,.06);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .wd-emp-card-header {
+        background: var(--wd-accent-light);
+        padding: .55rem .9rem;
+        border-bottom: 1px solid var(--wd-border);
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+    }
+
+    .wd-emp-card-header i { color: var(--wd-accent); }
+
+    .wd-emp-card-header .wd-emp-name {
+        font-weight: 700;
+        font-size: .9rem;
+        color: var(--wd-text);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .wd-emp-card-header .wd-emp-id {
+        font-size: .72rem;
+        color: var(--wd-muted);
+    }
+
+    .wd-file-list { list-style: none; margin: 0; padding: .4rem .6rem; flex: 1; }
+
+    .wd-file-item {
+        padding: .35rem .4rem;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        font-size: .83rem;
+        color: var(--wd-text);
+        border-bottom: 1px solid #f0f3f8;
+        transition: background .15s;
+    }
+
+    .wd-file-item:last-child { border-bottom: none; }
+    .wd-file-item:hover { background: var(--wd-accent-light); }
+
+    .wd-file-icon { font-size: .95rem; flex-shrink: 0; }
+    .wd-file-icon.img-icon { color: #e05c2a; }
+    .wd-file-icon.file-icon { color: var(--wd-muted); }
+
+    .wd-file-item a {
+        flex: 1;
+        color: var(--wd-accent);
+        text-decoration: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+
+    .wd-file-item a:hover { text-decoration: underline; }
+
+    .wd-file-size {
+        font-size: .72rem;
+        color: var(--wd-muted);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .wd-thumb-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--wd-muted);
+        font-size: .85rem;
+        flex-shrink: 0;
+        transition: color .15s;
+    }
+    .wd-thumb-btn:hover { color: var(--wd-accent); }
+
+    /* ── Lightbox ── */
+    #wd-lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.82);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    #wd-lightbox.active { display: flex; }
+    #wd-lightbox img { max-width: 92vw; max-height: 85vh; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+    #wd-lb-caption { color: #fff; font-size: .9rem; opacity: .8; }
+    #wd-lb-close {
+        position: fixed;
+        top: 1.2rem; right: 1.5rem;
+        background: rgba(255,255,255,.15);
+        border: none;
+        color: #fff;
+        font-size: 1.6rem;
+        border-radius: 50%;
+        width: 2.4rem; height: 2.4rem;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .2s;
+    }
+    #wd-lb-close:hover { background: rgba(255,255,255,.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wd-root">
+    <h1><i class="fas fa-folder-open"></i> Worksheet Data</h1>
+
+    {% if not tree %}
+    <div class="wd-empty">
+        <i class="fas fa-folder" style="font-size:3rem; color:#d0d7e3; display:block; margin-bottom:1rem;"></i>
+        No worksheet images have been uploaded yet.
+    </div>
+    {% else %}
+
+    {% for day in tree %}
+    <div class="wd-date-block">
+        <div class="wd-date-header" onclick="wdToggle(this)">
+            <span class="wd-date-label">
+                <i class="fas fa-calendar-day"></i>
+                {{ day.date }}
+            </span>
+            <span style="display:flex; align-items:center; gap:.6rem;">
+                <span class="wd-badge">{{ day.emp_entries|length }} employee{{ day.emp_entries|length|pluralize }} · {{ day.total_files }} file{{ day.total_files|pluralize }}</span>
+                <i class="fas fa-chevron-down wd-chevron"></i>
+            </span>
+        </div>
+        <div class="wd-date-body">
+            {% for emp in day.emp_entries %}
+            <div class="wd-emp-card">
+                <div class="wd-emp-card-header">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="wd-emp-name" title="{{ emp.emp_name }}">{{ emp.emp_name }}</span>
+                    <span class="wd-emp-id">#{{ emp.emp_id }}</span>
+                </div>
+                <ul class="wd-file-list">
+                    {% for f in emp.files %}
+                    <li class="wd-file-item">
+                        {% if f.is_image %}
+                        <i class="fas fa-file-image wd-file-icon img-icon"></i>
+                        <a href="#" onclick="wdPreview('{{ f.url }}','{{ f.name }}'); return false;" title="Click to preview · {{ f.name }}">{{ f.name }}</a>
+                        {% else %}
+                        <i class="fas fa-file wd-file-icon file-icon"></i>
+                        <a href="{{ f.url }}" target="_blank" title="{{ f.name }}">{{ f.name }}</a>
+                        {% endif %}
+                        <span class="wd-file-size">{{ f.size_kb }} KB</span>
+                        {% if f.is_image %}
+                        <a href="{{ f.url }}" target="_blank" class="wd-thumb-btn" title="Open original in new tab">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                        {% endif %}
+                    </li>
+                    {% empty %}
+                    <li class="wd-file-item" style="color:#aaa; justify-content:center;">No files</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+</div>
+
+<!-- Lightbox -->
+<div id="wd-lightbox" onclick="wdCloseLb(event)">
+    <button id="wd-lb-close" onclick="wdCloseLb(null)"><i class="fas fa-times"></i></button>
+    <img id="wd-lb-img" src="" alt="">
+    <div id="wd-lb-caption"></div>
+</div>
+
+<script>
+function wdToggle(header) {
+    header.classList.toggle('collapsed');
+    var body = header.nextElementSibling;
+    body.style.display = header.classList.contains('collapsed') ? 'none' : '';
+}
+
+function wdPreview(url, name) {
+    document.getElementById('wd-lb-img').src = url;
+    document.getElementById('wd-lb-caption').textContent = name;
+    document.getElementById('wd-lightbox').classList.add('active');
+}
+
+function wdCloseLb(e) {
+    if (!e || e.target === document.getElementById('wd-lightbox') || e.currentTarget.id === 'wd-lb-close') {
+        document.getElementById('wd-lightbox').classList.remove('active');
+        document.getElementById('wd-lb-img').src = '';
+    }
+}
+
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') wdCloseLb(null); });
+</script>
+{% endblock %}

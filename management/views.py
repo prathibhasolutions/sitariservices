@@ -2018,3 +2018,55 @@ def assigned_tasks_view(request):
     if not request.session.get("employee_id"):
         return redirect('login')
     return render(request, 'assigned_tasks.html')
+
+
+@staff_member_required
+def admin_worksheet_data(request):
+    import os
+    from django.conf import settings as _settings
+
+    worksheet_data_root = os.path.join(_settings.MEDIA_ROOT, 'worksheet_data')
+    media_url_base = _settings.MEDIA_URL.rstrip('/')
+
+    # Build tree: list of (date_str, list of (emp_id, emp_name, list of (filename, file_url, size_kb)))
+    tree = []
+
+    if os.path.isdir(worksheet_data_root):
+        date_folders = sorted(
+            [d for d in os.listdir(worksheet_data_root)
+             if os.path.isdir(os.path.join(worksheet_data_root, d))],
+            reverse=True  # newest date first
+        )
+
+        # Prefetch employees for name lookup
+        emp_map = {str(e.employee_id): e.name for e in Employee.objects.all()}
+
+        for date_str in date_folders:
+            date_path = os.path.join(worksheet_data_root, date_str)
+            emp_entries = []
+            emp_folders = sorted(
+                [e for e in os.listdir(date_path)
+                 if os.path.isdir(os.path.join(date_path, e))]
+            )
+            for emp_id in emp_folders:
+                emp_path = os.path.join(date_path, emp_id)
+                files = []
+                for fname in sorted(os.listdir(emp_path)):
+                    fpath = os.path.join(emp_path, fname)
+                    if os.path.isfile(fpath):
+                        rel = f"worksheet_data/{date_str}/{emp_id}/{fname}"
+                        url = f"{media_url_base}/{rel}"
+                        size_kb = round(os.path.getsize(fpath) / 1024, 1)
+                        ext = os.path.splitext(fname)[1].lower()
+                        is_image = ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+                        files.append({'name': fname, 'url': url, 'size_kb': size_kb, 'is_image': is_image})
+                emp_entries.append({
+                    'emp_id': emp_id,
+                    'emp_name': emp_map.get(emp_id, emp_id),
+                    'files': files,
+                    'file_count': len(files),
+                })
+            total_files = sum(e['file_count'] for e in emp_entries)
+            tree.append({'date': date_str, 'emp_entries': emp_entries, 'total_files': total_files})
+
+    return render(request, 'admin/worksheet_data.html', {'tree': tree})
