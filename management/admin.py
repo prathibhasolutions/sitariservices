@@ -1233,15 +1233,27 @@ class DepartmentAdmin(admin.ModelAdmin):
                     used_count = day_qs.count()
                     total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
                     remaining = max(0, stock_obj.quantity - used_count)
+                    price = stock_obj.price
+                    total_cost = Decimal(str(stock_obj.quantity)) * price
                     stock_rows.append({
                         'id': stock_obj.pk,
                         'service_type_id': st.pk,
                         'name': st.name,
                         'quantity': stock_obj.quantity,
+                        'price': price,
+                        'total_cost': total_cost,
                         'used': used_count,
                         'total_amount': total_amount,
                         'remaining': remaining,
                     })
+
+            stock_totals = {
+                'quantity': sum(r['quantity'] for r in stock_rows),
+                'total_cost': sum(r['total_cost'] for r in stock_rows),
+                'total_amount': sum(r['total_amount'] for r in stock_rows),
+                'used': sum(r['used'] for r in stock_rows),
+                'remaining': sum(r['remaining'] for r in stock_rows),
+            } if stock_rows else None
 
             extra_context.update({
                 'department_employees': employees,
@@ -1252,6 +1264,7 @@ class DepartmentAdmin(admin.ModelAdmin):
                 'is_notary_bonds': is_notary_bonds,
                 'is_forms_dept': is_forms_dept,
                 'stock_rows': stock_rows,
+                'stock_totals': stock_totals,
                 'stock_date': stock_date.isoformat(),
             })
 
@@ -1264,6 +1277,7 @@ class DepartmentAdmin(admin.ModelAdmin):
             errors = []
             for st in dept_service_types:
                 raw_qty = (request.POST.get(f'stock_qty_{st.pk}') or '').strip()
+                raw_price = (request.POST.get(f'stock_price_{st.pk}') or '').strip()
                 try:
                     qty = int(raw_qty)
                     if qty < 0:
@@ -1271,10 +1285,17 @@ class DepartmentAdmin(admin.ModelAdmin):
                 except ValueError:
                     errors.append(f"Invalid quantity for '{st.name}'.")
                     continue
+                try:
+                    price = Decimal(raw_price) if raw_price else Decimal('0')
+                    if price < 0:
+                        raise ValueError
+                except Exception:
+                    errors.append(f"Invalid price for '{st.name}'.")
+                    continue
                 DepartmentStock.objects.update_or_create(
                     department=obj,
                     service_type=st,
-                    defaults={'quantity': qty},
+                    defaults={'quantity': qty, 'price': price},
                 )
             if errors:
                 for e in errors:

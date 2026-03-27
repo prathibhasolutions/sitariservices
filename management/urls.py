@@ -24,6 +24,7 @@ urlpatterns = [
     path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
     path('admin/worksheet-management/', views.admin_worksheet_management, name='admin_worksheet_management'),
     path('admin/worksheet-management/print/<int:employee_id>/<str:time_range>/', views.admin_employee_daily_worksheet_pdf, name='admin_employee_daily_worksheet_pdf'),
+    path('admin/worksheet-management/commission/<int:employee_id>/<str:period>/', views.admin_employee_commission_print, name='admin_employee_commission_print'),
     path('notifications/', views.notification_list_view, name='notification_list'),
     path('notifications/mark-as-read/<int:pk>/', views.mark_notification_as_read, name='mark_notification_as_read'),
     path('change-password/', views.change_password_request, name='change_password_request'),

@@ -67,13 +67,26 @@ def department_topup_view(request):
             used_count = day_qs.count()
             total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
             remaining = max(0, stock_obj.quantity - used_count)
+            price = stock_obj.price
+            from decimal import Decimal
+            total_cost = Decimal(str(stock_obj.quantity)) * price
             stock_rows.append({
                 'name': st.name,
                 'quantity': stock_obj.quantity,
+                'price': price,
+                'total_cost': total_cost,
                 'used': used_count,
                 'total_amount': total_amount,
                 'remaining': remaining,
             })
+
+    stock_totals = {
+        'quantity': sum(r['quantity'] for r in stock_rows),
+        'total_cost': sum(r['total_cost'] for r in stock_rows),
+        'total_amount': sum(r['total_amount'] for r in stock_rows),
+        'used': sum(r['used'] for r in stock_rows),
+        'remaining': sum(r['remaining'] for r in stock_rows),
+    } if stock_rows else None
 
     context = {
         'department': department,
@@ -83,6 +96,7 @@ def department_topup_view(request):
         'selected_date': selected_date,
         'is_forms_dept': is_forms_dept,
         'stock_rows': stock_rows,
+        'stock_totals': stock_totals,
         'stock_date': stock_date.isoformat(),
     }
     return render(request, 'management/department_topup.html', context)
@@ -133,7 +147,7 @@ def admin_leave_management(request):
     ctx = admin.site.each_context(request)
     ctx.update({'records': records, 'tomorrow': tomorrow})
     return render(request, 'admin_leave_management.html', ctx)
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from auditlog.models import LogEntry
@@ -1558,6 +1572,74 @@ def admin_employee_daily_worksheet_pdf(request, employee_id, time_range='full_da
     doc.build(elements)
     return response
 
+
+@staff_member_required
+def admin_employee_commission_print(request, employee_id, period):
+    from django.utils.timezone import localtime, now as tz_now
+    now_local = localtime(tz_now())
+    today = now_local.date()
+
+    employee = get_object_or_404(Employee, employee_id=employee_id)
+    department_name = employee.department.name if employee.department else '-'
+
+    if period == 'weekly':
+        # Monday of the current week up to today
+        start_date = today - timedelta(days=today.weekday())
+        end_date = today
+        period_label = f"Weekly ({start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')})"
+    elif period == 'monthly':
+        start_date = today.replace(day=1)
+        end_date = today
+        period_label = f"Monthly ({start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')})"
+    else:
+        return HttpResponseBadRequest("Invalid period. Use 'weekly' or 'monthly'.")
+
+    totals = Worksheet.objects.filter(
+        employee=employee,
+        date__gte=start_date,
+        date__lte=end_date,
+    ).aggregate(total_amount=models.Sum('amount'))
+    total_amount = totals.get('total_amount') or Decimal('0.00')
+    commission = (total_amount * Decimal('0.05')).quantize(Decimal('0.01'))
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Commission – {employee.name}</title>
+<style>
+  @page {{ margin: 20mm; }}
+  body {{ font-family: Arial, sans-serif; color: #1f2937; }}
+  h2 {{ text-align: center; margin-bottom: 4px; }}
+  .subtitle {{ text-align: center; color: #6b7280; margin-bottom: 24px; font-size: 14px; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+  th, td {{ border: 1px solid #d1d5db; padding: 10px 14px; text-align: left; }}
+  th {{ background: #1f2937; color: #fff; font-size: 13px; }}
+  td {{ font-size: 14px; }}
+  .commission-row td {{ background: #eef7ee; font-weight: bold; font-size: 16px; color: #166534; }}
+  @media print {{ .no-print {{ display: none; }} body {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}
+</style>
+</head>
+<body>
+<h2>Commission Statement</h2>
+<p class="subtitle">{period_label}</p>
+
+<table>
+  <tr><th>Employee</th><td>{employee.name} (ID: {employee.employee_id})</td></tr>
+  <tr><th>Department</th><td>{department_name}</td></tr>
+  <tr><th>Period</th><td>{period_label}</td></tr>
+  <tr><th>Total Amount (₹)</th><td>₹ {total_amount:.2f}</td></tr>
+  <tr class="commission-row"><th>Commission (5%) (₹)</th><td>₹ {commission:.2f}</td></tr>
+</table>
+
+<p class="no-print" style="margin-top:24px; text-align:center;">
+  <button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;">Print</button>
+</p>
+<script>window.onload = function() {{ window.print(); }};</script>
+</body>
+</html>"""
+
+    return HttpResponse(html)
 
 
 @require_employee

@@ -203,6 +203,7 @@
                     <th>Total Amount (Today)</th>
                     <th>Total Payment (Today)</th>
                     <th>Worksheet Entry Status</th>
+                    <th>Commission</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -224,6 +225,10 @@
                             {% endif %}
                         </td>
                         <td>
+                            <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'weekly' %}" target="_blank" rel="noopener">Weekly</a>
+                            <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'monthly' %}" target="_blank" rel="noopener">Monthly</a>
+                        </td>
+                        <td>
                             <div class="action-stack">
                                 <form method="post" class="action-form">
                                     {% csrf_token %}
@@ -243,7 +248,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="6">No employees found.</td>
+                        <td colspan="7">No employees found.</td>
                     </tr>
                 {% endfor %}
             </tbody>

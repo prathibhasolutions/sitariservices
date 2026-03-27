@@ -1,17 +1,21 @@
 from django.utils import timezone
 
-from .models import Employee, UserNotificationStatus
+from .models import Department, Employee, UserNotificationStatus
 from .utils import format_hour_label, get_employee_next_day_alert_state
 
 def notifications_context(request):
     """
-    Makes the unread notification count available to all templates.
+    Makes the unread notification count and department-head flag available to all templates.
     """
     if request.session.get('employee_id'):
         employee_id = request.session.get('employee_id')
         count = UserNotificationStatus.objects.filter(employee_id=employee_id, is_read=False).count()
-        return {'unread_notification_count': count}
-    return {'unread_notification_count': 0}
+        is_department_head = Department.objects.filter(department_head__employee_id=employee_id).exists()
+        return {
+            'unread_notification_count': count,
+            'is_department_head': is_department_head,
+        }
+    return {'unread_notification_count': 0, 'is_department_head': False}
 
 
 def employee_next_day_alert_context(request):
