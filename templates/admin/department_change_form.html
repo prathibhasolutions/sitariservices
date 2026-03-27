@@ -68,13 +68,27 @@
         min-width: 220px;
         padding: 6px 8px;
     }
+    /* stock table */
+    .stock-table { width:100%; border-collapse:separate; border-spacing:0; }
+    .stock-table th, .stock-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid #edf2f7;
+        vertical-align: middle;
+    }
+    .stock-table thead th {
+        background:#f8fafc; font-size:12px;
+        text-transform:uppercase; letter-spacing:.03em; color:#4b5563;
+    }
+    .stock-table tbody tr:nth-child(even) { background:#fcfdff; }
+    .stock-table input[type=number] { width:100px; padding:4px 6px; }
+    .stock-balance { font-weight:600; color:#16a34a; }
 </style>
 {% endblock %}
 
 {% block after_field_sets %}
 {{ block.super }}
 <div class="dept-panel">
-    <h2>{% if is_notary_bonds %}Inventory Balance{% else %}Department Top Up{% endif %}</h2>
+    <h2>{% if is_notary_bonds %}Inventory Balance{% elif is_forms_dept %}Stock{% else %}Department Top Up{% endif %}</h2>
     <div class="panel-body">
         {% if is_notary_bonds %}
             <div class="topup-row" style="margin-bottom:10px;">
@@ -103,6 +117,104 @@
                     <button type="submit" name="_add_inventory" value="1" class="button default">Add Inventory</button>
                 </div>
             </div>
+        {% elif is_forms_dept %}
+            {# ── Date filter (GET-based, outside the POST form) ── #}
+            <div style="margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <strong>Date:</strong>
+                <input type="date" id="stock-date-input" value="{{ stock_date }}"
+                       style="padding:4px 8px; border:1px solid #ccc; border-radius:4px;">
+                <button type="button" onclick="applyStockDate()" class="button default">Apply</button>
+                <button type="button" onclick="goToday()" class="button default" style="background:#6b7280;">Today</button>
+                <button type="button" onclick="printStockTable()" class="button default" style="background:#374151;">&#128438; Print</button>
+            </div>
+            <style>
+            @media print {
+                body * { visibility: hidden !important; }
+                #stock-print-area, #stock-print-area * { visibility: visible !important; }
+                #stock-print-area { position: fixed; top: 0; left: 0; width: 100%; }
+                #stock-print-header { display: block !important; }
+                input[type="number"] { border: none; }
+            }
+            </style>
+            <script>
+            function applyStockDate() {
+                var d = document.getElementById('stock-date-input').value;
+                if (!d) return;
+                var url = new URL(window.location.href);
+                url.searchParams.set('stock_date', d);
+                window.location.href = url.toString();
+            }
+            function goToday() {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('stock_date');
+                window.location.href = url.toString();
+            }
+            document.getElementById('stock-date-input').addEventListener('keydown', function(e){
+                if (e.key === 'Enter') applyStockDate();
+            });
+            function printStockTable() {
+                window.print();
+            }
+            </script>
+            <div id="stock-print-area">
+            <div style="display:none;" id="stock-print-header" class="stock-print-only">
+                <h2 style="margin:0 0 4px;">{{ original.name }} — Stock Report</h2>
+                <p style="margin:0 0 12px; color:#555;">Date: {{ stock_date }}</p>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Stocked</th>
+                            <th>Total Amount (₹)</th>
+                            <th>Used</th>
+                            <th>Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-tbody">
+                        {% for row in stock_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>
+                                <input type="number" name="stock_qty_{{ row.service_type_id }}"
+                                       value="{{ row.quantity }}" min="0" step="1"
+                                       class="stock-qty-input" data-row="{{ forloop.counter0 }}"
+                                       data-used="{{ row.used }}">
+                            </td>
+                            <td>{{ row.total_amount|floatformat:2 }}</td>
+                            <td>{{ row.used }}</td>
+                            <td class="stock-balance" id="stock-balance-{{ forloop.counter0 }}">
+                                {{ row.remaining }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" style="color:#6b7280;">No services assigned to this department yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>{# /stock-print-area #}
+            {% if stock_rows %}
+            <div style="margin-top:12px;">
+                <button type="submit" name="_update_stock" value="1" class="button default">Save Stock</button>
+            </div>
+            {% endif %}
+            <script>
+            (function(){
+                document.querySelectorAll('.stock-qty-input').forEach(function(el){
+                    el.addEventListener('input', function(){
+                        var row = this.dataset.row;
+                        var qty = parseInt(this.value) || 0;
+                        var used = parseInt(this.dataset.used) || 0;
+                        var rem = Math.max(0, qty - used);
+                        document.getElementById('stock-balance-' + row).textContent = rem;
+                    });
+                });
+            })();
+            </script>
         {% else %}
             <div class="topup-row">
                 <div class="topup-field">

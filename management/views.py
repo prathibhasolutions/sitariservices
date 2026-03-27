@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from .models import Department, DepartmentTopUp, Employee, Worksheet
+from django.db.models import Sum
+from .models import Department, DepartmentTopUp, DepartmentStock, Employee, ServiceType, Worksheet
 # --- Department Head: Top Up Page ---
 @login_required
 def department_topup_view(request):
@@ -41,12 +42,48 @@ def department_topup_view(request):
     # Employees in this department
     employees = Employee.objects.filter(department=department).order_by('name')
 
+    # Forms department stock
+    from datetime import date as date_cls
+    is_forms_dept = department.name == 'Forms'
+    stock_rows = []
+    stock_date_str = request.GET.get('stock_date', '')
+    try:
+        stock_date = date_cls.fromisoformat(stock_date_str) if stock_date_str else timezone.localdate()
+    except ValueError:
+        stock_date = timezone.localdate()
+    if is_forms_dept:
+        dept_service_types = ServiceType.objects.filter(departments=department).order_by('name')
+        for st in dept_service_types:
+            stock_obj, _ = DepartmentStock.objects.get_or_create(
+                department=department,
+                service_type=st,
+                defaults={'quantity': 0},
+            )
+            day_qs = Worksheet.objects.filter(
+                department_name='Forms',
+                service=st.name,
+                date=stock_date,
+            )
+            used_count = day_qs.count()
+            total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
+            remaining = max(0, stock_obj.quantity - used_count)
+            stock_rows.append({
+                'name': st.name,
+                'quantity': stock_obj.quantity,
+                'used': used_count,
+                'total_amount': total_amount,
+                'remaining': remaining,
+            })
+
     context = {
         'department': department,
         'topups': topups,
         'all_transactions': all_transactions,
         'employees': employees,
         'selected_date': selected_date,
+        'is_forms_dept': is_forms_dept,
+        'stock_rows': stock_rows,
+        'stock_date': stock_date.isoformat(),
     }
     return render(request, 'management/department_topup.html', context)
 from django.contrib.auth.decorators import user_passes_test

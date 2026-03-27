@@ -7,7 +7,6 @@
         margin-bottom: 16px;
         font-weight: 700;
     }
-
     .topup-card {
         background: #ffffff;
         border: 1px solid #dee2e6;
@@ -15,24 +14,20 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         margin-bottom: 18px;
     }
-
     .topup-card-header {
         padding: 12px 14px;
         border-bottom: 1px solid #e9ecef;
         background: #f8f9fa;
         border-radius: 8px 8px 0 0;
     }
-
     .topup-card-header h2 {
         margin: 0;
         font-size: 1.2rem;
         font-weight: 600;
     }
-
     .topup-card-body {
         padding: 14px;
     }
-
     .topup-filter-form {
         display: flex;
         align-items: center;
@@ -40,35 +35,125 @@
         flex-wrap: wrap;
         margin-bottom: 12px;
     }
-
     .topup-filter-form label {
         margin: 0;
         font-weight: 600;
     }
-
     .topup-filter-form input[type="date"] {
         min-width: 180px;
     }
-
     .topup-table {
         margin-bottom: 0;
     }
-
     .topup-table thead th {
         white-space: nowrap;
         background: #f8f9fa;
     }
-
+    /* stock table colour overrides (Bootstrap handles structure) */
+    .stock-thead th {
+        white-space: nowrap;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #4b5563 !important;
+        background-color: #f8fafc !important;
+        border-bottom: 2px solid #dee2e6 !important;
+        font-weight: 600;
+    }
+    .stock-cell-name { font-weight: 500; }
+    .stock-cell-amount { color: #6b7280; }
+    .stock-cell-remaining { font-weight: 700; color: #16a34a; }
+    .stock-cell-remaining.low { color: #dc2626; }
     .muted-empty {
         color: #6c757d;
         font-style: italic;
     }
+    @media print {
+        body * { visibility: hidden !important; }
+        #stock-print-area, #stock-print-area * { visibility: visible !important; }
+        #stock-print-area { position: fixed; top: 0; left: 0; width: 100%; }
+        .stock-print-only { display: block !important; }
+    }
 </style>
+<script>
+function applyStockDate() {
+    var d = document.getElementById('stock-date-input');
+    if (!d || !d.value) return;
+    var url = new URL(window.location.href);
+    url.searchParams.set('stock_date', d.value);
+    window.location.href = url.toString();
+}
+function goStockToday() {
+    var url = new URL(window.location.href);
+    url.searchParams.delete('stock_date');
+    window.location.href = url.toString();
+}
+</script>
 {% endblock %}
 
 {% block content %}
-<h1 class="topup-page-title">Top Up & Transactions - {{ department.name }}</h1>
+<h1 class="topup-page-title">
+    {% if is_forms_dept %}Stock & Transactions{% else %}Top Up & Transactions{% endif %}
+    — {{ department.name }}
+</h1>
 
+{% if is_forms_dept %}
+{# ── Forms: stock table (read-only) ── #}
+<div class="topup-card">
+    <div class="topup-card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:10px;">
+        <h2 class="mb-0">Stock — {{ stock_date }}</h2>
+        <form class="form-inline" style="gap:6px; display:flex; flex-wrap:wrap; align-items:center;">
+            <label for="stock-date-input" class="mr-1 mb-0 font-weight-bold">Date:</label>
+            <input type="date" id="stock-date-input" class="form-control form-control-sm mr-1"
+                   value="{{ stock_date }}" onkeydown="if(event.key==='Enter') applyStockDate()">
+            <button type="button" class="btn btn-sm btn-primary mr-1" onclick="applyStockDate()">Apply</button>
+            <button type="button" class="btn btn-sm btn-secondary mr-1" onclick="goStockToday()">Today</button>
+            <button type="button" class="btn btn-sm btn-dark" onclick="window.print()">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </form>
+    </div>
+    <div class="topup-card-body p-0">
+        <div id="stock-print-area">
+            <div style="display:none;" class="stock-print-only px-3 pt-3">
+                <h2 class="mb-1">{{ department.name }} — Stock Report</h2>
+                <p class="text-muted mb-3">Date: {{ stock_date }}</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="stock-thead">
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Name</th>
+                            <th>Stocked</th>
+                            <th>Total Amount (₹)</th>
+                            <th>Used</th>
+                            <th>Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in stock_rows %}
+                        <tr>
+                            <td class="text-muted" style="font-size:0.82rem;">{{ forloop.counter }}</td>
+                            <td class="stock-cell-name">{{ row.name }}</td>
+                            <td>{{ row.quantity }}</td>
+                            <td class="stock-cell-amount">{{ row.total_amount|floatformat:2 }}</td>
+                            <td>{{ row.used }}</td>
+                            <td class="stock-cell-remaining {% if row.remaining == 0 %}low{% endif %}">{{ row.remaining }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="muted-empty text-center py-4">No services assigned to this department yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+{# ── Other departments: top-up history ── #}
 <div class="topup-card">
     <div class="topup-card-header">
         <h2>Department Top-Up History</h2>
@@ -98,6 +183,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <div class="topup-card">
     <div class="topup-card-header">

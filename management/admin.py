@@ -106,6 +106,7 @@ from .models import (
     Department,
     DepartmentInventoryEntry,
     DepartmentTopUp,
+    DepartmentStock,
     BreakSession,
     Application,
     ApplicationAssignment,
@@ -134,7 +135,7 @@ class ManagedLinkAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
 
 
-from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction
+from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction, SalaryPayment
 
 
 class TrainingBonusInline(admin.TabularInline):
@@ -156,7 +157,16 @@ class ExtraDaysBonusInline(admin.TabularInline):
 class MonthlyDeductionInline(admin.TabularInline):
     model = MonthlyDeduction
     extra = 0  # Show one empty row for adding a new deduction
-    fields = ('month', 'year', 'amount', 'notes')   
+    fields = ('month', 'year', 'amount', 'notes')
+
+
+class SalaryPaymentInline(admin.TabularInline):
+    model = SalaryPayment
+    extra = 0
+    fields = ('date', 'amount')
+    verbose_name = 'Salary Payment'
+    verbose_name_plural = 'Paid'
+
 # In your management/admin.py file
 
 from django.templatetags.static import static # Import the static tag function
@@ -168,7 +178,7 @@ from django.urls import reverse
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
     # --- 1. Display and Search Settings ---
-    inlines = [MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
+    inlines = [SalaryPaymentInline, MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
     list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
     list_filter = ['department']
@@ -177,7 +187,7 @@ class EmployeeAdmin(admin.ModelAdmin):
     
     # --- 2. THIS IS THE FIX: Fieldset and Readonly Field Configuration ---
     # We define a readonly field to show the image preview.
-    readonly_fields = ('profile_pic_preview',)
+    readonly_fields = ('profile_pic_preview', 'total_paid_month', 'salary_balance')
 
     fieldsets = (
         ('Personal Information', {
@@ -192,7 +202,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             )
         }),
         ('Salary & Compensation', {
-            'fields': ('salary', 'pf', 'esi')
+            'fields': ('salary', 'pf', 'esi', 'total_paid_month', 'salary_balance')
         }),
         ('Working Hours', {
             'fields': ('working_start_time', 'working_end_time')
@@ -238,6 +248,40 @@ class EmployeeAdmin(admin.ModelAdmin):
                 obj.profile_picture.url
             )
         return "(No Image)"
+
+    @admin.display(description='Total Paid (This Month)')
+    def total_paid_month(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        return format_html(
+            '<strong style="font-size:1.1em;">₹{}</strong>',
+            f'{total:,.2f}'
+        )
+
+    @admin.display(description='Balance Amount (This Month)')
+    def salary_balance(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total_paid = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        balance = (obj.salary or 0) - total_paid
+        color = 'green' if balance >= 0 else 'red'
+        return format_html(
+            '<strong style="font-size:1.1em; color:{};">₹{}</strong>',
+            color, f'{balance:,.2f}'
+        )
 
     @admin.display(description='Picture')
     def profile_pic_thumbnail(self, obj):
@@ -1146,10 +1190,13 @@ class DepartmentAdmin(admin.ModelAdmin):
             transactions=transactions,
         )
         return render(request, 'admin/department_print_transactions.html', context)
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         department = self.get_object(request, object_id)
 
         if department:
+            from .models import ServiceType
             employees = Employee.objects.filter(department=department).order_by('name')
             topup_history = DepartmentTopUp.objects.filter(department=department).order_by('-created_at')
             inventory_history = DepartmentInventoryEntry.objects.filter(department=department).order_by('-created_at')
@@ -1161,6 +1208,41 @@ class DepartmentAdmin(admin.ModelAdmin):
             }
             is_notary_bonds = department.name == 'Notary and Bonds'
 
+            # Build stock rows for departments that have service types
+            dept_service_types = ServiceType.objects.filter(departments=department).order_by('name')
+            is_forms_dept = department.name == 'Forms'
+            stock_rows = []
+            stock_date_str = request.GET.get('stock_date', '')
+            from datetime import date as date_cls
+            try:
+                stock_date = date_cls.fromisoformat(stock_date_str) if stock_date_str else timezone.localtime(timezone.now()).date()
+            except ValueError:
+                stock_date = timezone.localtime(timezone.now()).date()
+            if is_forms_dept:
+                for st in dept_service_types:
+                    stock_obj, _ = DepartmentStock.objects.get_or_create(
+                        department=department,
+                        service_type=st,
+                        defaults={'quantity': 0, 'price': st.amount},
+                    )
+                    day_qs = Worksheet.objects.filter(
+                        department_name='Forms',
+                        service=st.name,
+                        date=stock_date,
+                    )
+                    used_count = day_qs.count()
+                    total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
+                    remaining = max(0, stock_obj.quantity - used_count)
+                    stock_rows.append({
+                        'id': stock_obj.pk,
+                        'service_type_id': st.pk,
+                        'name': st.name,
+                        'quantity': stock_obj.quantity,
+                        'used': used_count,
+                        'total_amount': total_amount,
+                        'remaining': remaining,
+                    })
+
             extra_context.update({
                 'department_employees': employees,
                 'department_head': department.department_head,
@@ -1168,11 +1250,39 @@ class DepartmentAdmin(admin.ModelAdmin):
                 'inventory_history': inventory_history,
                 'inventory_balance': inventory_balance,
                 'is_notary_bonds': is_notary_bonds,
+                'is_forms_dept': is_forms_dept,
+                'stock_rows': stock_rows,
+                'stock_date': stock_date.isoformat(),
             })
 
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def response_change(self, request, obj):
+        if '_update_stock' in request.POST:
+            from .models import ServiceType
+            dept_service_types = ServiceType.objects.filter(departments=obj)
+            errors = []
+            for st in dept_service_types:
+                raw_qty = (request.POST.get(f'stock_qty_{st.pk}') or '').strip()
+                try:
+                    qty = int(raw_qty)
+                    if qty < 0:
+                        raise ValueError
+                except ValueError:
+                    errors.append(f"Invalid quantity for '{st.name}'.")
+                    continue
+                DepartmentStock.objects.update_or_create(
+                    department=obj,
+                    service_type=st,
+                    defaults={'quantity': qty},
+                )
+            if errors:
+                for e in errors:
+                    self.message_user(request, e, messages.ERROR)
+            else:
+                self.message_user(request, 'Stock updated successfully.', messages.SUCCESS)
+            return HttpResponseRedirect(request.get_full_path())
+
         if '_add_inventory' in request.POST:
             if obj.name != 'Notary and Bonds':
                 self.message_user(request, 'Inventory is available only for Notary and Bonds department.', messages.ERROR)

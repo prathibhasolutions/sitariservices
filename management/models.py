@@ -141,6 +141,30 @@ class DepartmentInventoryEntry(models.Model):
         return f"{self.get_bond_type_display()} x {self.quantity} for {self.department.name}"
 
 
+class DepartmentStock(models.Model):
+    """
+    Tracks the stock of each service (form) for a department.
+    One row per service per department. Updated in-place by the admin.
+    """
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='stocks')
+    service_type = models.ForeignKey('ServiceType', on_delete=models.CASCADE, related_name='stocks')
+    quantity = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('department', 'service_type')
+        ordering = ['service_type__name']
+
+    @property
+    def balance(self):
+        from decimal import Decimal
+        return Decimal(self.quantity) * self.price
+
+    def __str__(self):
+        return f"{self.service_type.name} stock for {self.department.name}"
+
+
 class EmployeeNextDayAvailability(models.Model):
     RESPONSE_SOURCE_MANUAL = 'manual'
     RESPONSE_SOURCE_AUTO = 'auto'
@@ -1009,6 +1033,18 @@ class TrainingBonus(models.Model):
 
     def __str__(self):
         return f"Training Bonus for {self.employee.name} on {self.date} - {self.reason}"
+
+
+class SalaryPayment(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='salary_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"Payment of \u20b9{self.amount} to {self.employee.name} on {self.date}"
 
 
 # --- NEW MODEL FOR RESOURCE REPAIR CHECKLIST ---

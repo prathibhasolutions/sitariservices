@@ -1,5 +1,48 @@
 {% extends "admin/change_form.html" %}
-{% load i18n admin_urls %}
+{% load i18n admin_urls jazzmin admin_modify %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        /* Horizontal sticky action bar */
+        .emp-action-bar {
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            background: #fff;
+            border-bottom: 1px solid #dee2e6;
+            padding: 0.6rem 1rem;
+            margin: -1.25rem -1.25rem 1.25rem -1.25rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        /* Make each button shrink-wrap instead of full-width */
+        .emp-action-bar .form-group { margin-bottom: 0; }
+        .emp-action-bar > div { display: contents; } /* submit_row wrapper transparent */
+        .emp-action-bar .btn.form-control {
+            width: auto !important;
+            min-width: 130px;
+            padding: 0.4rem 1rem;
+        }
+        .emp-action-bar .object-tools { margin: 0; }
+        .emp-action-bar .object-tools li {
+            float: none;
+            display: inline-block;
+        }
+    </style>
+    <script>
+        /* Hide the now-empty right sidebar column */
+        document.addEventListener('DOMContentLoaded', function () {
+            var el = document.getElementById('jazzy-actions');
+            if (el) {
+                var col = el.closest('.col-12.col-lg-3') || el.closest('[class*="col-lg-3"]');
+                if (col) col.style.display = 'none';
+            }
+        });
+    </script>
+{% endblock %}
 
 {% block breadcrumbs %}
     <div class="d-flex justify-content-between align-items-center">
@@ -22,3 +65,70 @@
         </div>
     </div>
 {% endblock %}
+
+{% block field_sets %}
+    {% trans "General" as general_tab %}
+    {% get_sections adminform inline_admin_formsets as all_forms %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+
+                {# ── Sticky horizontal action bar ── #}
+                <div class="emp-action-bar">
+                    {% submit_row %}
+                    {% if change and not is_popup %}
+                        <div class="object-tools ml-auto">
+                            <ul>{% change_form_object_tools %}</ul>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {# Tab navigation — "Paid" inline is merged into Salary & Compensation, so hide its own tab #}
+                <ul class="nav nav-tabs mb-3" role="tablist" id="jazzy-tabs">
+                    {% for fieldset in all_forms %}
+                        {% if not fieldset.is_inline or fieldset.name != "Paid" %}
+                            <li class="nav-item">
+                                <a class="nav-link{% if forloop.first %} active{% endif %}"
+                                   data-toggle="pill" role="tab"
+                                   aria-controls="{{ fieldset.name|default:general_tab|unicode_slugify }}-tab"
+                                   aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+                                   href="#{{ fieldset.name|default:general_tab|unicode_slugify }}-tab">
+                                    {{ fieldset.name|default:general_tab }}
+                                </a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+
+                {# Tab panes #}
+                <div class="tab-content">
+                    {% for fieldset in all_forms %}
+                        {% if not fieldset.is_inline or fieldset.name != "Paid" %}
+                            <div id="{{ fieldset.name|default:general_tab|unicode_slugify }}-tab"
+                                 class="tab-pane fade{% if forloop.first %} active show{% endif %} {{ fieldset.classes|default:'' }}"
+                                 role="tabpanel"
+                                 aria-labelledby="{{ fieldset.name|default:general_tab|unicode_slugify }}-tab">
+                                {% if fieldset.is_inline %}
+                                    {% include fieldset.opts.template with inline_admin_formset=fieldset %}
+                                {% else %}
+                                    {% include "admin/includes/fieldset.html" with card=True %}
+                                    {% if fieldset.name == "Salary & Compensation" %}
+                                        {# Render the Paid inline (payments table) inline here #}
+                                        {% for paid_section in all_forms %}
+                                            {% if paid_section.is_inline and paid_section.name == "Paid" %}
+                                                {% include paid_section.opts.template with inline_admin_formset=paid_section %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}{% endblock %}
