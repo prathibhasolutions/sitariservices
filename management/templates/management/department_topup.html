@@ -1,0 +1,143 @@
+{% extends 'masteremployee.html' %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .topup-page-title {
+        margin-bottom: 16px;
+        font-weight: 700;
+    }
+
+    .topup-card {
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 18px;
+    }
+
+    .topup-card-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid #e9ecef;
+        background: #f8f9fa;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .topup-card-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .topup-card-body {
+        padding: 14px;
+    }
+
+    .topup-filter-form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .topup-filter-form label {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .topup-filter-form input[type="date"] {
+        min-width: 180px;
+    }
+
+    .topup-table {
+        margin-bottom: 0;
+    }
+
+    .topup-table thead th {
+        white-space: nowrap;
+        background: #f8f9fa;
+    }
+
+    .muted-empty {
+        color: #6c757d;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="topup-page-title">Top Up & Transactions - {{ department.name }}</h1>
+
+<div class="topup-card">
+    <div class="topup-card-header">
+        <h2>Department Top-Up History</h2>
+    </div>
+    <div class="topup-card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover topup-table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Amount</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in topups %}
+                    <tr>
+                        <td>{{ t.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>{{ t.amount }}</td>
+                        <td>{{ t.note|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="muted-empty">No top-up history.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="topup-card">
+    <div class="topup-card-header">
+        <h2>Department Transactions for {{ selected_date }}</h2>
+    </div>
+    <div class="topup-card-body">
+        <form method="get" class="topup-filter-form">
+            <label for="date">Select date:</label>
+            <input type="date" id="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}">
+            <button type="submit" class="btn btn-primary">Go</button>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover topup-table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Employee</th>
+                        <th>Amount</th>
+                        <th>Payment</th>
+                        <th>Service</th>
+                        <th>Customer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in all_transactions %}
+                    <tr>
+                        <td>{{ tx.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>{{ tx.employee.name }}</td>
+                        <td>{{ tx.amount }}</td>
+                        <td>{{ tx.payment }}</td>
+                        <td>{{ tx.service|default:'-' }}</td>
+                        <td>{{ tx.customer_name|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="muted-empty">No transactions for {{ selected_date }}.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

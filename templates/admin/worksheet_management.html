@@ -219,8 +219,8 @@
                             {% else %}
                                 <span class="status-pill is-open">Open</span>
                             {% endif %}
-                            {% if row.employee.worksheet_entry_force_unlock %}
-                                <span class="status-note">(Admin Override)</span>
+                            {% if row.has_active_override %}
+                                <span class="status-note">(Admin Override until {{ row.override_until|date:"H:i" }})</span>
                             {% endif %}
                         </td>
                         <td>
@@ -235,7 +235,9 @@
                                         <button type="submit" class="worksheet-btn revoke">Revoke Access</button>
                                     {% endif %}
                                 </form>
-                                <a class="worksheet-btn print" href="{% url 'admin_employee_daily_worksheet_pdf' row.employee.employee_id %}" target="_blank" rel="noopener">Print Worksheet</a>
+                                <a class="worksheet-btn print" href="{% url 'admin_employee_daily_worksheet_pdf' row.employee.employee_id '5pm' %}" target="_blank" rel="noopener">Print 5PM</a>
+                                <a class="worksheet-btn print" href="{% url 'admin_employee_daily_worksheet_pdf' row.employee.employee_id '9pm' %}" target="_blank" rel="noopener">Print 9PM</a>
+                                <a class="worksheet-btn print" href="{% url 'admin_employee_daily_worksheet_pdf' row.employee.employee_id 'full_day' %}" target="_blank" rel="noopener">Full Day</a>
                             </div>
                         </td>
                     </tr>

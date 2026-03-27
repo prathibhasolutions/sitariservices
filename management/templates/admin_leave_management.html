@@ -1,0 +1,139 @@
+{% extends 'admin/base_site.html' %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .leave-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .leave-title {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+
+    .leave-wrap {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 12px;
+    }
+
+    .leave-table {
+        margin-bottom: 0;
+    }
+
+    .leave-table thead th {
+        white-space: nowrap;
+        background: #f8f9fa;
+    }
+
+    .response-edit-form {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+    }
+
+    .response-select {
+        min-width: 96px;
+        height: 32px;
+        padding: 2px 8px;
+    }
+
+    .response-save-btn {
+        height: 32px;
+        padding: 4px 10px;
+        line-height: 1;
+    }
+
+    @media print {
+        .leave-print-btn,
+        .breadcrumbs,
+        .messagelist,
+        #header,
+        #nav-sidebar,
+        footer {
+            display: none !important;
+        }
+
+        #content {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .leave-wrap {
+            border: 0;
+            padding: 0;
+        }
+
+        .leave-table {
+            font-size: 12pt;
+        }
+
+        .leave-title {
+            margin-top: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="leave-toolbar">
+    <h1 class="leave-title">Leave Management (Tomorrow: {{ tomorrow }})</h1>
+    <button type="button" class="btn btn-primary leave-print-btn" onclick="window.print()">
+        <i class="fas fa-print"></i> Print
+    </button>
+</div>
+
+<div class="leave-wrap">
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped table-hover leave-table">
+            <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Mobile</th>
+                    <th>Will Come?</th>
+                    <th>Response Source</th>
+                    <th>Responded At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in records %}
+                <tr>
+                    <td>{{ rec.employee.employee_id }}</td>
+                    <td>{{ rec.employee.name }}</td>
+                    <td>{{ rec.employee.mobile_number }}</td>
+                    <td>
+                        {% if rec.availability %}
+                            {% if rec.availability.will_come %}<span style="color:green;">Yes</span>{% else %}<span style="color:red;">No</span>{% endif %}
+                        {% else %}
+                            <span style="color:gray;">No response</span>
+                        {% endif %}
+
+                        <form method="post" class="response-edit-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="employee_id" value="{{ rec.employee.employee_id }}">
+                            <select name="will_come" class="form-control response-select">
+                                <option value="yes" {% if rec.availability and rec.availability.will_come %}selected{% endif %}>Yes</option>
+                                <option value="no" {% if rec.availability and not rec.availability.will_come %}selected{% endif %}>No</option>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-success response-save-btn">Save</button>
+                        </form>
+                    </td>
+                    <td>{% if rec.availability %}{{ rec.availability.get_response_source_display }}{% else %}-{% endif %}</td>
+                    <td>{% if rec.availability %}{{ rec.availability.responded_at|date:'Y-m-d H:i' }}{% else %}-{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

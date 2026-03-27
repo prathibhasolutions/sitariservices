@@ -195,9 +195,10 @@ from calendar import monthrange
 
 class Employee(models.Model):
     locked = models.BooleanField(default=False, help_text="If checked, this employee is locked and cannot access the system.")
-    worksheet_entry_force_unlock = models.BooleanField(
-        default=False,
-        help_text="If enabled, this employee can add worksheet entries even after the daily 4:00 PM lock.",
+    worksheet_entry_force_unlock_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="If set, this employee can add worksheet entries until this datetime. Null means no override active.",
     )
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)

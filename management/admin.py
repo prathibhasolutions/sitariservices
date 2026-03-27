@@ -1,3 +1,5 @@
+# Add this import for models.Sum usage
+from django.db import models
 # Monkey-patch admin login view to use custom OTP login
 from django.urls import reverse
 from django.http import HttpResponseRedirect
@@ -1051,7 +1053,32 @@ class BreakSessionAdmin(admin.ModelAdmin):
 # --- Register All Other Models with Default Admin ---
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'department_head_name', 'employee_count')
+    list_display = ('name', 'department_head_name', 'employee_count', 'current_topup_amount', 'department_balance', 'print_topup_history', 'print_employee_transactions')
+    @admin.display(description='Current Top Up')
+    def current_topup_amount(self, obj):
+        latest_topup = obj.topups.order_by('-created_at').first()
+        if latest_topup:
+            return f"₹ {latest_topup.amount}"
+        return '-'
+
+    @admin.display(description='Balance')
+    def department_balance(self, obj):
+        total_topup = obj.topups.aggregate(total=models.Sum('amount'))['total'] or 0
+        # Optionally, subtract total spent if you have a Worksheet or transaction model
+        # total_spent = Worksheet.objects.filter(department_name=obj.name).aggregate(total=models.Sum('amount'))['total'] or 0
+        # balance = total_topup - total_spent
+        balance = total_topup
+        return f"₹ {balance}"
+
+    @admin.display(description='Print Top Up History')
+    def print_topup_history(self, obj):
+        url = reverse('admin:department-print-topup', args=[obj.pk])
+        return format_html('<a class="button" href="{}" target="_blank">Print Top Up</a>', url)
+
+    @admin.display(description='Print Employee Transactions')
+    def print_employee_transactions(self, obj):
+        url = reverse('admin:department-print-transactions', args=[obj.pk])
+        return format_html('<a class="button" href="{}" target="_blank">Print Transactions</a>', url)
     search_fields = ('name', 'department_head__name')
     change_form_template = 'admin/department_change_form.html'
     save_on_top = True
@@ -1090,7 +1117,35 @@ class DepartmentAdmin(admin.ModelAdmin):
         total = obj.topups.aggregate(total=Sum('amount'))['total'] or 0
         return f"Balance: ₹ {total}"
 
-    def change_view(self, request, object_id, form_url='', extra_context=None):
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('<int:department_id>/print-topup/', self.admin_site.admin_view(self.print_topup_history_view), name='department-print-topup'),
+            path('<int:department_id>/print-transactions/', self.admin_site.admin_view(self.print_employee_transactions_view), name='department-print-transactions'),
+        ]
+        return custom_urls + urls
+
+    def print_topup_history_view(self, request, department_id):
+        department = Department.objects.get(pk=department_id)
+        topup_history = department.topups.order_by('-created_at')
+        context = dict(
+            self.admin_site.each_context(request),
+            department=department,
+            topup_history=topup_history,
+        )
+        return render(request, 'admin/department_print_topup.html', context)
+
+    def print_employee_transactions_view(self, request, department_id):
+        department = Department.objects.get(pk=department_id)
+        from .models import Worksheet
+        transactions = Worksheet.objects.filter(department_name=department.name).order_by('-created_at')
+        context = dict(
+            self.admin_site.each_context(request),
+            department=department,
+            transactions=transactions,
+        )
+        return render(request, 'admin/department_print_transactions.html', context)
         extra_context = extra_context or {}
         department = self.get_object(request, object_id)
 

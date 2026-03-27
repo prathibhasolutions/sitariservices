@@ -1,11 +1,11 @@
-
-
 from django.urls import path
 
 from . import views
 
 urlpatterns = [
     path('assigned-tasks/', views.assigned_tasks_view, name='assigned_tasks'),
+        # Admin: Leave Management Report
+        path('admin/leave-management/', views.admin_leave_management, name='admin_leave_management'),
     path('assigned-tasks/self/', views.assign_task_to_self, name='assign_task_to_self'),
     path('', views.employee_login, name='login'),
     path('employee/dashboard/', views.employee_dashboard, name='employee_dashboard'),
@@ -19,10 +19,11 @@ urlpatterns = [
     path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
     path('employee/refresh_session/', views.refresh_session, name='refresh_session'),
     path('employee/next-day-availability/', views.submit_next_day_availability, name='submit_next_day_availability'),
+    path('employee/todays-absentees/', views.todays_absentees_view, name='todays_absentees'),
     path('worksheet/', views.worksheet_view, name='worksheet'),
     path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
     path('admin/worksheet-management/', views.admin_worksheet_management, name='admin_worksheet_management'),
-    path('admin/worksheet-management/print/<int:employee_id>/', views.admin_employee_daily_worksheet_pdf, name='admin_employee_daily_worksheet_pdf'),
+    path('admin/worksheet-management/print/<int:employee_id>/<str:time_range>/', views.admin_employee_daily_worksheet_pdf, name='admin_employee_daily_worksheet_pdf'),
     path('notifications/', views.notification_list_view, name='notification_list'),
     path('notifications/mark-as-read/<int:pk>/', views.mark_notification_as_read, name='mark_notification_as_read'),
     path('change-password/', views.change_password_request, name='change_password_request'),
@@ -33,6 +34,10 @@ urlpatterns = [
     path('api/todos/add/', views.add_employee_todo, name='todos_add'),
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
     path('api/geofence_check/', views.geofence_check, name='geofence_check'),
+
+
+    # Department Head: Top Up Page (renamed)
+    path('employee/topup/', views.department_topup_view, name='department_topup'),
 
     # Admin print event logging endpoint
     path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),

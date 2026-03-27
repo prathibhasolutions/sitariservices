@@ -156,6 +156,12 @@ JAZZMIN_SETTINGS = {
                 "url": "admin_worksheet_management",
                 "icon": "fas fa-table",
                 "permissions": ["auth.view_user"],
+            },
+            {
+                "name": "Leave Management",
+                "url": "admin_leave_management",
+                "icon": "fas fa-calendar-check",
+                "permissions": ["auth.view_user"],
             }
         ]
     },

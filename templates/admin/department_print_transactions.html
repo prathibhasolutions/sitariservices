@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<button onclick="window.print()" class="button default mt-3" style="margin-bottom: 1em;">Print</button>
+<h1>Employee Transactions for {{ department.name }}</h1>
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; margin-bottom: 2em;">
+    <thead>
+        <tr>
+            <th>Date/Time</th>
+            <th>Token Number</th>
+            <th>Employee</th>
+            <th>Amount</th>
+            <th>Payment</th>
+            <th>Service</th>
+            <th>Customer</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tx in transactions %}
+        <tr>
+            <td>{{ tx.created_at|date:'Y-m-d H:i' }}</td>
+            <td>{{ tx.token_no|default:'-' }}</td>
+            <td>{{ tx.employee.name }}</td>
+            <td>{{ tx.amount }}</td>
+            <td>{{ tx.payment }}</td>
+            <td>{{ tx.service|default:'-' }}</td>
+            <td>{{ tx.customer_name|default:'-' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">No transactions.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+<button onclick="window.print()" class="button default mt-3">Print</button>
+{% endblock %}

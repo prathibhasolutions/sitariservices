@@ -22,13 +22,3 @@ window.onafterprint = function() {
 };
 </script>
 {% endblock %}
-
-{% block nav-sidebar %}
-{{ block.super }}
-<div class="module" style="margin: 12px;">
-    <h2>Management</h2>
-    <ul style="margin:0; padding-left: 18px;">
-        <li><a href="{% url 'admin_worksheet_management' %}">Worksheet Management</a></li>
-    </ul>
-</div>
-{% endblock %}

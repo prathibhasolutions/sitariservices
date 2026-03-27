@@ -1,3 +1,101 @@
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from .models import Department, DepartmentTopUp, Employee, Worksheet
+# --- Department Head: Top Up Page ---
+@login_required
+def department_topup_view(request):
+    # Get logged-in employee
+    try:
+        employee = Employee.objects.get(pk=request.session.get('employee_id'))
+    except Employee.DoesNotExist:
+        from django.contrib import messages
+        messages.error(request, "You are not recognized as an employee.")
+        return redirect('employee_dashboard')
+
+    # Get department where this employee is the current head
+    department = Department.objects.filter(department_head=employee).first()
+    if not department:
+        from django.contrib import messages
+        messages.error(request, "You are not the current head of any department.")
+        return redirect('employee_dashboard')
+
+    # Top-up history (all time)
+    topups = DepartmentTopUp.objects.filter(department=department).order_by('-created_at')
+
+    # Date filter for per-employee table
+    date_str = request.GET.get('date')
+    if date_str:
+        try:
+            selected_date = timezone.datetime.strptime(date_str, '%Y-%m-%d').date()
+        except Exception:
+            selected_date = timezone.localdate()
+    else:
+        selected_date = timezone.localdate()
+
+    # Main table: selected-date transactions for this department
+    all_transactions = Worksheet.objects.filter(
+        department_name=department.name,
+        date=selected_date,
+    ).order_by('-created_at')
+
+    # Employees in this department
+    employees = Employee.objects.filter(department=department).order_by('name')
+
+    context = {
+        'department': department,
+        'topups': topups,
+        'all_transactions': all_transactions,
+        'employees': employees,
+        'selected_date': selected_date,
+    }
+    return render(request, 'management/department_topup.html', context)
+from django.contrib.auth.decorators import user_passes_test
+from .models import Employee, EmployeeNextDayAvailability
+def admin_only(user):
+    return user.is_active and user.is_superuser
+
+# --- Admin: Leave Management Report ---
+@user_passes_test(admin_only)
+def admin_leave_management(request):
+    tomorrow = timezone.localdate() + timezone.timedelta(days=1)
+
+    if request.method == 'POST':
+        from django.contrib import messages
+
+        employee_id = request.POST.get('employee_id')
+        will_come_value = request.POST.get('will_come')
+
+        if employee_id and will_come_value in ('yes', 'no'):
+            try:
+                employee = Employee.objects.get(pk=employee_id)
+                EmployeeNextDayAvailability.objects.update_or_create(
+                    employee=employee,
+                    target_date=tomorrow,
+                    defaults={
+                        'will_come': (will_come_value == 'yes'),
+                        'response_source': EmployeeNextDayAvailability.RESPONSE_SOURCE_MANUAL,
+                        'responded_at': timezone.now(),
+                    }
+                )
+                messages.success(request, f"Updated response for {employee.name}.")
+            except Employee.DoesNotExist:
+                messages.error(request, "Employee not found.")
+        else:
+            messages.error(request, "Please choose Yes or No.")
+
+        return redirect('admin_leave_management')
+
+    employees = Employee.objects.all().order_by('name')
+    records = []
+    for emp in employees:
+        record = EmployeeNextDayAvailability.objects.filter(employee=emp, target_date=tomorrow).order_by('-responded_at').first()
+        records.append({
+            'employee': emp,
+            'availability': record,
+        })
+    ctx = admin.site.each_context(request)
+    ctx.update({'records': records, 'tomorrow': tomorrow})
+    return render(request, 'admin_leave_management.html', ctx)
 from django.http import JsonResponse
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
@@ -130,7 +228,7 @@ def refresh_session(request):
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from collections import defaultdict
-from datetime import datetime,timedelta
+from datetime import datetime, timedelta, time
 from django.utils import timezone
 from calendar import month_name,monthrange
 from django.shortcuts import render, get_object_or_404
@@ -449,6 +547,9 @@ def employee_dashboard(request):
     active_announcements = Announcement.objects.filter(active=True).order_by('-created_at')
 
     # 5. Build the Context Dictionary (Now includes new bonus lists and all announcements)
+    is_department_head = False
+    if employee.department and employee.department.department_head_id == employee.employee_id:
+        is_department_head = True
     context = {
         'employee': employee,
         'show_sensitive': show_sensitive,
@@ -460,6 +561,7 @@ def employee_dashboard(request):
         'extra_days_bonuses': extra_days_bonuses,
         'upload_form': upload_form,
         'active_announcements': active_announcements,
+        'is_department_head': is_department_head,
     }
 
     # 6. Perform Session Cleanup (Unchanged)
@@ -633,6 +735,27 @@ def submit_next_day_availability(request, employee):
     )
     messages.success(request, 'Tomorrow availability saved successfully.')
     return redirect(request.META.get('HTTP_REFERER') or 'employee_dashboard')
+
+
+@require_employee
+def todays_absentees_view(request, employee):
+    today = timezone.localdate()
+    absentees = EmployeeNextDayAvailability.objects.filter(
+        target_date=today,
+        will_come=False,
+    ).select_related('employee').order_by('employee__name')
+
+    is_department_head = False
+    if employee.department and employee.department.department_head_id == employee.employee_id:
+        is_department_head = True
+
+    context = {
+        'employee': employee,
+        'today': today,
+        'absentees': absentees,
+        'is_department_head': is_department_head,
+    }
+    return render(request, 'todays_absentees.html', context)
 
 # --- Main Views ---
 
@@ -918,14 +1041,18 @@ def is_worksheet_entry_locked_now(employee=None, now_local=None, cutoff_hour=Non
     if cutoff_hour is None:
         cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
 
+    # Check if user has time-based permission override
+    if employee and employee.worksheet_entry_force_unlock_until:
+        # If current time is before the permission expiration, allow access
+        if now_local < employee.worksheet_entry_force_unlock_until:
+            return False
+        # If permission has expired, clear it
+        employee.worksheet_entry_force_unlock_until = None
+        employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+
+    # After cutoff hour, entries are locked
     base_locked = now_local.hour >= cutoff_hour
-    if not base_locked:
-        return False
-
-    if employee and employee.worksheet_entry_force_unlock:
-        return False
-
-    return True
+    return base_locked
 
 
 def format_cutoff_time_label(cutoff_hour):
@@ -1109,7 +1236,7 @@ def worksheet_view(request, employee):
         'todays_breaks': todays_breaks,
         'is_worksheet_entry_locked': is_worksheet_entry_locked,
         'milliseconds_until_worksheet_cutoff': milliseconds_until_worksheet_cutoff,
-        'should_auto_lock_after_cutoff': not employee.worksheet_entry_force_unlock,
+        'should_auto_lock_after_cutoff': not (employee.worksheet_entry_force_unlock_until and now_local < employee.worksheet_entry_force_unlock_until),
         'cutoff_time_label': cutoff_time_label,
     }
     return render(request, 'worksheet.html', context)
@@ -1125,10 +1252,26 @@ def admin_worksheet_management(request):
     if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
         employee_id = request.POST.get('target_employee_id')
         target_employee = get_object_or_404(Employee, employee_id=employee_id)
-        target_employee.worksheet_entry_force_unlock = not target_employee.worksheet_entry_force_unlock
-        target_employee.save(update_fields=['worksheet_entry_force_unlock'])
-        state = 'enabled' if target_employee.worksheet_entry_force_unlock else 'disabled'
-        messages.success(request, f'Worksheet entry override {state} for {target_employee.name}.')
+        
+        if target_employee.worksheet_entry_force_unlock_until is None:
+            # Grant permission with expiration time based on current time
+            if now_local.hour < cutoff_hour:
+                # Before 5 PM: permission expires at 5 PM today
+                expiration = now_local.replace(hour=cutoff_hour, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until {cutoff_time_label} today."
+            else:
+                # At/after 5 PM: permission expires at midnight tonight
+                expiration = (now_local + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until midnight tonight."
+            
+            target_employee.worksheet_entry_force_unlock_until = expiration
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, msg)
+        else:
+            # Revoke permission
+            target_employee.worksheet_entry_force_unlock_until = None
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, f'Worksheet entry override disabled for {target_employee.name}.')
 
         return redirect(request.path)
 
@@ -1151,9 +1294,15 @@ def admin_worksheet_management(request):
     for emp in employees:
         is_locked = is_worksheet_entry_locked_now(employee=emp, now_local=now_local, cutoff_hour=cutoff_hour)
         employee_totals = todays_totals_map.get(emp.employee_id, {})
+        
+        # Check if override is currently active
+        has_active_override = emp.worksheet_entry_force_unlock_until and now_local < emp.worksheet_entry_force_unlock_until
+        
         employee_rows.append({
             'employee': emp,
             'worksheet_locked': is_locked,
+            'has_active_override': has_active_override,
+            'override_until': emp.worksheet_entry_force_unlock_until,
             'total_amount': employee_totals.get('total_amount', 0),
             'total_payment': employee_totals.get('total_payment', 0),
         })
@@ -1171,7 +1320,7 @@ def admin_worksheet_management(request):
 
 
 @staff_member_required
-def admin_employee_daily_worksheet_pdf(request, employee_id):
+def admin_employee_daily_worksheet_pdf(request, employee_id, time_range='full_day'):
     from django.http import HttpResponse
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -1185,7 +1334,34 @@ def admin_employee_daily_worksheet_pdf(request, employee_id):
     department = employee.department
     department_name = department.name if department else ''
 
-    todays_entries = Worksheet.objects.filter(employee=employee, date=today).order_by('created_at', 'id')
+    # Filter entries based on time_range
+    if time_range == '5pm':
+        # 12:00 AM to 5:00 PM (00:00 to 17:00)
+        start_of_day = timezone.make_aware(datetime.combine(today, time(0, 0, 0)))
+        end_of_5pm = timezone.make_aware(datetime.combine(today, time(17, 0, 0)))
+        todays_entries = Worksheet.objects.filter(
+            employee=employee, 
+            date=today,
+            created_at__gte=start_of_day,
+            created_at__lt=end_of_5pm
+        ).order_by('created_at', 'id')
+        time_range_label = "12:00 AM - 5:00 PM"
+    elif time_range == '9pm':
+        # 5:00 PM to 12:00 AM (17:00 to 23:59:59)
+        end_of_5pm = timezone.make_aware(datetime.combine(today, time(17, 0, 0)))
+        end_of_day = timezone.make_aware(datetime.combine(today, time(23, 59, 59)))
+        todays_entries = Worksheet.objects.filter(
+            employee=employee, 
+            date=today,
+            created_at__gte=end_of_5pm,
+            created_at__lte=end_of_day
+        ).order_by('created_at', 'id')
+        time_range_label = "5:00 PM - 12:00 AM"
+    else:
+        # full_day: all entries
+        todays_entries = Worksheet.objects.filter(employee=employee, date=today).order_by('created_at', 'id')
+        time_range_label = "Full Day"
+    
     totals = todays_entries.aggregate(total_payment=models.Sum('payment'), total_amount=models.Sum('amount'))
     total_payment = totals.get('total_payment') or Decimal('0.00')
     total_amount = totals.get('total_amount') or Decimal('0.00')
@@ -1321,6 +1497,7 @@ def admin_employee_daily_worksheet_pdf(request, employee_id):
         Paragraph(f'Employee: {employee.name} (ID: {employee.employee_id})', styles['Normal']),
         Paragraph(f'Department: {department_name or "-"}', styles['Normal']),
         Paragraph(f'Date: {today.strftime("%d %b %Y")}', styles['Normal']),
+        Paragraph(f'Time Range: {time_range_label}', styles['Normal']),
         Spacer(1, 12),
     ]
 

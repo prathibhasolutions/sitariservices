@@ -370,5 +370,14 @@
         </div>
     </div>
 
+    {% if employee.department and employee.department.department_head_id == employee.employee_id %}
+    <div class="module" style="margin: 12px 0;">
+        <h3>Department Management</h3>
+        <ul>
+            <li><a href="/department/topup/">Top Up & Transactions</a></li>
+        </ul>
+    </div>
+    {% endif %}
+
 </main>
 {% endblock %}

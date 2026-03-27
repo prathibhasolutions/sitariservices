@@ -1,0 +1,42 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<h1>Leave Management (Tomorrow: {{ tomorrow }})</h1>
+<button onclick="window.print()" style="margin-bottom: 1em;">Print</button>
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+    <thead>
+        <tr>
+            <th>Employee ID</th>
+            <th>Name</th>
+            <th>Mobile</th>
+            <th>Will Come?</th>
+            <th>Response Source</th>
+            <th>Responded At</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rec in records %}
+        <tr>
+            <td>{{ rec.employee.employee_id }}</td>
+            <td>{{ rec.employee.name }}</td>
+            <td>{{ rec.employee.mobile_number }}</td>
+            <td>
+                {% if rec.availability %}
+                    {% if rec.availability.will_come %}<span style="color:green;">Yes</span>{% else %}<span style="color:red;">No</span>{% endif %}
+                {% else %}
+                    <span style="color:gray;">No response</span>
+                {% endif %}
+            </td>
+            <td>{% if rec.availability %}{{ rec.availability.get_response_source_display }}{% else %}-{% endif %}</td>
+            <td>{% if rec.availability %}{{ rec.availability.responded_at|date:'Y-m-d H:i' }}{% else %}-{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<style>
+@media print {
+    button, .breadcrumbs, .module, .messagelist, .nav-global, .nav-sidebar, .header, .footer { display: none !important; }
+    table { font-size: 12pt; }
+    h1 { margin-top: 0; }
+}
+</style>
+{% endblock %}
