@@ -162,7 +162,13 @@ JAZZMIN_SETTINGS = {
                 "url": "admin_leave_management",
                 "icon": "fas fa-calendar-check",
                 "permissions": ["auth.view_user"],
-            }
+            },
+            {
+                "name": "Daily Targets",
+                "url": "admin_employee_targets",
+                "icon": "fas fa-bullseye",
+                "permissions": ["auth.view_user"],
+            },
         ]
     },
 

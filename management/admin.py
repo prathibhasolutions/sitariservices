@@ -956,7 +956,7 @@ class ServiceTypeAdmin(admin.ModelAdmin):
         return ", ".join([d.name for d in obj.departments.all()])
     get_departments.short_description = 'Departments'
     search_fields = ('name',)
-    
+    list_filter = ('departments',)
     change_list_template = "admin/service_type_changelist.html"
 
 

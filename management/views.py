@@ -1133,6 +1133,17 @@ def resolve_notary_bond_type(service_value):
 
     return None
 
+
+def _calc_commission(collection, target):
+    """5% commission on amount up to target; 10% on any amount above target."""
+    collection = Decimal(str(collection))
+    target = Decimal(str(target)) if target else Decimal('0.00')
+    if target <= 0:
+        return (collection * Decimal('0.05')).quantize(Decimal('0.01'))
+    below = min(collection, target)
+    above = max(Decimal('0.00'), collection - target)
+    return (below * Decimal('0.05') + above * Decimal('0.10')).quantize(Decimal('0.01'))
+
 @require_employee
 def worksheet_view(request, employee):
     department = employee.department
@@ -1174,9 +1185,37 @@ def worksheet_view(request, employee):
             if is_worksheet_entry_locked:
                 messages.error(request, f"Daily worksheet entry is closed after {cutoff_time_label}.")
                 return redirect('worksheet')
-            worksheet_form = WorksheetForm(request.POST, employee=employee)
+            worksheet_form = WorksheetForm(request.POST, request.FILES, employee=employee)
             if worksheet_form.is_valid():
-                entry = worksheet_form.save(commit=False); entry.employee = employee; entry.department_name = department.name; entry.save()
+                import uuid, os
+                from django.conf import settings as _settings
+                entry = worksheet_form.save(commit=False)
+                entry.employee = employee
+                entry.department_name = department.name
+
+                def _save_worksheet_image(file_obj, field_label):
+                    if not file_obj:
+                        return None
+                    ext = os.path.splitext(file_obj.name)[1].lower()
+                    uid = uuid.uuid4().hex[:8]
+                    rel_path = f"worksheet_data/{today}/{employee.employee_id}/{field_label}_{uid}{ext}"
+                    abs_dir = os.path.join(_settings.MEDIA_ROOT, 'worksheet_data', str(today), str(employee.employee_id))
+                    os.makedirs(abs_dir, exist_ok=True)
+                    abs_path = os.path.join(_settings.MEDIA_ROOT, rel_path)
+                    file_obj.seek(0)
+                    with open(abs_path, 'wb+') as dest:
+                        for chunk in file_obj.chunks():
+                            dest.write(chunk)
+                    return rel_path
+
+                token_file = request.FILES.get('token_image')
+                particulars_file = request.FILES.get('particulars_image')
+                if token_file:
+                    entry.token_image = _save_worksheet_image(token_file, 'token')
+                if particulars_file:
+                    entry.particulars_image = _save_worksheet_image(particulars_file, 'particulars')
+
+                entry.save()
                 # Auto-deduct payment from department top-up (skip Notary and Bonds)
                 if entry.payment and entry.payment > 0 and department.name != 'Notary and Bonds':
                     DepartmentTopUp.objects.create(
@@ -1209,7 +1248,10 @@ def worksheet_view(request, employee):
     todays_entries = Worksheet.objects.filter(employee=employee, date=today)
     todays_total_amount = todays_entries.aggregate(total=Sum('amount'))['total'] or 0
     todays_total_payment = todays_entries.aggregate(total=Sum('payment'))['total'] or 0
-    todays_commission = (todays_total_amount * Decimal('0.05')).quantize(Decimal('0.01'))
+    from .models import EmployeeTarget as _ET
+    _today_target_obj = _ET.objects.filter(employee=employee, date=today).first()
+    _today_target = (_today_target_obj.target_amount + _today_target_obj.carry_forward) if _today_target_obj else Decimal('0.00')
+    todays_commission = _calc_commission(todays_total_amount, _today_target)
     
     all_entries = Worksheet.objects.filter(employee=employee)
     start_date_str = request.GET.get('start_date'); end_date_str = request.GET.get('end_date')
@@ -1341,14 +1383,54 @@ def admin_worksheet_management(request):
         )
     }
 
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    weekly_totals_map = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date__gte=week_start, date__lte=today)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+    monthly_totals_map = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date__gte=month_start, date__lte=today)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+
+    from .models import EmployeeTarget as _ET
+    from django.db.models import F
+    daily_targets_map = {
+        t.employee_id: (t.target_amount + t.carry_forward).quantize(Decimal('0.01'))
+        for t in _ET.objects.filter(date=today)
+    }
+    weekly_targets_map = {
+        row['employee_id']: row['total_target'] or Decimal('0.00')
+        for row in _ET.objects.filter(date__gte=week_start, date__lte=today)
+        .values('employee_id')
+        .annotate(total_target=models.Sum(F('target_amount') + F('carry_forward')))
+    }
+    monthly_targets_map = {
+        row['employee_id']: row['total_target'] or Decimal('0.00')
+        for row in _ET.objects.filter(date__gte=month_start, date__lte=today)
+        .values('employee_id')
+        .annotate(total_target=models.Sum(F('target_amount') + F('carry_forward')))
+    }
+
     employee_rows = []
     for emp in employees:
         is_locked = is_worksheet_entry_locked_now(employee=emp, now_local=now_local, cutoff_hour=cutoff_hour)
         employee_totals = todays_totals_map.get(emp.employee_id, {})
-        
+
         # Check if override is currently active
         has_active_override = emp.worksheet_entry_force_unlock_until and now_local < emp.worksheet_entry_force_unlock_until
-        
+
+        weekly_amount = weekly_totals_map.get(emp.employee_id, Decimal('0.00'))
+        monthly_amount = monthly_totals_map.get(emp.employee_id, Decimal('0.00'))
+        weekly_target = weekly_targets_map.get(emp.employee_id, Decimal('0.00'))
+        monthly_target = monthly_targets_map.get(emp.employee_id, Decimal('0.00'))
+
         employee_rows.append({
             'employee': emp,
             'worksheet_locked': is_locked,
@@ -1356,6 +1438,9 @@ def admin_worksheet_management(request):
             'override_until': emp.worksheet_entry_force_unlock_until,
             'total_amount': employee_totals.get('total_amount', 0),
             'total_payment': employee_totals.get('total_payment', 0),
+            'daily_target': daily_targets_map.get(emp.employee_id, Decimal('0.00')),
+            'weekly_commission': _calc_commission(weekly_amount, weekly_target),
+            'monthly_commission': _calc_commission(monthly_amount, monthly_target),
         })
 
     context = {
@@ -1416,7 +1501,10 @@ def admin_employee_daily_worksheet_pdf(request, employee_id, time_range='full_da
     totals = todays_entries.aggregate(total_payment=models.Sum('payment'), total_amount=models.Sum('amount'))
     total_payment = totals.get('total_payment') or Decimal('0.00')
     total_amount = totals.get('total_amount') or Decimal('0.00')
-    todays_commission = total_amount * Decimal('0.05')
+    from .models import EmployeeTarget as _ET
+    _target_obj = _ET.objects.filter(employee=employee, date=today).first()
+    _daily_target = (_target_obj.target_amount + _target_obj.carry_forward) if _target_obj else Decimal('0.00')
+    todays_commission = _calc_commission(total_amount, _daily_target)
 
     def _display(value):
         return '-' if value in (None, '') else str(value)
@@ -1600,7 +1688,13 @@ def admin_employee_commission_print(request, employee_id, period):
         date__lte=end_date,
     ).aggregate(total_amount=models.Sum('amount'))
     total_amount = totals.get('total_amount') or Decimal('0.00')
-    commission = (total_amount * Decimal('0.05')).quantize(Decimal('0.01'))
+    from .models import EmployeeTarget as _ET
+    from django.db.models import F
+    _period_target_agg = _ET.objects.filter(
+        employee=employee, date__gte=start_date, date__lte=end_date
+    ).aggregate(total=models.Sum(F('target_amount') + F('carry_forward')))
+    period_target = _period_target_agg.get('total') or Decimal('0.00')
+    commission = _calc_commission(total_amount, period_target)
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -1629,7 +1723,8 @@ def admin_employee_commission_print(request, employee_id, period):
   <tr><th>Department</th><td>{department_name}</td></tr>
   <tr><th>Period</th><td>{period_label}</td></tr>
   <tr><th>Total Amount (₹)</th><td>₹ {total_amount:.2f}</td></tr>
-  <tr class="commission-row"><th>Commission (5%) (₹)</th><td>₹ {commission:.2f}</td></tr>
+  <tr><th>Period Target (₹)</th><td>₹ {period_target:.2f}</td></tr>
+  <tr class="commission-row"><th>Commission (5% / 10% above target) (₹)</th><td>₹ {commission:.2f}</td></tr>
 </table>
 
 <p class="no-print" style="margin-top:24px; text-align:center;">
@@ -1640,6 +1735,108 @@ def admin_employee_commission_print(request, employee_id, period):
 </html>"""
 
     return HttpResponse(html)
+
+
+@staff_member_required
+def admin_employee_targets(request):
+    from .models import EmployeeTarget
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
+    yesterday = today - timedelta(days=1)
+
+    employees = Employee.objects.select_related('department').order_by('department__name', 'name')
+
+    if request.method == 'POST':
+        for emp in employees:
+            key = f'target_{emp.employee_id}'
+            raw = request.POST.get(key, '').strip()
+            if raw == '':
+                continue
+            try:
+                amount = Decimal(raw).quantize(Decimal('0.01'))
+            except Exception:
+                continue
+            EmployeeTarget.objects.update_or_create(
+                employee=emp,
+                date=today,
+                defaults={'target_amount': amount},
+            )
+        messages.success(request, f"Targets saved for {today.strftime('%d %b %Y')}.")
+        return redirect(request.path)
+
+    # --- Carry-forward: calculate from yesterday ---
+    # Yesterday's targets
+    yesterday_targets = {
+        t.employee_id: t
+        for t in EmployeeTarget.objects.filter(date=yesterday)
+    }
+    # Yesterday's collections
+    yesterday_collections = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date=yesterday)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+    # Compute and persist carry_forward on today's record for each employee
+    for emp in employees:
+        yest_entry = yesterday_targets.get(emp.employee_id)
+        if yest_entry:
+            yest_effective = yest_entry.target_amount + yest_entry.carry_forward
+            yest_collection = yesterday_collections.get(emp.employee_id, Decimal('0.00'))
+            shortfall = max(Decimal('0.00'), (yest_effective - yest_collection).quantize(Decimal('0.01')))
+            prev_target = yest_entry.target_amount
+        else:
+            shortfall = Decimal('0.00')
+            prev_target = Decimal('0.00')
+        # When creating today's record for the first time, pre-fill target_amount from yesterday.
+        # When updating an existing record, only refresh carry_forward (preserve admin-entered target).
+        EmployeeTarget.objects.update_or_create(
+            employee=emp,
+            date=today,
+            create_defaults={'target_amount': prev_target, 'carry_forward': shortfall},
+            defaults={'carry_forward': shortfall},
+        )
+
+    # Build today's target map (fresh after carry_forward update)
+    today_target_objs = {
+        t.employee_id: t
+        for t in EmployeeTarget.objects.filter(date=today)
+    }
+
+    # Today's collections
+    today_actuals_map = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date=today)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+
+    rows = []
+    for emp in employees:
+        obj = today_target_objs.get(emp.employee_id)
+        target = obj.target_amount if obj else Decimal('0.00')
+        carry_forward = obj.carry_forward if obj else Decimal('0.00')
+        effective_target = target + carry_forward
+        collection = today_actuals_map.get(emp.employee_id, Decimal('0.00'))
+        balance = (effective_target - collection).quantize(Decimal('0.01'))
+        achieved = collection >= effective_target if effective_target > 0 else None
+        rows.append({
+            'employee': emp,
+            'target': target,
+            'carry_forward': carry_forward,
+            'effective_target': effective_target,
+            'collection': collection,
+            'balance': balance,
+            'achieved': achieved,
+        })
+
+    context = {
+        'rows': rows,
+        'today': today,
+    }
+    admin_context = admin.site.each_context(request)
+    admin_context.update(context)
+    return render(request, 'admin/employee_targets.html', admin_context)
 
 
 @require_employee

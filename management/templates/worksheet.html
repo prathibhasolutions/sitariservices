@@ -122,11 +122,12 @@
                         </div>
                     </div>
                 </div>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="worksheet_entry">
                 <div class="form-row align-items-end g-3">
                     {% for field in form %}
+                        {% if field.name == 'token_image' or field.name == 'particulars_image' %}{% else %}
                         <div class="col mb-2">
                             <div class="form-group mb-0">
                                 {{ field.label_tag }}
@@ -146,6 +147,23 @@
                                 {% endif %}
                             </div>
                         </div>
+                        {% if field.name == 'token_no' %}
+                        <div class="col mb-2" style="min-width:110px; max-width:140px;">
+                            <div class="form-group mb-0">
+                                <label class="d-block" style="font-size:0.8rem;"><i class="fas fa-camera"></i> Token Image</label>
+                                <input type="file" name="token_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem;">
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if field.name == 'particulars' %}
+                        <div class="col mb-2" style="min-width:110px; max-width:140px;">
+                            <div class="form-group mb-0">
+                                <label class="d-block" style="font-size:0.8rem;"><i class="fas fa-camera"></i> Particulars Image</label>
+                                <input type="file" name="particulars_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem;">
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
                     {% endfor %}
                     <script src="{% static 'management/service_amount.js' %}"></script>
                     <div class="col-auto mb-2 d-flex align-items-end">

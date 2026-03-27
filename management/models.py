@@ -165,6 +165,28 @@ class DepartmentStock(models.Model):
         return f"{self.service_type.name} stock for {self.department.name}"
 
 
+class EmployeeTarget(models.Model):
+    """
+    Stores a daily target (amount) assigned by admin to each employee.
+    One row per employee per date. Admin sets it fresh each day.
+    carry_forward: automatically populated with unmet balance carried over from the previous day.
+    """
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='targets')
+    date = models.DateField()
+    target_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    carry_forward = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+        help_text="Unmet balance carried forward from the previous day. Auto-calculated.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')
+        ordering = ['-date', 'employee__name']
+
+    def __str__(self):
+        return f"Target for {self.employee.name} on {self.date}: ₹{self.target_amount}"
+
+
 class EmployeeNextDayAvailability(models.Model):
     RESPONSE_SOURCE_MANUAL = 'manual'
     RESPONSE_SOURCE_AUTO = 'auto'
@@ -820,6 +842,10 @@ class Worksheet(models.Model):
     
     # NEW field for 'Notary and Bonds'
     bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
+
+    # Image attachments
+    token_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)
+    particulars_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']

@@ -1,0 +1,239 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .target-admin {
+        --ta-border: #d8dee8;
+        --ta-border-soft: #e8edf4;
+        --ta-head-bg: linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+        --ta-text-main: #1f2a37;
+        --ta-text-muted: #5c6b7d;
+        --ta-accent: #0b5cab;
+        --ta-accent-hover: #084989;
+        --ta-success: #166534;
+        --ta-danger: #ad1f1f;
+        --ta-surface: #ffffff;
+        --ta-shadow: 0 8px 20px rgba(20, 43, 74, 0.08);
+    }
+
+    .target-table-wrap {
+        border: 1px solid var(--ta-border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--ta-surface);
+        box-shadow: var(--ta-shadow);
+        margin-top: 16px;
+    }
+
+    .target-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .target-table thead th {
+        text-align: left;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--ta-border);
+        background: var(--ta-head-bg);
+        color: var(--ta-text-main);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        font-size: 13px;
+    }
+
+    .target-table tbody td {
+        border-bottom: 1px solid var(--ta-border-soft);
+        padding: 10px 14px;
+        color: var(--ta-text-main);
+        vertical-align: middle;
+        font-size: 13px;
+    }
+
+    .target-table tbody tr:nth-child(even) { background: #fbfcfe; }
+    .target-table tbody tr:hover { background: #f3f7fc; }
+    .target-table tbody tr:last-child td { border-bottom: none; }
+
+    .target-input {
+        width: 120px;
+        padding: 5px 8px;
+        border: 1px solid #c4d0df;
+        border-radius: 6px;
+        font-size: 13px;
+        text-align: right;
+        transition: border-color 0.15s;
+    }
+    .target-input:focus {
+        outline: none;
+        border-color: var(--ta-accent);
+        box-shadow: 0 0 0 2px rgba(11, 92, 171, 0.15);
+    }
+
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid transparent;
+    }
+    .pill-achieved {
+        color: var(--ta-success);
+        background: #eaf8ef;
+        border-color: #bfe7cb;
+    }
+    .pill-missed {
+        color: var(--ta-danger);
+        background: #fdecec;
+        border-color: #f5c9c9;
+    }
+    .pill-none {
+        color: var(--ta-text-muted);
+        background: #f0f2f5;
+        border-color: #d8dee8;
+    }
+
+    .save-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 22px;
+        background: var(--ta-accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        margin-top: 16px;
+    }
+    .save-btn:hover { background: var(--ta-accent-hover); }
+
+    .dept-badge {
+        display: inline-block;
+        background: #eef3f9;
+        color: var(--ta-accent);
+        border-radius: 6px;
+        padding: 2px 8px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    @media (max-width: 1024px) {
+        .target-table-wrap { overflow-x: auto; }
+        .target-table { min-width: 700px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="target-admin">
+    <h1>Daily Targets</h1>
+    <p style="color: #5c6b7d; margin-bottom: 4px;">
+        Set each employee's target amount for today: <strong>{{ today|date:"d M Y" }}</strong>.
+        Targets reset every day — previous days' targets are preserved as records.
+    </p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <ul class="messagelist">
+                <li class="{{ message.tags }}">{{ message }}</li>
+            </ul>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="target-table-wrap">
+            <table class="target-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Today's Target (₹)</th>
+                        <th>Pending (Carried ₹)</th>
+                        <th>Collection (₹)</th>
+                        <th>Balance (₹)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td style="color:#9aa5b4;">{{ forloop.counter }}</td>
+                        <td><strong>{{ row.employee.name }}</strong> <span style="color:#9aa5b4;font-size:12px;">(ID: {{ row.employee.employee_id }})</span></td>
+                        <td><span class="dept-badge">{{ row.employee.department.name|default:"—" }}</span></td>
+                        <td>
+                            <input
+                                class="target-input"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="target_{{ row.employee.employee_id }}"
+                                value="{{ row.target }}"
+                                placeholder="0.00"
+                                data-empid="{{ row.employee.employee_id }}"
+                                data-carry="{{ row.carry_forward }}"
+                            >
+                        </td>
+                        <td style="font-weight:600; color: {% if row.carry_forward > 0 %}#ad1f1f{% else %}#9aa5b4{% endif %};">₹ {{ row.carry_forward }}</td>
+                        <td id="collection-{{ row.employee.employee_id }}">₹ {{ row.collection }}</td>
+                        <td id="balance-{{ row.employee.employee_id }}" style="font-weight:600; color: {% if row.balance <= 0 %}#166534{% else %}#ad1f1f{% endif %};">₹ {{ row.balance }}</td>
+                        <td id="status-{{ row.employee.employee_id }}">
+                            {% if row.achieved is None %}
+                                <span class="pill pill-none">No Target</span>
+                            {% elif row.achieved %}
+                                <span class="pill pill-achieved">Achieved</span>
+                            {% else %}
+                                <span class="pill pill-missed">Pending</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" style="text-align:center;color:#9aa5b4;padding:24px;">No employees found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="submit" class="save-btn">Save Targets</button>
+    </form>
+</div>
+
+<script>
+(function () {
+    var collections = {
+        {% for row in rows %}"{{ row.employee.employee_id }}": {{ row.collection|default:"0" }},
+        {% endfor %}
+    };
+
+    document.querySelectorAll('.target-input').forEach(function (input) {
+        input.addEventListener('input', function () {
+            var empId = this.dataset.empid;
+            var carry = parseFloat(this.dataset.carry) || 0;
+            var target = parseFloat(this.value) || 0;
+            var collection = parseFloat(collections[empId]) || 0;
+            var effective = target + carry;
+            var balance = (effective - collection).toFixed(2);
+
+            var balanceEl = document.getElementById('balance-' + empId);
+            var statusEl = document.getElementById('status-' + empId);
+
+            balanceEl.textContent = '\u20b9 ' + balance;
+            balanceEl.style.color = balance <= 0 ? '#166534' : '#ad1f1f';
+
+            if (effective <= 0) {
+                statusEl.innerHTML = '<span class="pill pill-none">No Target</span>';
+                return;
+            }
+            if (collection >= effective) {
+                statusEl.innerHTML = '<span class="pill pill-achieved">Achieved</span>';
+            } else {
+                statusEl.innerHTML = '<span class="pill pill-missed">Pending</span>';
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

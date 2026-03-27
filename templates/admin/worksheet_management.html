@@ -200,6 +200,7 @@
                 <tr>
                     <th>Employee</th>
                     <th>Department</th>
+                    <th>Target (Today)</th>
                     <th>Total Amount (Today)</th>
                     <th>Total Payment (Today)</th>
                     <th>Worksheet Entry Status</th>
@@ -212,6 +213,7 @@
                     <tr>
                         <td>{{ row.employee.name }} (ID: {{ row.employee.employee_id }})</td>
                         <td>{{ row.employee.department.name|default:"-" }}</td>
+                        <td style="font-weight:600;">{% if row.daily_target > 0 %}&#8377; {{ row.daily_target }}{% else %}<span style="color:#9aa5b4;">—</span>{% endif %}</td>
                         <td>{{ row.total_amount }}</td>
                         <td>{{ row.total_payment }}</td>
                         <td>
@@ -225,8 +227,16 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'weekly' %}" target="_blank" rel="noopener">Weekly</a>
-                            <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'monthly' %}" target="_blank" rel="noopener">Monthly</a>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'weekly' %}" target="_blank" rel="noopener">Weekly</a>
+                                    <span style="font-weight:600;font-size:13px;">&#8377; {{ row.weekly_commission }}</span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <a class="worksheet-btn print" href="{% url 'admin_employee_commission_print' row.employee.employee_id 'monthly' %}" target="_blank" rel="noopener">Monthly</a>
+                                    <span style="font-weight:600;font-size:13px;">&#8377; {{ row.monthly_commission }}</span>
+                                </div>
+                            </div>
                         </td>
                         <td>
                             <div class="action-stack">
@@ -248,7 +258,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="7">No employees found.</td>
+                        <td colspan="8">No employees found.</td>
                     </tr>
                 {% endfor %}
             </tbody>
