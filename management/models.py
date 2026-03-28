@@ -1123,3 +1123,79 @@ class ResourceRepairReport(models.Model):
 
     def __str__(self):
         return f"Repair Report for {self.employee.name} on {self.date}"
+
+
+# --- TTD Section ---
+
+class TTDGroupSeva(models.Model):
+    """Stores a group seva booking at TTD."""
+    created_by = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ttd_group_sevas'
+    )
+    planned_date = models.DateField(help_text="Planned date for the group seva")
+    num_members = models.PositiveIntegerField(help_text="Number of members in the group")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'TTD Group Seva'
+        verbose_name_plural = 'TTD Group Sevas'
+
+    def __str__(self):
+        return f"Group Seva ({self.num_members} members) on {self.planned_date}"
+
+
+class TTDGroupMember(models.Model):
+    """Individual member details for a TTD group seva."""
+    group = models.ForeignKey(TTDGroupSeva, on_delete=models.CASCADE, related_name='members')
+    name = models.CharField(max_length=150)
+    mobile_number = models.CharField(max_length=15)
+    aadhar_number = models.CharField(max_length=12, help_text="12-digit Aadhaar number")
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ['order']
+        verbose_name = 'TTD Group Member'
+        verbose_name_plural = 'TTD Group Members'
+
+    def __str__(self):
+        return f"{self.name} (Group: {self.group_id})"
+
+
+class TTDIndividualDarshan(models.Model):
+    """Stores an individual darshan booking at TTD."""
+    SLOT_CHOICES = [
+        ('06:00', '06:00 AM'),
+        ('07:00', '07:00 AM'),
+        ('08:00', '08:00 AM'),
+        ('09:00', '09:00 AM'),
+        ('10:00', '10:00 AM'),
+        ('11:00', '11:00 AM'),
+        ('12:00', '12:00 PM'),
+        ('13:00', '01:00 PM'),
+        ('14:00', '02:00 PM'),
+        ('15:00', '03:00 PM'),
+        ('16:00', '04:00 PM'),
+        ('17:00', '05:00 PM'),
+        ('18:00', '06:00 PM'),
+    ]
+
+    created_by = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ttd_individual_darshans'
+    )
+    name = models.CharField(max_length=150)
+    mobile_number = models.CharField(max_length=15)
+    aadhar_number = models.CharField(max_length=12, help_text="12-digit Aadhaar number")
+    planned_date = models.DateField(help_text="Planned date for darshan")
+    slot_time = models.CharField(max_length=5, choices=SLOT_CHOICES, help_text="Preferred slot time")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'TTD Individual Darshan'
+        verbose_name_plural = 'TTD Individual Darshans'
+
+    def __str__(self):
+        return f"{self.name} – Darshan on {self.planned_date} at {self.slot_time}"

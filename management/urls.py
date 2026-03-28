@@ -44,5 +44,16 @@ urlpatterns = [
 
     # Admin print event logging endpoint
     path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),
+
+    # TTD Section
+    path('ttd/', views.ttd_main_view, name='ttd_main'),
+    path('ttd/group-seva/new/', views.ttd_group_seva_step1, name='ttd_group_seva_step1'),
+    path('ttd/group-seva/<int:group_id>/members/', views.ttd_group_seva_step2, name='ttd_group_seva_step2'),
+    path('ttd/individual-darshan/new/', views.ttd_individual_darshan_create, name='ttd_individual_darshan_create'),
+    path('ttd/group-seva/<int:group_id>/delete/', views.ttd_group_seva_delete, name='ttd_group_seva_delete'),
+    path('ttd/individual-darshan/<int:darshan_id>/delete/', views.ttd_individual_darshan_delete, name='ttd_individual_darshan_delete'),
+    path('ttd/group-seva/<int:group_id>/print/', views.ttd_group_seva_print, name='ttd_group_seva_print'),
+    path('ttd/individual-darshan/<int:darshan_id>/print/', views.ttd_individual_darshan_print, name='ttd_individual_darshan_print'),
+    path('ttd/print-all/', views.ttd_print_all, name='ttd_print_all'),
 ]
 

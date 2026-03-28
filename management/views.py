@@ -2107,3 +2107,152 @@ def admin_worksheet_data(request):
             tree.append({'date': date_str, 'emp_entries': emp_entries, 'total_files': total_files})
 
     return render(request, 'admin/worksheet_data.html', {'tree': tree})
+
+
+# --- TTD Section Views ---
+
+from .models import TTDGroupSeva, TTDGroupMember, TTDIndividualDarshan
+from .forms import TTDGroupSevaStep1Form, TTDGroupMemberForm, TTDIndividualDarshanForm
+
+@require_employee
+def ttd_main_view(request, employee):
+    """Main TTD page – lists recent group sevas and individual darshans."""
+    group_sevas = TTDGroupSeva.objects.all().prefetch_related('members').order_by('-created_at')[:20]
+    individual_darshans = TTDIndividualDarshan.objects.all().order_by('-created_at')[:20]
+    return render(request, 'ttd_main.html', {
+        'group_sevas': group_sevas,
+        'individual_darshans': individual_darshans,
+    })
+
+
+@require_employee
+def ttd_group_seva_step1(request, employee):
+    """Step 1: Enter number of members and planned date for Group Seva."""
+    if request.method == 'POST':
+        form = TTDGroupSevaStep1Form(request.POST)
+        if form.is_valid():
+            group_seva = form.save(commit=False)
+            group_seva.created_by = employee
+            group_seva.save()
+            return redirect('ttd_group_seva_step2', group_id=group_seva.pk)
+    else:
+        form = TTDGroupSevaStep1Form()
+    return render(request, 'ttd_group_seva_step1.html', {'form': form})
+
+
+@require_employee
+def ttd_group_seva_step2(request, employee, group_id):
+    """Step 2: Enter member details for the group seva."""
+    from django.forms import modelformset_factory
+    from .forms import TTDGroupMemberForm
+
+    try:
+        group_seva = TTDGroupSeva.objects.get(pk=group_id)
+    except TTDGroupSeva.DoesNotExist:
+        from django.contrib import messages as msg
+        msg.error(request, "Group Seva not found.")
+        return redirect('ttd_main')
+
+    MemberFormSet = modelformset_factory(
+        TTDGroupMember,
+        form=TTDGroupMemberForm,
+        extra=group_seva.num_members,
+        can_delete=False,
+        max_num=group_seva.num_members,
+        validate_max=True,
+    )
+
+    if request.method == 'POST':
+        formset = MemberFormSet(request.POST, queryset=TTDGroupMember.objects.none())
+        if formset.is_valid():
+            members = formset.save(commit=False)
+            for idx, member in enumerate(members, start=1):
+                member.group = group_seva
+                member.order = idx
+                member.save()
+            from django.contrib import messages as msg
+            msg.success(request, f"Group Seva saved with {len(members)} members.")
+            return redirect('ttd_main')
+    else:
+        formset = MemberFormSet(queryset=TTDGroupMember.objects.none())
+
+    return render(request, 'ttd_group_seva_step2.html', {
+        'group_seva': group_seva,
+        'formset': formset,
+    })
+
+
+@require_employee
+def ttd_individual_darshan_create(request, employee):
+    """Create an individual darshan booking."""
+    if request.method == 'POST':
+        form = TTDIndividualDarshanForm(request.POST)
+        if form.is_valid():
+            darshan = form.save(commit=False)
+            darshan.created_by = employee
+            darshan.save()
+            from django.contrib import messages as msg
+            msg.success(request, "Individual Darshan booking saved.")
+            return redirect('ttd_main')
+    else:
+        form = TTDIndividualDarshanForm()
+    return render(request, 'ttd_individual_darshan.html', {'form': form})
+
+
+@require_employee
+def ttd_group_seva_delete(request, employee, group_id):
+    """Delete a group seva and its members."""
+    try:
+        group_seva = TTDGroupSeva.objects.get(pk=group_id)
+        group_seva.delete()
+        from django.contrib import messages as msg
+        msg.success(request, "Group Seva deleted.")
+    except TTDGroupSeva.DoesNotExist:
+        pass
+    return redirect('ttd_main')
+
+
+@require_employee
+def ttd_individual_darshan_delete(request, employee, darshan_id):
+    """Delete an individual darshan booking."""
+    try:
+        darshan = TTDIndividualDarshan.objects.get(pk=darshan_id)
+        darshan.delete()
+        from django.contrib import messages as msg
+        msg.success(request, "Individual Darshan booking deleted.")
+    except TTDIndividualDarshan.DoesNotExist:
+        pass
+    return redirect('ttd_main')
+
+
+@require_employee
+def ttd_group_seva_print(request, employee, group_id):
+    """Print view for a single group seva booking."""
+    try:
+        group_seva = TTDGroupSeva.objects.prefetch_related('members').get(pk=group_id)
+    except TTDGroupSeva.DoesNotExist:
+        from django.http import Http404
+        raise Http404
+    return render(request, 'ttd_group_seva_print.html', {'group_seva': group_seva})
+
+
+@require_employee
+def ttd_individual_darshan_print(request, employee, darshan_id):
+    """Print view for a single individual darshan booking."""
+    try:
+        darshan = TTDIndividualDarshan.objects.get(pk=darshan_id)
+    except TTDIndividualDarshan.DoesNotExist:
+        from django.http import Http404
+        raise Http404
+    return render(request, 'ttd_individual_darshan_print.html', {'darshan': darshan})
+
+
+@require_employee
+def ttd_print_all(request, employee):
+    """Print all TTD bookings — all group sevas and all individual darshans."""
+    group_sevas = TTDGroupSeva.objects.all().prefetch_related('members').order_by('planned_date', '-created_at')
+    individual_darshans = TTDIndividualDarshan.objects.all().order_by('planned_date', 'slot_time')
+    return render(request, 'ttd_print_all.html', {
+        'group_sevas': group_sevas,
+        'individual_darshans': individual_darshans,
+    })

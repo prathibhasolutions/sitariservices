@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
                     <!-- Commission widget (rightmost before timer) -->
                     <div style="text-align:center; line-height:1.1; flex-shrink:0;">
-                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Comm. Due</div>
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Comm. Earned</div>
                         <div style="font-size:0.9rem; font-weight:700; color:#ff4d4d;">₹{{ navbar_daily_commission|floatformat:2 }}</div>
                     </div>
                     <div style="color:rgba(255,255,255,0.3); font-size:1rem; flex-shrink:0;">|</div>
@@ -455,6 +455,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <a id="taskReminderBtn" href="{% url 'assigned_tasks' %}" class="mr-2 position-relative" title="Task Reminder" style="flex-shrink:0;">
                         <i class="fas fa-list-check navbar-upload-icon" data-toggle="tooltip" title="Task Reminder"></i>
                         <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:-8px; right:-10px; display:none;">0</span>
+                    </a>
+                    <a href="{% url 'ttd_main' %}" class="mr-2" title="TTD Services" style="flex-shrink:0; display:inline-flex; align-items:center; background:rgba(0,0,0,0.35); border-radius:6px; padding:2px 5px;">
+                        <img src="{% static 'img/ttd_logo.png' %}" alt="TTD" style="height:28px; width:auto; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
                     </a>
                     <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
                         <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>

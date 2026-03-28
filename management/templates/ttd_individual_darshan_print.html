@@ -1,0 +1,226 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TTD Individual Darshan – {{ darshan.name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+            background: #fff;
+            padding: 24px 32px;
+        }
+
+        /* ── Header ── */
+        .print-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 3px solid #d4a017;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+        .print-header img { height: 60px; width: auto; background:#1a1a1a; border-radius:8px; padding:4px 6px; }
+        .print-header .org-info h1 {
+            font-size: 20px;
+            font-weight: 800;
+            color: #8B1A1A;
+            letter-spacing: 0.5px;
+        }
+        .print-header .org-info p {
+            font-size: 12px;
+            color: #555;
+            margin-top: 2px;
+        }
+        .print-header .badge-type {
+            margin-left: auto;
+            background: #d4a017;
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        /* ── Detail card ── */
+        .detail-card {
+            border: 1px solid #e0c8a0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 24px;
+            max-width: 560px;
+        }
+        .detail-card .card-title {
+            background: #8B1A1A;
+            color: #fff;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        .detail-card table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .detail-card table tr { border-bottom: 1px solid #f0e6d0; }
+        .detail-card table tr:last-child { border-bottom: none; }
+        .detail-card table th {
+            width: 40%;
+            padding: 9px 14px;
+            background: #fdf6eb;
+            font-size: 12px;
+            color: #666;
+            font-weight: 600;
+            text-align: left;
+            vertical-align: top;
+        }
+        .detail-card table td {
+            padding: 9px 14px;
+            font-size: 13px;
+            color: #222;
+            font-weight: 500;
+        }
+
+        /* ── Slot badge ── */
+        .slot-badge {
+            display: inline-block;
+            background: #d4a017;
+            color: #fff;
+            padding: 4px 14px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        /* ── Booking ID strip ── */
+        .booking-id-strip {
+            background: #fffdf7;
+            border: 1px dashed #d4a017;
+            border-radius: 8px;
+            padding: 10px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 560px;
+        }
+        .booking-id-strip .bid { font-size: 22px; font-weight: 800; color: #8B1A1A; }
+        .booking-id-strip .blabel { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.06em; }
+
+        /* ── Footer ── */
+        .print-footer {
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* ── Print button (screen only) ── */
+        .no-print { margin-bottom: 20px; }
+        .btn-print {
+            background: #d4a017;
+            color: #fff;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        .btn-back {
+            background: #eee;
+            color: #333;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { padding: 10px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <button class="btn-print" onclick="window.print()"><i>⎙</i> Print</button>
+        <a class="btn-back" href="javascript:history.back()">← Back</a>
+    </div>
+
+    <!-- Header -->
+    <div class="print-header">
+        <img src="{% static 'img/ttd_logo.png' %}" alt="TTD Logo">
+        <div class="org-info">
+            <h1>TTD Individual Darshan Booking</h1>
+            <p>Tirumala Tirupati Devasthanams – Darshan Registration</p>
+        </div>
+        <span class="badge-type">Individual Darshan</span>
+    </div>
+
+    <!-- Booking ID strip -->
+    <div class="booking-id-strip">
+        <div>
+            <div class="blabel">Booking ID</div>
+            <div class="bid">#{{ darshan.pk }}</div>
+        </div>
+        <div style="width:1px; background:#e0c8a0; align-self:stretch;"></div>
+        <div>
+            <div class="blabel">Booked On</div>
+            <div style="font-size:13px; font-weight:600; color:#555; margin-top:4px;">{{ darshan.created_at|date:"d M Y, H:i" }}</div>
+        </div>
+        <div style="width:1px; background:#e0c8a0; align-self:stretch;"></div>
+        <div>
+            <div class="blabel">Booked By</div>
+            <div style="font-size:13px; font-weight:600; color:#555; margin-top:4px;">{{ darshan.created_by.name|default:"—" }}</div>
+        </div>
+    </div>
+
+    <!-- Detail card -->
+    <div class="detail-card">
+        <div class="card-title">Devotee Details</div>
+        <table>
+            <tr>
+                <th>Full Name</th>
+                <td><strong>{{ darshan.name }}</strong></td>
+            </tr>
+            <tr>
+                <th>Mobile Number</th>
+                <td>{{ darshan.mobile_number }}</td>
+            </tr>
+            <tr>
+                <th>Aadhaar Number</th>
+                <td>{{ darshan.aadhar_number }}</td>
+            </tr>
+            <tr>
+                <th>Planned Darshan Date</th>
+                <td><strong>{{ darshan.planned_date|date:"l, d M Y" }}</strong></td>
+            </tr>
+            <tr>
+                <th>Slot Time</th>
+                <td><span class="slot-badge">{{ darshan.get_slot_time_display }}</span></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="print-footer">
+        <span>Generated on: {% now "d M Y, H:i" %}</span>
+        <span>TTD Individual Darshan – Booking #{{ darshan.pk }}</span>
+    </div>
+
+</body>
+</html>

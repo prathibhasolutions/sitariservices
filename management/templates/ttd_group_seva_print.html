@@ -1,0 +1,232 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TTD Group Seva – {{ group_seva.planned_date }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+            background: #fff;
+            padding: 24px 32px;
+        }
+
+        /* ── Header ── */
+        .print-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 3px solid #8B1A1A;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+        .print-header img { height: 60px; width: auto; background:#1a1a1a; border-radius:8px; padding:4px 6px; }
+        .print-header .org-info h1 {
+            font-size: 20px;
+            font-weight: 800;
+            color: #8B1A1A;
+            letter-spacing: 0.5px;
+        }
+        .print-header .org-info p {
+            font-size: 12px;
+            color: #555;
+            margin-top: 2px;
+        }
+        .print-header .badge-type {
+            margin-left: auto;
+            background: #8B1A1A;
+            color: #fff;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        /* ── Summary box ── */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            border: 1px solid #e0c8a0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            background: #fffdf7;
+        }
+        .summary-item .label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #888;
+            margin-bottom: 3px;
+        }
+        .summary-item .value {
+            font-size: 15px;
+            font-weight: 700;
+            color: #8B1A1A;
+        }
+
+        /* ── Member table ── */
+        h2 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #8B1A1A;
+            margin-bottom: 8px;
+            border-left: 4px solid #d4a017;
+            padding-left: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+        }
+        thead tr {
+            background: #8B1A1A;
+            color: #fff;
+        }
+        thead th {
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        tbody tr:nth-child(even) { background: #fdf6eb; }
+        tbody td {
+            padding: 7px 10px;
+            border-bottom: 1px solid #e8ddc8;
+            font-size: 13px;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* ── Footer ── */
+        .print-footer {
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* ── Print button (screen only) ── */
+        .no-print {
+            margin-bottom: 20px;
+        }
+        .btn-print {
+            background: #8B1A1A;
+            color: #fff;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+        .btn-back {
+            background: #eee;
+            color: #333;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { padding: 10px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <button class="btn-print" onclick="window.print()"><i>⎙</i> Print</button>
+        <a class="btn-back" href="javascript:history.back()">← Back</a>
+    </div>
+
+    <!-- Header -->
+    <div class="print-header">
+        <img src="{% static 'img/ttd_logo.png' %}" alt="TTD Logo">
+        <div class="org-info">
+            <h1>TTD Group Seva Booking</h1>
+            <p>Tirumala Tirupati Devasthanams – Official Seva Registration</p>
+        </div>
+        <span class="badge-type">Group Seva</span>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-grid">
+        <div class="summary-item">
+            <div class="label">Booking ID</div>
+            <div class="value">#{{ group_seva.pk }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Planned Date</div>
+            <div class="value">{{ group_seva.planned_date|date:"d M Y" }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Total Members</div>
+            <div class="value">{{ group_seva.num_members }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Booked By</div>
+            <div class="value" style="font-size:13px;">{{ group_seva.created_by.name|default:"—" }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Booking Date</div>
+            <div class="value" style="font-size:13px;">{{ group_seva.created_at|date:"d M Y, H:i" }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Members Registered</div>
+            <div class="value">{{ group_seva.members.count }} / {{ group_seva.num_members }}</div>
+        </div>
+    </div>
+
+    <!-- Member Table -->
+    <h2>Member Details</h2>
+    {% if group_seva.members.all %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width:40px;">#</th>
+                <th>Full Name</th>
+                <th>Mobile Number</th>
+                <th>Aadhaar Number</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for member in group_seva.members.all %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><strong>{{ member.name }}</strong></td>
+                <td>{{ member.mobile_number }}</td>
+                <td>{{ member.aadhar_number }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:#888; font-style:italic; margin-bottom:20px;">No member details registered yet.</p>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="print-footer">
+        <span>Generated on: {% now "d M Y, H:i" %}</span>
+        <span>TTD Group Seva Booking – ID #{{ group_seva.pk }}</span>
+    </div>
+
+</body>
+</html>

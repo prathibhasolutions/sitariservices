@@ -1,0 +1,183 @@
+{% extends "masteremployee.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex align-items-center mb-4">
+        <img src="{% static 'img/ttd_logo.png' %}" alt="TTD" style="height:48px; margin-right:14px; background:#1a1a1a; border-radius:8px; padding:4px 6px;">
+        <h2 class="mb-0" style="font-weight:700; color:#8B1A1A;">
+            <i class="fas fa-om mr-2" style="color:#d4a017;"></i>TTD Services
+        </h2>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <a href="{% url 'ttd_group_seva_step1' %}" class="btn btn-block py-3" style="background:#8B1A1A; color:#fff; border-radius:10px; font-size:1.1rem; font-weight:600; box-shadow:0 2px 8px rgba(139,26,26,0.3);">
+                <i class="fas fa-users mr-2"></i>New Group Seva Booking
+            </a>
+        </div>
+        <div class="col-md-4 mb-3">
+            <a href="{% url 'ttd_individual_darshan_create' %}" class="btn btn-block py-3" style="background:#d4a017; color:#fff; border-radius:10px; font-size:1.1rem; font-weight:600; box-shadow:0 2px 8px rgba(212,160,23,0.3);">
+                <i class="fas fa-pray mr-2"></i>New Individual Darshan Booking
+            </a>
+        </div>
+        <div class="col-md-4 mb-3">
+            <a href="{% url 'ttd_print_all' %}" target="_blank" class="btn btn-block py-3" style="background:#2c7a4b; color:#fff; border-radius:10px; font-size:1.1rem; font-weight:600; box-shadow:0 2px 8px rgba(44,122,75,0.3);">
+                <i class="fas fa-print mr-2"></i>Print All TTD Data
+            </a>
+        </div>
+    </div>
+
+    <!-- Group Sevas -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header" style="background:#8B1A1A; color:#fff;">
+            <h5 class="mb-0"><i class="fas fa-users mr-2"></i>Group Seva Bookings</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if group_sevas %}
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Planned Date</th>
+                            <th>Members</th>
+                            <th>Created By</th>
+                            <th>Booked On</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gs in group_sevas %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ gs.planned_date|date:"d M Y" }}</strong></td>
+                            <td>
+                                <span class="badge badge-primary">{{ gs.num_members }} members</span>
+                                {% if gs.members.count < gs.num_members %}
+                                    <span class="badge badge-warning ml-1">{{ gs.members.count }}/{{ gs.num_members }} filled</span>
+                                {% else %}
+                                    <span class="badge badge-success ml-1">Complete</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ gs.created_by.name|default:"—" }}</td>
+                            <td>{{ gs.created_at|date:"d M Y, H:i" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    data-toggle="collapse" data-target="#group-members-{{ gs.pk }}"
+                                    aria-expanded="false">
+                                    <i class="fas fa-eye"></i> Members
+                                </button>
+                                <a href="{% url 'ttd_group_seva_print' gs.pk %}" target="_blank" class="btn btn-sm btn-outline-primary" title="Print">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                <form method="post" action="{% url 'ttd_group_seva_delete' gs.pk %}" class="d-inline" onsubmit="return confirm('Delete this group seva?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="6" class="p-0">
+                                <div class="collapse" id="group-members-{{ gs.pk }}">
+                                    <div class="p-3 bg-light">
+                                        {% if gs.members.all %}
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="thead-dark">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Name</th>
+                                                    <th>Mobile</th>
+                                                    <th>Aadhaar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for member in gs.members.all %}
+                                                <tr>
+                                                    <td>{{ forloop.counter }}</td>
+                                                    <td>{{ member.name }}</td>
+                                                    <td>{{ member.mobile_number }}</td>
+                                                    <td>{{ member.aadhar_number }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                        {% else %}
+                                        <p class="text-muted mb-0">No member details added yet.</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted p-3 mb-0">No group seva bookings yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Individual Darshans -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header" style="background:#d4a017; color:#fff;">
+            <h5 class="mb-0"><i class="fas fa-pray mr-2"></i>Individual Darshan Bookings</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if individual_darshans %}
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Mobile</th>
+                            <th>Aadhaar</th>
+                            <th>Planned Date</th>
+                            <th>Slot Time</th>
+                            <th>Created By</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for darshan in individual_darshans %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ darshan.name }}</strong></td>
+                            <td>{{ darshan.mobile_number }}</td>
+                            <td>{{ darshan.aadhar_number }}</td>
+                            <td>{{ darshan.planned_date|date:"d M Y" }}</td>
+                            <td><span class="badge badge-info">{{ darshan.get_slot_time_display }}</span></td>
+                            <td>{{ darshan.created_by.name|default:"—" }}</td>
+                            <td>
+                                <a href="{% url 'ttd_individual_darshan_print' darshan.pk %}" target="_blank" class="btn btn-sm btn-outline-primary" title="Print">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                <form method="post" action="{% url 'ttd_individual_darshan_delete' darshan.pk %}" class="d-inline" onsubmit="return confirm('Delete this booking?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted p-3 mb-0">No individual darshan bookings yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

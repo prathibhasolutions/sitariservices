@@ -1504,3 +1504,103 @@ class NotificationAdmin(admin.ModelAdmin):
 
 
 # Remove the problematic override - we'll use template context instead
+
+
+# --- TTD Admin ---
+from .models import TTDGroupSeva, TTDGroupMember, TTDIndividualDarshan
+
+
+class TTDGroupMemberInline(admin.TabularInline):
+    model = TTDGroupMember
+    extra = 0
+    fields = ('order', 'name', 'mobile_number', 'aadhar_number')
+    ordering = ('order',)
+
+
+@admin.register(TTDGroupSeva)
+class TTDGroupSevaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'planned_date', 'num_members', 'members_filled', 'created_by', 'created_at', 'print_button')
+    list_filter = ('planned_date',)
+    search_fields = ('created_by__name',)
+    ordering = ('-created_at',)
+    inlines = [TTDGroupMemberInline]
+    readonly_fields = ('created_at',)
+
+    @admin.display(description='Members Registered')
+    def members_filled(self, obj):
+        return f"{obj.members.count()} / {obj.num_members}"
+
+    @admin.display(description='Print')
+    def print_button(self, obj):
+        url = reverse('admin:ttd-group-seva-print', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" target="_blank" '
+            'style="background:#8B1A1A;color:#fff;padding:4px 12px;border-radius:4px;'
+            'text-decoration:none;font-size:12px;">&#128438; Print</a>',
+            url
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:group_id>/print/',
+                self.admin_site.admin_view(self.admin_print_view),
+                name='ttd-group-seva-print',
+            ),
+        ]
+        return custom_urls + urls
+
+    def admin_print_view(self, request, group_id):
+        from django.http import Http404
+        try:
+            group_seva = TTDGroupSeva.objects.prefetch_related('members').get(pk=group_id)
+        except TTDGroupSeva.DoesNotExist:
+            raise Http404
+        return render(request, 'ttd_group_seva_print.html', {'group_seva': group_seva})
+
+
+@admin.register(TTDGroupMember)
+class TTDGroupMemberAdmin(admin.ModelAdmin):
+    list_display = ('name', 'mobile_number', 'aadhar_number', 'group', 'order')
+    search_fields = ('name', 'mobile_number', 'aadhar_number')
+    list_filter = ('group__planned_date',)
+    ordering = ('group', 'order')
+
+
+@admin.register(TTDIndividualDarshan)
+class TTDIndividualDarshanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'mobile_number', 'aadhar_number', 'planned_date', 'slot_time', 'created_by', 'created_at', 'print_button')
+    list_filter = ('planned_date', 'slot_time')
+    search_fields = ('name', 'mobile_number', 'aadhar_number')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at',)
+
+    @admin.display(description='Print')
+    def print_button(self, obj):
+        url = reverse('admin:ttd-individual-darshan-print', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" target="_blank" '
+            'style="background:#d4a017;color:#fff;padding:4px 12px;border-radius:4px;'
+            'text-decoration:none;font-size:12px;">&#128438; Print</a>',
+            url
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:darshan_id>/print/',
+                self.admin_site.admin_view(self.admin_print_view),
+                name='ttd-individual-darshan-print',
+            ),
+        ]
+        return custom_urls + urls
+
+    def admin_print_view(self, request, darshan_id):
+        from django.http import Http404
+        try:
+            darshan = TTDIndividualDarshan.objects.get(pk=darshan_id)
+        except TTDIndividualDarshan.DoesNotExist:
+            raise Http404
+        return render(request, 'ttd_individual_darshan_print.html', {'darshan': darshan})

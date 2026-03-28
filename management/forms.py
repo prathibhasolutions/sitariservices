@@ -264,6 +264,81 @@ class EmployeeProfilePictureForm(forms.ModelForm):
         }
 
 
+# --- TTD Forms ---
+
+from .models import TTDGroupSeva, TTDGroupMember, TTDIndividualDarshan
+
+class TTDGroupSevaStep1Form(forms.ModelForm):
+    """Step 1: Capture group size and planned date for TTD Group Seva."""
+    class Meta:
+        model = TTDGroupSeva
+        fields = ['planned_date', 'num_members']
+        widgets = {
+            'planned_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'num_members': forms.NumberInput(attrs={
+                'class': 'form-control', 'min': 1, 'max': 100,
+                'placeholder': 'e.g. 5'
+            }),
+        }
+        labels = {
+            'planned_date': 'Planned Date',
+            'num_members': 'Number of Members',
+        }
+
+
+class TTDGroupMemberForm(forms.ModelForm):
+    """Form for a single TTD group member."""
+    class Meta:
+        model = TTDGroupMember
+        fields = ['name', 'mobile_number', 'aadhar_number']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Full Name'}),
+            'mobile_number': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': '10-digit mobile',
+                'maxlength': '15',
+            }),
+            'aadhar_number': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': '12-digit Aadhaar',
+                'maxlength': '12',
+            }),
+        }
+
+
+TTDGroupMemberFormSet = forms.modelformset_factory(
+    TTDGroupMember,
+    form=TTDGroupMemberForm,
+    extra=0,
+    can_delete=False,
+)
+
+
+class TTDIndividualDarshanForm(forms.ModelForm):
+    """Form for booking an individual TTD darshan."""
+    class Meta:
+        model = TTDIndividualDarshan
+        fields = ['name', 'mobile_number', 'aadhar_number', 'planned_date', 'slot_time']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Full Name'}),
+            'mobile_number': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': '10-digit mobile',
+                'maxlength': '15',
+            }),
+            'aadhar_number': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': '12-digit Aadhaar',
+                'maxlength': '12',
+            }),
+            'planned_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'slot_time': forms.Select(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'name': 'Full Name',
+            'mobile_number': 'Mobile Number',
+            'aadhar_number': 'Aadhaar Number',
+            'planned_date': 'Planned Date',
+            'slot_time': 'Slot Time',
+        }
+
+
 
 from .models import Employee
 
