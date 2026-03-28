@@ -420,27 +420,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="d-flex align-items-center" style="gap:1rem; flex-shrink:0;">
                     <div style="text-align:center; line-height:1.1;">
                         <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Target</div>
-                        <div style="font-size:0.9rem; font-weight:700; color:#ffd700;">
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">
                             {% if navbar_daily_target is not None %}₹{{ navbar_daily_target|floatformat:0 }}{% else %}<span style="color:rgba(255,255,255,0.4);">—</span>{% endif %}
                         </div>
                     </div>
                     <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
                     <div style="text-align:center; line-height:1.1;">
                         <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Collected</div>
-                        <div style="font-size:0.9rem; font-weight:700; color:#5cb85c;">₹{{ navbar_daily_collected|floatformat:0 }}</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">₹{{ navbar_daily_collected|floatformat:0 }}</div>
                     </div>
                     <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
                     <div style="text-align:center; line-height:1.1;">
                         <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Balance</div>
-                        <div style="font-size:0.9rem; font-weight:700;
-                            {% if navbar_daily_balance is not None %}
-                                {% if navbar_daily_balance <= 0 %}color:#5cb85c;{% else %}color:#d9534f;{% endif %}
-                            {% else %}color:rgba(255,255,255,0.4);{% endif %}">
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">
                             {% if navbar_daily_balance is not None %}₹{{ navbar_daily_balance|floatformat:0 }}{% else %}—{% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
+                    <!-- Commission widget (rightmost before timer) -->
+                    <div style="text-align:center; line-height:1.1; flex-shrink:0;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Comm. Due</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#ff4d4d;">₹{{ navbar_daily_commission|floatformat:2 }}</div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem; flex-shrink:0;">|</div>
                     <!-- Session Timer Widget (unchanged, but no mobile stacking) -->
                     <div id="session-timer-container" class="mr-2" style="flex-shrink:0;">
                         <button id="session-timer" data-toggle="tooltip" title="Session Timer" class="btn btn-warning" style="font-weight:bold; min-width:70px; transition:background 0.3s;">15:00</button>
@@ -482,7 +485,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <h4 id="employee-next-day-alert-title" style="margin:0; font-weight:700;">Tomorrow Attendance Confirmation</h4>
         </div>
         <div class="employee-alert-card-body">
-            <p style="font-size:1.05rem; margin-bottom:8px;">Will you come tomorrow, on {{ employee_next_day_alert_target_date|date:"d M Y" }}?</p>
+            <p style="font-size:1.05rem; margin-bottom:8px;">Will you come on {{ employee_next_day_alert_target_date|date:"l" }}, {{ employee_next_day_alert_target_date|date:"d M Y" }}?</p>
             <div class="employee-alert-badge">This alert is active from {{ employee_next_day_alert_start_label }} to {{ employee_next_day_alert_end_label }}.</div>
             <p class="employee-alert-meta">Until you select an answer, all employee features stay disabled. If you do not answer by {{ employee_next_day_alert_end_label }}, the system will automatically mark <strong>No</strong>.</p>
             <div class="employee-alert-actions">

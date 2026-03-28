@@ -86,10 +86,72 @@
 
 {% block content %}
 <div class="leave-toolbar">
-    <h1 class="leave-title">Leave Management (Tomorrow: {{ tomorrow }})</h1>
+    <h1 class="leave-title">Leave Management — Next Working Day: {{ tomorrow|date:"l, d M Y" }}</h1>
     <button type="button" class="btn btn-primary leave-print-btn" onclick="window.print()">
         <i class="fas fa-print"></i> Print
     </button>
+</div>
+
+<!-- Holiday Management Panel -->
+<div class="leave-wrap mb-4" style="border-left: 4px solid #e05c2a;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <h5 style="margin:0; font-weight:700; color:#e05c2a;"><i class="fas fa-umbrella-beach"></i> Holiday Management</h5>
+        <button class="btn btn-sm btn-warning" type="button" onclick="document.getElementById('add-holiday-form').style.display = document.getElementById('add-holiday-form').style.display === 'none' ? 'flex' : 'none';">
+            <i class="fas fa-plus"></i> Mark a Holiday
+        </button>
+    </div>
+
+    <!-- Add holiday form (hidden by default) -->
+    <form id="add-holiday-form" method="post" style="display:none; align-items:flex-end; gap:10px; flex-wrap:wrap; background:#fff8f0; border:1px solid #f5c8a0; border-radius:6px; padding:12px; margin-bottom:12px;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_holiday">
+        <div>
+            <label style="font-size:.85rem; font-weight:600;">Date</label>
+            <input type="date" name="holiday_date" class="form-control" min="{{ today_iso }}" required style="min-width:160px;">
+        </div>
+        <div style="flex:1; min-width:180px;">
+            <label style="font-size:.85rem; font-weight:600;">Reason <span style="font-weight:400;">(optional)</span></label>
+            <input type="text" name="holiday_reason" class="form-control" placeholder="e.g. Ugadi, Diwali...">
+        </div>
+        <div style="align-self:flex-end;">
+            <button type="submit" class="btn btn-warning"><i class="fas fa-check"></i> Save Holiday</button>
+        </div>
+    </form>
+
+    <!-- Upcoming holidays list -->
+    {% if upcoming_holidays %}
+    <div class="table-responsive" style="margin-bottom:0;">
+        <table class="table table-sm table-bordered mb-0">
+            <thead style="background:#fff3eb;">
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>Reason</th>
+                    <th style="width:80px;">Remove</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in upcoming_holidays %}
+                <tr>
+                    <td><strong>{{ h.date|date:"d M Y" }}</strong></td>
+                    <td>{{ h.date|date:"l" }}</td>
+                    <td>{{ h.reason|default:"—" }}</td>
+                    <td>
+                        <form method="post" style="margin:0;" onsubmit="return confirm('Remove this holiday?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_holiday">
+                            <input type="hidden" name="holiday_id" value="{{ h.pk }}">
+                            <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color:#999; margin:0; font-size:.9rem;">No upcoming holidays marked.</p>
+    {% endif %}
 </div>
 
 <div class="leave-wrap">

@@ -6,6 +6,14 @@ from django.http import HttpResponseRedirect
 from django.utils.deprecation import MiddlewareMixin
 from .admin_otp_login import admin_login_with_otp
 from django.contrib import admin as django_admin
+from django.contrib import admin as _adm
+from .models import Holiday
+
+@_adm.register(Holiday)
+class HolidayAdmin(_adm.ModelAdmin):
+    list_display = ('date', 'reason', 'created_at')
+    search_fields = ('reason',)
+    ordering = ('date',)
 
 def custom_admin_login(request, extra_context=None):
     return admin_login_with_otp(request)
@@ -91,6 +99,9 @@ class TodoTaskAdmin(admin.ModelAdmin):
         return (obj.description[:40] + '...') if len(obj.description) > 40 else obj.description
     short_description.short_description = 'Description'
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
     list_display = ('short_description', 'employee', 'due_time', 'created_at', 'completed')
     search_fields = ('description', 'employee__name')
     list_filter = ('employee', 'completed')
@@ -138,6 +149,19 @@ class ManagedLinkAdmin(admin.ModelAdmin):
 from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction, SalaryPayment
 
 
+class ExcludeLockedEmployeesMixin:
+    """Hides records belonging to locked employees from list views,
+    and removes locked employees from FK dropdowns in all non-Employee admin pages."""
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'employee':
+            kwargs['queryset'] = Employee.objects.filter(locked=False).order_by('name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
 class TrainingBonusInline(admin.TabularInline):
     model = TrainingBonus
     extra = 0  # Show one empty row for adding a new bonus
@@ -163,9 +187,9 @@ class MonthlyDeductionInline(admin.TabularInline):
 class SalaryPaymentInline(admin.TabularInline):
     model = SalaryPayment
     extra = 0
-    fields = ('date', 'amount')
-    verbose_name = 'Salary Payment'
-    verbose_name_plural = 'Paid'
+    fields = ('date', 'payment_type', 'amount')
+    verbose_name = 'Payment'
+    verbose_name_plural = 'Payments'
 
 # In your management/admin.py file
 
@@ -187,7 +211,7 @@ class EmployeeAdmin(admin.ModelAdmin):
     
     # --- 2. THIS IS THE FIX: Fieldset and Readonly Field Configuration ---
     # We define a readonly field to show the image preview.
-    readonly_fields = ('profile_pic_preview', 'total_paid_month', 'salary_balance')
+    readonly_fields = ('profile_pic_preview', 'total_paid_month', 'salary_balance', 'total_commission_paid_month', 'commission_due')
 
     fieldsets = (
         ('Personal Information', {
@@ -202,7 +226,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             )
         }),
         ('Salary & Compensation', {
-            'fields': ('salary', 'pf', 'esi', 'total_paid_month', 'salary_balance')
+            'fields': ('salary', 'pf', 'esi', 'total_paid_month', 'salary_balance', 'total_commission_paid_month', 'commission_due')
         }),
         ('Working Hours', {
             'fields': ('working_start_time', 'working_end_time')
@@ -249,7 +273,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             )
         return "(No Image)"
 
-    @admin.display(description='Total Paid (This Month)')
+    @admin.display(description='Salary Paid (This Month)')
     def total_paid_month(self, obj):
         if not obj.pk:
             return '-'
@@ -259,13 +283,14 @@ class EmployeeAdmin(admin.ModelAdmin):
         total = obj.salary_payments.filter(
             date__year=now.year,
             date__month=now.month,
+            payment_type='salary',
         ).aggregate(total=Sum('amount'))['total'] or 0
         return format_html(
             '<strong style="font-size:1.1em;">₹{}</strong>',
             f'{total:,.2f}'
         )
 
-    @admin.display(description='Balance Amount (This Month)')
+    @admin.display(description='Salary Balance (This Month)')
     def salary_balance(self, obj):
         if not obj.pk:
             return '-'
@@ -275,12 +300,55 @@ class EmployeeAdmin(admin.ModelAdmin):
         total_paid = obj.salary_payments.filter(
             date__year=now.year,
             date__month=now.month,
+            payment_type='salary',
         ).aggregate(total=Sum('amount'))['total'] or 0
         balance = (obj.salary or 0) - total_paid
         color = 'green' if balance >= 0 else 'red'
         return format_html(
             '<strong style="font-size:1.1em; color:{};">₹{}</strong>',
             color, f'{balance:,.2f}'
+        )
+
+    @admin.display(description='Commission Paid (This Month)')
+    def total_commission_paid_month(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='commission',
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        return format_html(
+            '<strong style="font-size:1.1em;">₹{}</strong>',
+            f'{total:,.2f}'
+        )
+
+    @admin.display(description='Commission Due (This Month)')
+    def commission_due(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        from decimal import Decimal
+        now = timezone.now()
+        earnings = obj.get_current_month_earnings(now.year, now.month)
+        total_earned = (
+            (earnings.get('worksheet_commissions') or Decimal('0')) +
+            (earnings.get('application_commissions') or Decimal('0'))
+        )
+        total_paid = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='commission',
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        due = total_earned - total_paid
+        color = 'green' if due > 0 else ('gray' if due == 0 else 'red')
+        return format_html(
+            '<strong style="font-size:1.1em; color:{};">₹{}</strong>',
+            color, f'{due:,.2f}'
         )
 
     @admin.display(description='Picture')
@@ -304,6 +372,13 @@ class EmployeeAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green;">&#128994; Active</span>')
         return format_html('<span style="color: red;">&#128308; Inactive</span>')
     display_status.short_description = 'Status'
+
+    def get_search_results(self, request, queryset, search_term):
+        """Exclude locked employees from autocomplete results used by FK dropdowns elsewhere."""
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if 'app_label' in request.GET and 'model_name' in request.GET:
+            queryset = queryset.filter(locked=False)
+        return queryset, use_distinct
 
     # --- 6. MODIFIED: Add the new Salary Report URL ---
     def get_urls(self):
@@ -612,7 +687,7 @@ from .models import Worksheet, Employee
 
 
 @admin.register(Worksheet)
-class WorksheetAdmin(admin.ModelAdmin):
+class WorksheetAdmin(ExcludeLockedEmployeesMixin, admin.ModelAdmin):
     """
     Consolidated and corrected admin class for the Worksheet model.
     This version uses only native Django and Jazzmin features.
@@ -766,7 +841,7 @@ class ResourceRepairReportAdmin(admin.ModelAdmin):
     date_hierarchy = 'date'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
+        return super().get_queryset(request).select_related('employee').filter(employee__locked=False)
 
 
 # --- Your Other Custom Admins (Unchanged) ---
@@ -828,7 +903,7 @@ class UploadServiceAdmin(admin.ModelAdmin):
 
 
 @admin.register(EmployeeUpload)
-class EmployeeUploadAdmin(admin.ModelAdmin):
+class EmployeeUploadAdmin(ExcludeLockedEmployeesMixin, admin.ModelAdmin):
     list_display = ('employee', 'service', 'short_description', 'mobile_number', 'file_link', 'uploaded_at', 'colored_renewal_date')
     list_filter = ('service', 'employee', 'uploaded_at', 'renewal_date')
     search_fields = ('employee__name', 'service__name', 'description', 'mobile_number')
@@ -892,7 +967,7 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
         from django.shortcuts import render, redirect
 
         class EmployeeChoiceForm(forms.Form):
-            employee = forms.ModelChoiceField(queryset=Employee.objects.all(), label="Assign to employee")
+            employee = forms.ModelChoiceField(queryset=Employee.objects.filter(locked=False).order_by('name'), label="Assign to employee")
 
         if 'apply' in request.POST:
             form = EmployeeChoiceForm(request.POST)
@@ -940,6 +1015,9 @@ class ApplicationAssignmentInline(admin.TabularInline):
     model = ApplicationAssignment
     extra = 1
     autocomplete_fields = ['employee']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
 
 
 from django.contrib import admin
@@ -1022,6 +1100,9 @@ class MeetingAttendanceInline(admin.TabularInline):
     extra = 1 # Shows one extra empty row for adding attendees
     autocomplete_fields = ['employee'] # Recommended for easier employee selection
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
 
 @admin.register(Meeting)
 class MeetingAdmin(admin.ModelAdmin):
@@ -1085,6 +1166,9 @@ class BreakSessionAdmin(admin.ModelAdmin):
         self.message_user(request, f'{rows_updated} break session(s) were successfully approved.')
 
     # --- 4. Helper methods for display (Unchanged) ---
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
     @admin.display(description='Employee Name', ordering='employee__name')
     def get_employee_name(self, obj):
         return obj.employee.name
@@ -1137,7 +1221,7 @@ class DepartmentAdmin(admin.ModelAdmin):
         if db_field.name == 'department_head':
             object_id = request.resolver_match.kwargs.get('object_id') if request.resolver_match else None
             if object_id:
-                kwargs['queryset'] = Employee.objects.filter(department_id=object_id).order_by('name')
+                kwargs['queryset'] = Employee.objects.filter(department_id=object_id, locked=False).order_by('name')
             else:
                 kwargs['queryset'] = Employee.objects.none()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)

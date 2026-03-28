@@ -1,7 +1,7 @@
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Department, Employee, EmployeeTarget, UserNotificationStatus, Worksheet
+from .models import Department, Employee, EmployeeTarget, UserNotificationStatus, Worksheet, SalaryPayment
 from .utils import format_hour_label, get_employee_next_day_alert_state
 
 def notifications_context(request):
@@ -57,11 +57,18 @@ def employee_next_day_alert_context(request):
 
 def employee_daily_stats_context(request):
     """
-    Provides today's target, total worksheet amount collected, and balance for the navbar.
+    Provides today's target, total worksheet amount collected, balance,
+    and this month's commission due (earned minus paid) for the navbar.
     """
+    from decimal import Decimal
     employee_id = request.session.get('employee_id')
     if not employee_id:
-        return {'navbar_daily_target': None, 'navbar_daily_collected': None, 'navbar_daily_balance': None}
+        return {
+            'navbar_daily_target': None,
+            'navbar_daily_collected': None,
+            'navbar_daily_balance': None,
+            'navbar_daily_commission': None,
+        }
 
     today = timezone.localtime(timezone.now()).date()
 
@@ -74,8 +81,29 @@ def employee_daily_stats_context(request):
 
     balance = (target - collected) if target is not None else None
 
+    # Commission due = total commission earned this month - total commission paid this month
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+        earnings = employee.get_current_month_earnings(today.year, today.month)
+        commission_earned = (
+            (earnings.get('worksheet_commissions') or Decimal('0')) +
+            (earnings.get('application_commissions') or Decimal('0'))
+        )
+    except Employee.DoesNotExist:
+        commission_earned = Decimal('0')
+
+    commission_paid = SalaryPayment.objects.filter(
+        employee__employee_id=employee_id,
+        payment_type='commission',
+        date__year=today.year,
+        date__month=today.month,
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+    commission_due = commission_earned - Decimal(str(commission_paid))
+
     return {
         'navbar_daily_target': target,
         'navbar_daily_collected': collected,
         'navbar_daily_balance': balance,
+        'navbar_daily_commission': commission_due,
     }

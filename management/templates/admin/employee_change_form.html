@@ -31,6 +31,30 @@
             float: none;
             display: inline-block;
         }
+        /* Payment print toolbar */
+        .payment-print-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 0.6rem 1rem;
+            margin-bottom: 1rem;
+        }
+        .payment-print-bar label {
+            margin-bottom: 0;
+            font-weight: 600;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        .payment-print-bar input[type="date"] {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.85rem;
+        }
     </style>
     <script>
         /* Hide the now-empty right sidebar column */
@@ -41,6 +65,101 @@
                 if (col) col.style.display = 'none';
             }
         });
+
+        function printPayments() {
+            var fromVal = document.getElementById('print-from-date').value;
+            var toVal   = document.getElementById('print-to-date').value;
+            var from = fromVal ? new Date(fromVal) : null;
+            var to   = toVal   ? new Date(toVal)   : null;
+            if (to) to.setHours(23, 59, 59, 999);
+
+            // Gather rows from the payments inline table
+            var rows = document.querySelectorAll('#salarypayment_set-group .dynamic-salarypayment_set:not(.empty-form)');
+            var payments = [];
+            rows.forEach(function(row) {
+                // Skip rows marked for deletion
+                var delCb = row.querySelector('input[type="checkbox"][id$="-DELETE"]');
+                if (delCb && delCb.checked) return;
+
+                var dateInput = row.querySelector('input[type="date"], input[id$="-date"]');
+                var amtInput  = row.querySelector('input[id$="-amount"]');
+                var typeSelect = row.querySelector('select[id$="-payment_type"]');
+                if (!dateInput || !dateInput.value) return;
+
+                var rowDate = new Date(dateInput.value);
+                if (from && rowDate < from) return;
+                if (to   && rowDate > to)   return;
+
+                payments.push({
+                    date: dateInput.value,
+                    type: typeSelect ? typeSelect.options[typeSelect.selectedIndex].text : 'Salary',
+                    amount: amtInput ? amtInput.value : ''
+                });
+            });
+
+            // Sort by date asc
+            payments.sort(function(a, b) { return a.date.localeCompare(b.date); });
+
+            var empName = '{{ original.name|default:"Employee" }}';
+            var empId   = '{{ original.employee_id|default:"" }}';
+            var salary  = '{{ original.salary|default:"" }}';
+            var dateLabel = '';
+            if (fromVal && toVal)     dateLabel = fromVal + ' to ' + toVal;
+            else if (fromVal)         dateLabel = 'From ' + fromVal;
+            else if (toVal)           dateLabel = 'Up to ' + toVal;
+            else                      dateLabel = 'All dates';
+
+            var totalSalary = 0, totalCommission = 0;
+            var rowsHtml = payments.map(function(p, i) {
+                var amt = parseFloat(p.amount) || 0;
+                if (p.type.toLowerCase() === 'commission') totalCommission += amt;
+                else totalSalary += amt;
+                return '<tr>' +
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td>' + p.date + '</td>' +
+                    '<td>' + p.type + '</td>' +
+                    '<td style="text-align:right;">\u20b9' + amt.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
+                '</tr>';
+            }).join('');
+
+            var html = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+                '<title>Payment Summary \u2014 ' + empName + '</title>' +
+                '<style>' +
+                'body{font-family:Arial,sans-serif;font-size:13px;color:#222;padding:24px;}' +
+                'h2{margin:0 0 4px;}' +
+                '.meta{color:#555;font-size:12px;margin-bottom:16px;}' +
+                'table{width:100%;border-collapse:collapse;margin-bottom:16px;}' +
+                'th{background:#3c3c3c;color:#fff;padding:7px 10px;text-align:left;}' +
+                'td{padding:6px 10px;border-bottom:1px solid #ddd;}' +
+                'tr:last-child td{border-bottom:none;}' +
+                '.totals td{font-weight:700;background:#f5f5f5;}' +
+                '.footer{font-size:11px;color:#888;margin-top:20px;border-top:1px solid #ddd;padding-top:8px;}' +
+                '@media print{body{padding:0;}}' +
+                '</style></head><body>' +
+                '<h2>Payment Summary</h2>' +
+                '<div class="meta">' +
+                    '<strong>' + empName + '</strong>' +
+                    (empId ? ' &nbsp;|&nbsp; ID: ' + empId : '') +
+                    (salary ? ' &nbsp;|&nbsp; Monthly Salary: \u20b9' + salary : '') +
+                    ' &nbsp;|&nbsp; Period: ' + dateLabel +
+                '</div>' +
+                '<table><thead><tr><th>#</th><th>Date</th><th>Type</th><th>Amount</th></tr></thead>' +
+                '<tbody>' + (rowsHtml || '<tr><td colspan="4" style="text-align:center;color:#888;">No payments in this date range.</td></tr>') + '</tbody>' +
+                '<tfoot class="totals">' +
+                    '<tr><td colspan="2"></td><td>Salary Total</td><td style="text-align:right;">\u20b9' + totalSalary.toLocaleString('en-IN',{minimumFractionDigits:2}) + '</td></tr>' +
+                    '<tr><td colspan="2"></td><td>Commission Total</td><td style="text-align:right;">\u20b9' + totalCommission.toLocaleString('en-IN',{minimumFractionDigits:2}) + '</td></tr>' +
+                    '<tr><td colspan="2"></td><td>Grand Total</td><td style="text-align:right;">\u20b9' + (totalSalary+totalCommission).toLocaleString('en-IN',{minimumFractionDigits:2}) + '</td></tr>' +
+                '</tfoot>' +
+                '</table>' +
+                '<div class="footer">Printed on ' + new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) + '</div>' +
+                '</body></html>';
+
+            var win = window.open('', '_blank', 'width=800,height=600');
+            win.document.write(html);
+            win.document.close();
+            win.focus();
+            win.print();
+        }
     </script>
 {% endblock %}
 
@@ -83,10 +202,10 @@
                     {% endif %}
                 </div>
 
-                {# Tab navigation — "Paid" inline is merged into Salary & Compensation, so hide its own tab #}
+                {# Tab navigation — "Payments" inline is merged into Salary & Compensation, so hide its own tab #}
                 <ul class="nav nav-tabs mb-3" role="tablist" id="jazzy-tabs">
                     {% for fieldset in all_forms %}
-                        {% if not fieldset.is_inline or fieldset.name != "Paid" %}
+                        {% if not fieldset.is_inline or fieldset.name != "Payments" %}
                             <li class="nav-item">
                                 <a class="nav-link{% if forloop.first %} active{% endif %}"
                                    data-toggle="pill" role="tab"
@@ -103,7 +222,7 @@
                 {# Tab panes #}
                 <div class="tab-content">
                     {% for fieldset in all_forms %}
-                        {% if not fieldset.is_inline or fieldset.name != "Paid" %}
+                        {% if not fieldset.is_inline or fieldset.name != "Payments" %}
                             <div id="{{ fieldset.name|default:general_tab|unicode_slugify }}-tab"
                                  class="tab-pane fade{% if forloop.first %} active show{% endif %} {{ fieldset.classes|default:'' }}"
                                  role="tabpanel"
@@ -113,9 +232,19 @@
                                 {% else %}
                                     {% include "admin/includes/fieldset.html" with card=True %}
                                     {% if fieldset.name == "Salary & Compensation" %}
-                                        {# Render the Paid inline (payments table) inline here #}
+                                        {# Print toolbar #}
+                                        <div class="payment-print-bar">
+                                            <label for="print-from-date">From:</label>
+                                            <input type="date" id="print-from-date">
+                                            <label for="print-to-date">To:</label>
+                                            <input type="date" id="print-to-date">
+                                            <button type="button" class="btn btn-secondary btn-sm" onclick="printPayments()">
+                                                <i class="fas fa-print"></i> Print Payments
+                                            </button>
+                                        </div>
+                                        {# Render the Payments inline inside this tab #}
                                         {% for paid_section in all_forms %}
-                                            {% if paid_section.is_inline and paid_section.name == "Paid" %}
+                                            {% if paid_section.is_inline and paid_section.name == "Payments" %}
                                                 {% include paid_section.opts.template with inline_admin_formset=paid_section %}
                                             {% endif %}
                                         {% endfor %}

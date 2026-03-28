@@ -101,18 +101,42 @@ def department_topup_view(request):
     }
     return render(request, 'management/department_topup.html', context)
 from django.contrib.auth.decorators import user_passes_test
-from .models import Employee, EmployeeNextDayAvailability
+from .models import Employee, EmployeeNextDayAvailability, Holiday
 def admin_only(user):
     return user.is_active and user.is_superuser
 
 # --- Admin: Leave Management Report ---
 @user_passes_test(admin_only)
 def admin_leave_management(request):
-    tomorrow = timezone.localdate() + timezone.timedelta(days=1)
+    from django.contrib import messages
+    tomorrow = next_working_day(timezone.localdate())
 
     if request.method == 'POST':
-        from django.contrib import messages
+        action = request.POST.get('action', '')
 
+        # ── Holiday actions ────────────────────────────────────────
+        if action == 'add_holiday':
+            date_str = request.POST.get('holiday_date', '').strip()
+            reason = request.POST.get('holiday_reason', '').strip()
+            if date_str:
+                try:
+                    from datetime import date as _date
+                    holiday_date = _date.fromisoformat(date_str)
+                    Holiday.objects.get_or_create(date=holiday_date, defaults={'reason': reason})
+                    messages.success(request, f"Holiday marked for {holiday_date}.")
+                except ValueError:
+                    messages.error(request, "Invalid date.")
+            else:
+                messages.error(request, "Please select a date.")
+            return redirect('admin_leave_management')
+
+        if action == 'delete_holiday':
+            holiday_id = request.POST.get('holiday_id')
+            Holiday.objects.filter(pk=holiday_id).delete()
+            messages.success(request, "Holiday removed.")
+            return redirect('admin_leave_management')
+
+        # ── Employee availability action ───────────────────────────
         employee_id = request.POST.get('employee_id')
         will_come_value = request.POST.get('will_come')
 
@@ -144,8 +168,18 @@ def admin_leave_management(request):
             'employee': emp,
             'availability': record,
         })
+
+    from datetime import date as _date
+    today = timezone.localdate()
+    upcoming_holidays = Holiday.objects.filter(date__gte=today).order_by('date')
+
     ctx = admin.site.each_context(request)
-    ctx.update({'records': records, 'tomorrow': tomorrow})
+    ctx.update({
+        'records': records,
+        'tomorrow': tomorrow,
+        'upcoming_holidays': upcoming_holidays,
+        'today_iso': today.isoformat(),
+    })
     return render(request, 'admin_leave_management.html', ctx)
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.contrib import admin
@@ -287,7 +321,7 @@ from django.db import models
 from .models import Invoice
 from django.http import JsonResponse
 from .forms import InvoiceForm, ParticularFormSet,WorksheetEntryEditForm
-from .utils import generate_otp, send_otp_whatsapp, get_employee_next_day_alert_state
+from .utils import generate_otp, send_otp_whatsapp, get_employee_next_day_alert_state, next_working_day
 from .models import Employee,AttendanceSession, BreakSession, Application, ApplicationAssignment, ChatMessage, Commission,Worksheet
 from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
@@ -791,8 +825,10 @@ def submit_next_day_availability(request, employee):
 @require_employee
 def todays_absentees_view(request, employee):
     today = timezone.localdate()
+    # On Saturday show Monday's absentees; any other day shows tomorrow's
+    absentee_date = next_working_day(today)
     absentees = EmployeeNextDayAvailability.objects.filter(
-        target_date=today,
+        target_date=absentee_date,
         will_come=False,
     ).select_related('employee').order_by('employee__name')
 
@@ -803,6 +839,7 @@ def todays_absentees_view(request, employee):
     context = {
         'employee': employee,
         'today': today,
+        'absentee_date': absentee_date,
         'absentees': absentees,
         'is_department_head': is_department_head,
     }

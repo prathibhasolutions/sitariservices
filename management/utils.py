@@ -39,6 +39,20 @@ def format_hour_label(hour):
     return f"{hour_12}:00 {am_pm}"
 
 
+def next_working_day(date):
+    """Return the next working day after `date`, skipping Sundays and admin-declared holidays."""
+    from .models import Holiday
+    # Fetch holidays in a 14-day window to avoid repeated DB hits in the loop
+    holiday_dates = set(
+        Holiday.objects.filter(date__gt=date, date__lte=date + timedelta(days=14))
+        .values_list('date', flat=True)
+    )
+    candidate = date + timedelta(days=1)
+    while candidate.weekday() == 6 or candidate in holiday_dates:  # 6 = Sunday
+        candidate += timedelta(days=1)
+    return candidate
+
+
 def get_employee_next_day_alert_state(employee, now_local=None):
     from .models import EmployeeNextDayAvailability
 
@@ -58,7 +72,7 @@ def get_employee_next_day_alert_state(employee, now_local=None):
     if now_local is None:
         now_local = timezone.localtime(timezone.now())
 
-    target_date = (now_local + timedelta(days=1)).date()
+    target_date = next_working_day(now_local.date())
     start_at = now_local.replace(hour=start_hour, minute=0, second=0, microsecond=0)
     end_at = now_local.replace(hour=end_hour, minute=0, second=0, microsecond=0)
 
