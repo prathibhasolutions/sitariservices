@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.db.models import Sum
 from .models import Department, DepartmentTopUp, DepartmentStock, Employee, ServiceType, Worksheet
@@ -181,6 +182,83 @@ def admin_leave_management(request):
         'today_iso': today.isoformat(),
     })
     return render(request, 'admin_leave_management.html', ctx)
+
+
+# --- Admin Dashboard ---
+def admin_dashboard(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/?next=/admin-dashboard/')
+    from .models import Employee
+    employees = Employee.objects.select_related('department').order_by('name')
+    employee_data = [
+        {
+            'employee': emp,
+            'is_active': emp.is_active(),
+        }
+        for emp in employees
+    ]
+    active_count = sum(1 for e in employee_data if e['is_active'])
+    inactive_count = len(employee_data) - active_count
+    return render(request, 'admin_dashboard.html', {
+        'employee_data': employee_data,
+        'active_count': active_count,
+        'inactive_count': inactive_count,
+        'total_count': len(employee_data),
+    })
+
+
+# --- Admin TTD Views ---
+def admin_ttd_view(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/?next=/admin-dashboard/ttd/')
+    groups = TTDGroupSeva.objects.prefetch_related('members').order_by('-created_at')
+    individual_darshans = TTDIndividualDarshan.objects.order_by('-created_at')
+    return render(request, 'admin_ttd.html', {
+        'groups': groups,
+        'individual_darshans': individual_darshans,
+    })
+
+def admin_ttd_group_print(request, group_id):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/')
+    group_seva = get_object_or_404(TTDGroupSeva.objects.prefetch_related('members'), pk=group_id)
+    return render(request, 'ttd_group_seva_print.html', {'group_seva': group_seva})
+
+def admin_ttd_individual_print(request, darshan_id):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/')
+    darshan = get_object_or_404(TTDIndividualDarshan, pk=darshan_id)
+    return render(request, 'ttd_individual_darshan_print.html', {'darshan': darshan})
+
+def admin_ttd_print_all(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/')
+    group_sevas = TTDGroupSeva.objects.prefetch_related('members').order_by('planned_date', 'created_at')
+    individual_darshans = TTDIndividualDarshan.objects.order_by('planned_date', 'slot_time')
+    return render(request, 'ttd_print_all.html', {
+        'group_sevas': group_sevas,
+        'individual_darshans': individual_darshans,
+    })
+
+
+# --- Admin: Departments Section ---
+@staff_member_required
+def admin_departments(request):
+    departments = Department.objects.all().select_related('department_head')
+    return render(request, 'management/admin_dashboard.html', {
+        'departments': departments,
+    })
+
+
+# --- Admin: Employees Section ---
+@staff_member_required
+def admin_employees(request):
+    employees = Employee.objects.select_related('department').order_by('name')
+    return render(request, 'management/admin_employees.html', {
+        'employees': employees,
+    })
+
+
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
@@ -248,7 +326,7 @@ def haversine(lat1, lon1, lat2, lon2):
     R = 6371000  # Earth radius in meters
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
+    dphi = math.radians(lon2 - lon1)
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))

@@ -60,6 +60,15 @@
 {% endblock %}
 
 {% block content %}
+    <div style="margin-bottom: 18px;">
+        <a href="{% url 'admin_dashboard' %}"
+           style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px;
+                  background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+                  color: #fff; font-weight: 700; font-size: 0.95rem;
+                  border-radius: 6px; text-decoration: none; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+            &#9783; Admin Dashboard
+        </a>
+    </div>
     {% if show_renewal_alert %}
         <div class="renewal-alert critical">
             <h3>🔔 Document Renewal Alert</h3>

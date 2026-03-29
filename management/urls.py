@@ -42,6 +42,13 @@ urlpatterns = [
     # Department Head: Top Up Page (renamed)
     path('employee/topup/', views.department_topup_view, name='department_topup'),
 
+    # Admin Dashboard
+    path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
+    path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),
+    path('admin-dashboard/ttd/individual/<int:darshan_id>/print/', views.admin_ttd_individual_print, name='admin_ttd_individual_print'),
+    path('admin-dashboard/ttd/print-all/', views.admin_ttd_print_all, name='admin_ttd_print_all'),
+
     # Admin print event logging endpoint
     path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),
 
@@ -55,5 +62,11 @@ urlpatterns = [
     path('ttd/group-seva/<int:group_id>/print/', views.ttd_group_seva_print, name='ttd_group_seva_print'),
     path('ttd/individual-darshan/<int:darshan_id>/print/', views.ttd_individual_darshan_print, name='ttd_individual_darshan_print'),
     path('ttd/print-all/', views.ttd_print_all, name='ttd_print_all'),
+
+    # Admin: Employees Section
+    path('admin-dashboard/employees/', views.admin_employees, name='admin_employees'),
+
+    # Admin: Departments Section
+    path('admin-dashboard/departments/', views.admin_departments, name='admin_departments'),
 ]
 
