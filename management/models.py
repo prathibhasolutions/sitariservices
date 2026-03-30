@@ -859,7 +859,6 @@ class Worksheet(models.Model):
     bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
 
     # Image attachments
-    token_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)
     particulars_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)
 
     class Meta:

@@ -1333,10 +1333,7 @@ def worksheet_view(request, employee):
                             dest.write(chunk)
                     return rel_path
 
-                token_file = request.FILES.get('token_image')
                 particulars_file = request.FILES.get('particulars_image')
-                if token_file:
-                    entry.token_image = _save_worksheet_image(token_file, 'token')
                 if particulars_file:
                     entry.particulars_image = _save_worksheet_image(particulars_file, 'particulars')
 
