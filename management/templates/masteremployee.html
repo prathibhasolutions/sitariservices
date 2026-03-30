@@ -459,6 +459,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <a href="{% url 'ttd_main' %}" class="mr-2" title="TTD Services" style="flex-shrink:0; display:inline-flex; align-items:center; background:rgba(0,0,0,0.35); border-radius:6px; padding:2px 5px;">
                         <img src="{% static 'img/ttd_logo.png' %}" alt="TTD" style="height:28px; width:auto; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
                     </a>
+                    <a href="{% url 'employee_upi_qr' %}" class="mr-2" data-toggle="tooltip" title="UPI QR" style="flex-shrink:0;">
+                        <i class="bi bi-qr-code navbar-upload-icon"></i>
+                    </a>
                     <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
                         <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>
                     </a>

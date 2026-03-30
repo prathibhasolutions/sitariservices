@@ -20,6 +20,7 @@ urlpatterns = [
     path('employee/refresh_session/', views.refresh_session, name='refresh_session'),
     path('employee/next-day-availability/', views.submit_next_day_availability, name='submit_next_day_availability'),
     path('employee/todays-absentees/', views.todays_absentees_view, name='todays_absentees'),
+    path('employee/upi-qr/', views.employee_upi_qr_view, name='employee_upi_qr'),
     path('worksheet/', views.worksheet_view, name='worksheet'),
     path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
     path('admin/worksheet-management/', views.admin_worksheet_management, name='admin_worksheet_management'),

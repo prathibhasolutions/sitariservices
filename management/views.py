@@ -923,6 +923,16 @@ def todays_absentees_view(request, employee):
     }
     return render(request, 'todays_absentees.html', context)
 
+
+@require_employee
+def employee_upi_qr_view(request, employee):
+    context = {
+        'employee': employee,
+        'upi_id': '9542906390@ybl',
+        'upi_payee_name': 'Sitari Services',
+    }
+    return render(request, 'upi_qr.html', context)
+
 # --- Main Views ---
 
 # management/views.py
