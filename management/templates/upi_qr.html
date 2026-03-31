@@ -193,35 +193,33 @@
 <body>
     <div class="wrap">
         <div class="top-row">
-            <a class="back-btn" href="{% url 'employee_dashboard' %}">Back to Dashboard</a>
+            {% if is_single_entry %}<a class="back-btn" href="{% url 'worksheet' %}">Back to Worksheet</a>{% else %}<a class="back-btn" href="{% url 'employee_dashboard' %}">Back to Dashboard</a>{% endif %}
         </div>
 
         <div class="card">
-            <h1>UPI QR</h1>
-            <p class="sub">Generate payment QR for UPI ID {{ upi_id }}. The remarks sent to UPI will be: employee name + service + amount.</p>
+            <h1>{% if is_single_entry %}Entry QR{% else %}Payment QR{% endif %}</h1>
+            <p class="sub">Scan to complete payment for today's worksheet entries.</p>
 
             <div class="layout">
                 <div>
                     <div class="form-grid">
                         <div>
-                            <label for="amount">Amount</label>
-                            <input id="amount" name="amount" type="number" min="1" step="0.01" placeholder="Enter amount" required>
+                            <label>Total Amount</label>
+                            <input type="text" value="₹{{ total_amount|floatformat:2 }}" readonly style="background: #f0f0f0; cursor: not-allowed;">
                         </div>
 
                         <div>
-                            <label for="service">Remarks</label>
-                            <input id="service" name="service" type="text" placeholder="Enter service / remarks" required>
-                            <div class="meta">Used as service in UPI note. Final note format: {{ employee.name }} - [service] - [amount]</div>
+                            <label>Remarks</label>
+                            <input type="text" value="{{ remarks }}" readonly style="background: #f0f0f0; cursor: not-allowed;">
                         </div>
 
-                        <button id="generateBtn" class="btn btn-generate" type="button">Generate QR</button>
                         <div id="message" class="msg" aria-live="polite"></div>
                     </div>
                 </div>
 
                 <div>
                     <div id="qrBox" class="qr-box">
-                        QR will appear here after clicking Generate QR.
+                        Loading QR code...
                     </div>
 
                     <div id="doneArea" class="done-area">
@@ -234,10 +232,7 @@
 
     <script>
         (function () {
-            const generateBtn = document.getElementById('generateBtn');
             const markDoneBtn = document.getElementById('markDoneBtn');
-            const amountInput = document.getElementById('amount');
-            const serviceInput = document.getElementById('service');
             const qrBox = document.getElementById('qrBox');
             const doneArea = document.getElementById('doneArea');
             const message = document.getElementById('message');
@@ -245,55 +240,44 @@
             const upiId = '{{ upi_id|escapejs }}';
             const payeeName = '{{ upi_payee_name|escapejs }}';
             const employeeName = '{{ employee.name|escapejs }}';
+            const totalAmount = '{{ total_amount|escapejs }}';
+            const remarks = '{{ remarks|escapejs }}';
 
             function setMessage(text, isError) {
                 message.textContent = text || '';
                 message.className = isError ? 'msg msg-error' : 'msg msg-ok';
             }
 
-            function formatAmount(value) {
-                const n = Number(value);
-                if (!Number.isFinite(n) || n <= 0) {
-                    return null;
-                }
-                return n.toFixed(2);
-            }
-
-            generateBtn.addEventListener('click', function () {
-                setMessage('', false);
-                const rawAmount = amountInput.value.trim();
-                const service = serviceInput.value.trim();
-                const amount = formatAmount(rawAmount);
-
-                if (!amount) {
-                    setMessage('Please enter a valid amount greater than 0.', true);
-                    return;
-                }
-                if (!service) {
-                    setMessage('Please enter remarks/service.', true);
+            function generateQR() {
+                if (!totalAmount || totalAmount === '0') {
+                    setMessage('No worksheet entries for today. Add entries to generate QR.', true);
+                    doneArea.style.display = 'none';
                     return;
                 }
 
-                const remarkText = employeeName + ' - ' + service + ' - ' + amount;
+                const remarkText = employeeName + ' - ' + remarks + ' - ' + totalAmount;
 
                 const upiUrl =
                     'upi://pay' +
                     '?pa=' + encodeURIComponent(upiId) +
                     '&pn=' + encodeURIComponent(payeeName) +
-                    '&am=' + encodeURIComponent(amount) +
+                    '&am=' + encodeURIComponent(totalAmount) +
                     '&cu=INR' +
                     '&tn=' + encodeURIComponent(remarkText);
 
                 const qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=' + encodeURIComponent(upiUrl);
 
-                qrBox.innerHTML = '<img src="' + qrApiUrl + '" alt="UPI QR">';
+                qrBox.innerHTML = '<img src="' + qrApiUrl + '" alt="Payment QR">';
                 doneArea.style.display = 'block';
-                setMessage('QR generated successfully.', false);
-            });
+                setMessage('QR ready for payment.', false);
+            }
 
             markDoneBtn.addEventListener('click', function () {
                 window.location.reload();
             });
+
+            // Auto-generate QR on page load
+            window.addEventListener('load', generateQR);
         })();
     </script>
 </body>

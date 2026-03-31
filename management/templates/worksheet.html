@@ -147,14 +147,6 @@
                                 {% endif %}
                             </div>
                         </div>
-                        {% if field.name == 'particulars' %}
-                        <div class="col mb-2" style="min-width:110px; max-width:140px;">
-                            <div class="form-group mb-0">
-                                <label class="d-block" style="font-size:0.8rem;"><i class="fas fa-camera"></i> Particulars Image</label>
-                                <input type="file" name="particulars_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem;">
-                            </div>
-                        </div>
-                        {% endif %}
                         {% endif %}
                     {% endfor %}
                     <script src="{% static 'management/service_amount.js' %}"></script>
@@ -245,6 +237,8 @@
                                 <th>Token No</th><th>Customer Name</th><th>Service</th><th>Particulars</th><th>Bonds Sl. No</th><th>Payment</th>
                             {% endif %}
                             <th>Amount (₹)</th>
+                            <th class="no-print">QR</th>
+                            <th class="no-print">Image</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -266,6 +260,19 @@
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% endif %}
                             <td>{{ entry.amount|floatformat:2 }}</td>
+                            <td style="text-align: center;">
+                                <a href="{% url 'employee_upi_qr_single' entry.id %}" class="btn btn-sm btn-outline-info" title="Generate QR for this entry" style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px;">
+                                    <i class="bi bi-qr-code"></i>
+                                </a>
+                            </td>
+                            <td style="text-align: center;">
+                                <form method="post" enctype="multipart/form-data" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                    <input type="hidden" name="upload_image" value="1">
+                                    <input type="file" name="particulars_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem; display:inline-block; width:80px; padding:2px 4px; margin-right:2px;">
+                                    <button type="submit" class="btn btn-sm btn-info" style="padding:4px 8px;"><i class="fas fa-upload"></i></button>
+                                </form>
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No entries for today.</td></tr>
@@ -277,33 +284,34 @@
                             <td></td>
                             {# Insert empty cells for each data column before payment/amount #}
                             {% if department.name == 'Mee Seva' or department.name == 'Online Hub' %}
-                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Aadhaar' %}
-                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Bhu Bharathi' %}
-                                <td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Forms' %}
-                                <td class="text-right">Total</td>
+                                <td class="text-right">Total</td><td></td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Xerox' %}
-                                <td class="text-right">Total</td>
+                                <td class="text-right">Total</td><td></td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Notary and Bonds' %}
-                                <td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% endif %}
                             <td>₹{{ todays_total_amount|floatformat:2 }}</td>
+                            <td class="no-print"></td>
                         </tr>
                         <tr class="font-weight-bold bg-light">
                             {% if department.name == 'Mee Seva' or department.name == 'Online Hub' or department.name == 'Aadhaar' %}
-                                <td colspan="9" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="9" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Bhu Bharathi' %}
-                                <td colspan="7" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="7" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Notary and Bonds' %}
-                                <td colspan="6" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="6" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Forms' or department.name == 'Xerox' %}
-                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% else %}
-                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% endif %}
-                            <td>₹{{ todays_commission|floatformat:2 }}</td>
+                            <td></td>
                         </tr>
                         </tr>
                     </tfoot>
@@ -466,6 +474,13 @@
 
 
 <!-- Modal and Scripts remain unchanged -->
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
 
 
 

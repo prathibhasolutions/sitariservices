@@ -926,10 +926,55 @@ def todays_absentees_view(request, employee):
 
 @require_employee
 def employee_upi_qr_view(request, employee):
+    from django.utils import timezone
+    from django.db.models import Sum, Value
+    from django.db.models.functions import Concat
+    
+    today = timezone.now().date()
+    
+    # Get today's worksheet entries
+    todays_entries = Worksheet.objects.filter(employee=employee, date=today)
+    
+    # Calculate total amount (amount + payment)
+    total_stats = todays_entries.aggregate(
+        total_amount=Sum('amount'),
+        total_payment=Sum('payment')
+    )
+    
+    total_amount_val = (total_stats['total_amount'] or 0) + (total_stats['total_payment'] or 0)
+    
+    # Get service types from today's entries
+    services = list(set(todays_entries.values_list('service', flat=True).exclude(service__isnull=True).exclude(service__exact='')))
+    remarks = ', '.join(filter(None, services[:3]))  # Limit to top 3 services
+    
     context = {
         'employee': employee,
-        'upi_id': '9542906390@ybl',
-        'upi_payee_name': 'Sitari Services',
+        'upi_id': 'sainadhassociates@sbi',
+        'upi_payee_name': 'Sainadha Associates',
+        'total_amount': total_amount_val,
+        'remarks': remarks if remarks else 'Payment',
+    }
+    return render(request, 'upi_qr.html', context)
+
+@require_employee
+def employee_upi_qr_single_view(request, employee, entry_id):
+    from django.utils import timezone
+    entry = get_object_or_404(Worksheet, pk=entry_id, employee=employee)
+    
+    # Calculate amount for this entry (amount + payment)
+    total_amount_val = (entry.amount or 0) + (entry.payment or 0)
+    
+    # Use service and remarks from this entry
+    remarks = entry.service or entry.particulars or 'Payment'
+    
+    context = {
+        'employee': employee,
+        'entry': entry,
+        'upi_id': 'sainadhassociates@sbi',
+        'upi_payee_name': 'Sainadha Associates',
+        'total_amount': total_amount_val,
+        'remarks': remarks,
+        'is_single_entry': True,
     }
     return render(request, 'upi_qr.html', context)
 
@@ -1306,6 +1351,31 @@ def worksheet_view(request, employee):
 
     if request.method == 'POST':
         form_type = request.POST.get('form_type')
+        upload_image = request.POST.get('upload_image')
+        if upload_image == '1':
+            import uuid, os
+            from django.conf import settings as _settings
+            entry_id = request.POST.get('entry_id')
+            try:
+                entry = Worksheet.objects.get(pk=entry_id, employee=employee)
+                if 'particulars_image' in request.FILES:
+                    file_obj = request.FILES['particulars_image']
+                    ext = os.path.splitext(file_obj.name)[1].lower()
+                    uid = uuid.uuid4().hex[:8]
+                    rel_path = f"worksheet_data/{today}/{employee.employee_id}/particulars_{uid}{ext}"
+                    abs_dir = os.path.join(_settings.MEDIA_ROOT, 'worksheet_data', str(today), str(employee.employee_id))
+                    os.makedirs(abs_dir, exist_ok=True)
+                    abs_path = os.path.join(_settings.MEDIA_ROOT, rel_path)
+                    file_obj.seek(0)
+                    with open(abs_path, 'wb+') as dest:
+                        for chunk in file_obj.chunks():
+                            dest.write(chunk)
+                    entry.particulars_image = rel_path
+                    entry.save()
+                    messages.success(request, 'Image uploaded successfully.')
+            except Worksheet.DoesNotExist:
+                messages.error(request, 'Entry not found.')
+            return redirect('worksheet')
         if form_type == 'worksheet_entry' and WorksheetForm:
             if is_worksheet_entry_locked:
                 messages.error(request, f"Daily worksheet entry is closed after {cutoff_time_label}.")
