@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -97,6 +98,24 @@
             font-size: 12px;
         }
 
+        .qr-block {
+            margin-top: 4px;
+            text-align: center;
+        }
+
+        .qr-title {
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+
+        .qr-image {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin:  0 auto;
+        }
+
         @page {
             size: 80mm auto;
             margin: 0;
@@ -126,7 +145,7 @@
 
         <div class="row">
             <div class="label">Date & Time</div>
-            <div class="value">{{ token.created_at|date:"d-m-Y h:i A" }}</div>
+            <div class="value">{{ token.created_at|date:"d-m-Y H:i" }}</div>
         </div>
         <div class="row">
             <div class="label">Customer Name</div>
@@ -143,7 +162,13 @@
 
         <div class="line"></div>
         <div class="center">Please keep this token safely.</div>
-        <div class="center footnote">Temporary reference purpose only.</div>
+        <div class="center footnote">**Temporary reference purpose only.</div>
+
+        <div class="line"></div>
+        <div class="qr-block">
+            <img src="{{ assistant_qr_url }}" alt="Assistant QR" class="qr-image">
+            <div class="qr-title">Scan here for Services</div>
+        </div>
     </div>
 
     <div class="actions">

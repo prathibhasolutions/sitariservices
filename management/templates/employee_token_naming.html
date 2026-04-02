@@ -83,7 +83,7 @@
                                 {% for token in recent_tokens %}
                                 <tr>
                                     <td>{{ token.token_no }}</td>
-                                    <td>{{ token.created_at|date:"d-m-Y h:i A" }}</td>
+                                    <td>{{ token.created_at|date:"d-m-Y H:i" }}</td>
                                     <td>{{ token.customer_name }}</td>
                                     <td>{{ token.cell_no }}</td>
                                     <td>{{ token.department.name|default:"-" }}</td>

@@ -252,7 +252,7 @@
 
     .worksheet-panels {
         display: grid;
-        grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.35fr);
+        grid-template-columns: 1fr;
         gap: 18px;
         align-items: start;
     }
@@ -265,12 +265,6 @@
     .worksheet-panel-left .card,
     .worksheet-panel-right .card {
         margin-bottom: 18px;
-    }
-
-    @media (max-width: 991px) {
-        .worksheet-panels {
-            grid-template-columns: 1fr;
-        }
     }
 
     @media print {
@@ -289,6 +283,9 @@
         <button type="button" class="theme-btn" data-theme="light">Light</button>
         <button type="button" class="theme-btn" data-theme="dark">Dark</button>
         <button type="button" class="theme-btn" data-theme="radiant">Radiant</button>
+        <div class="ml-auto">
+            <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#tokenEntryModal">Token +</button>
+        </div>
     </div>
 
     {% if messages %}
@@ -310,140 +307,146 @@
     <div class="worksheet-panels">
         <div class="worksheet-panel-left">
     
-    <!-- Section to Add New Entry -->
-    <div class="card mb-4 shadow-sm">
-        <div class="card-header">
-            <h4>Add New Entry for {{ today|date:"d M Y" }}</h4>
-        </div>
-        <div class="card-body">
-                        <!-- Attendance and Breaks tables moved to print-only section below -->
-                <!-- Hidden print-only section for attendance and break sessions -->
-                <div class="d-none" id="attendance-breaks-for-print">
-                    <!-- Today's Attendance Sessions Table -->
-                    <div class="mb-4">
-                        <h5>Today's Attendance Sessions</h5>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Login Time</th>
-                                        <th>Logout Time</th>
-                                        <th>Duration</th>
-                                        <th>Reason</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for session in todays_sessions %}
-                                    <tr>
-                                        <td>{{ forloop.counter }}</td>
-                                        <td>{{ session.login_time|date:'h:i A' }}</td>
-                                        <td>
-                                            {% if session.logout_time %}
-                                                {{ session.logout_time|date:'h:i A' }}
-                                            {% else %}
-                                                <span class="text-warning">Active</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {{ session.duration_str|default:"-" }}
-                                        </td>
-                                        <td>{{ session.logout_reason|default:'-' }}</td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="5" class="text-center">No attendance sessions for today.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <!-- Today's Break Sessions Table -->
-                    <div class="mb-4">
-                        <h5>Today's Break Sessions</h5>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Start Time</th>
-                                        <th>End Time</th>
-                                        <th>Duration</th>
-                                        <th>Reason</th>
-                                        <th>Approved</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for break in todays_breaks %}
-                                    <tr>
-                                        <td>{{ forloop.counter }}</td>
-                                        <td>{{ break.start_time|date:'h:i A' }}</td>
-                                        <td>
-                                            {% if break.end_time %}
-                                                {{ break.end_time|date:'h:i A' }}
-                                            {% else %}
-                                                <span class="text-warning">Active</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% with duration=break.duration %}
-                                                {% if duration %}
-                                                    {% with total_seconds=duration.total_seconds %}
-                                                        {% widthratio total_seconds 3600 1 as hours %}
-                                                        {% widthratio total_seconds|floatformat:0|add:'-1' 60 1 as minutes %}
-                                                        {{ hours }}h {{ minutes }}m
-                                                    {% endwith %}
-                                                {% else %}-{% endif %}
-                                            {% endwith %}
-                                        </td>
-                                        <td>{{ break.logout_reason|default:'-' }}</td>
-                                        <td>
-                                            {% if break.approved %}
-                                                <span class="badge badge-success">Yes</span>
-                                            {% else %}
-                                                <span class="badge badge-danger">No</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="6" class="text-center">No break sessions for today.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+    <div class="modal fade" id="tokenEntryModal" tabindex="-1" role="dialog" aria-labelledby="tokenEntryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 id="tokenEntryModalLabel" class="mb-0">Add New Entry for {{ today|date:"d M Y" }}</h4>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="form_type" value="worksheet_entry">
-                <div>
-                    {% for field in form %}
-                        {% if field.name == 'particulars_image' %}{% else %}
-                        <div class="form-group mb-2">
-                            {{ field.label_tag }}
-                            {% if field.name == 'service' %}
-                                <select name="service" class="form-control service-dropdown">
-                                    <option value="">-- Select a Service --</option>
-                                    {% for st in field.field.queryset %}
-                                        <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
-                            {% else %}
-                                {{ field }}
-                            {% endif %}
-                            {% if field.errors %}
-                                <div class="text-danger small">{{ field.errors.as_text }}</div>
-                            {% endif %}
+                <div class="card-body">
+                    <!-- Attendance and Breaks tables moved to print-only section below -->
+                    <!-- Hidden print-only section for attendance and break sessions -->
+                    <div class="d-none" id="attendance-breaks-for-print">
+                        <!-- Today's Attendance Sessions Table -->
+                        <div class="mb-4">
+                            <h5>Today's Attendance Sessions</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Login Time</th>
+                                            <th>Logout Time</th>
+                                            <th>Duration</th>
+                                            <th>Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for session in todays_sessions %}
+                                        <tr>
+                                            <td>{{ forloop.counter }}</td>
+                                            <td>{{ session.login_time|date:'h:i A' }}</td>
+                                            <td>
+                                                {% if session.logout_time %}
+                                                    {{ session.logout_time|date:'h:i A' }}
+                                                {% else %}
+                                                    <span class="text-warning">Active</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {{ session.duration_str|default:"-" }}
+                                            </td>
+                                            <td>{{ session.logout_reason|default:'-' }}</td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="5" class="text-center">No attendance sessions for today.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        {% endif %}
-                    {% endfor %}
-                    <script src="{% static 'management/service_amount.js' %}"></script>
-                    <div class="form-group mb-0 mt-3">
-                        <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
+                        <!-- Today's Break Sessions Table -->
+                        <div class="mb-4">
+                            <h5>Today's Break Sessions</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Start Time</th>
+                                            <th>End Time</th>
+                                            <th>Duration</th>
+                                            <th>Reason</th>
+                                            <th>Approved</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for break in todays_breaks %}
+                                        <tr>
+                                            <td>{{ forloop.counter }}</td>
+                                            <td>{{ break.start_time|date:'h:i A' }}</td>
+                                            <td>
+                                                {% if break.end_time %}
+                                                    {{ break.end_time|date:'h:i A' }}
+                                                {% else %}
+                                                    <span class="text-warning">Active</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% with duration=break.duration %}
+                                                    {% if duration %}
+                                                        {% with total_seconds=duration.total_seconds %}
+                                                            {% widthratio total_seconds 3600 1 as hours %}
+                                                            {% widthratio total_seconds|floatformat:0|add:'-1' 60 1 as minutes %}
+                                                            {{ hours }}h {{ minutes }}m
+                                                        {% endwith %}
+                                                    {% else %}-{% endif %}
+                                                {% endwith %}
+                                            </td>
+                                            <td>{{ break.logout_reason|default:'-' }}</td>
+                                            <td>
+                                                {% if break.approved %}
+                                                    <span class="badge badge-success">Yes</span>
+                                                {% else %}
+                                                    <span class="badge badge-danger">No</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="6" class="text-center">No break sessions for today.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="worksheet_entry">
+                        <div>
+                            {% for field in form %}
+                                {% if field.name == 'particulars_image' %}{% else %}
+                                <div class="form-group mb-2">
+                                    {{ field.label_tag }}
+                                    {% if field.name == 'service' %}
+                                        <select name="service" class="form-control service-dropdown">
+                                            <option value="">-- Select a Service --</option>
+                                            {% for st in field.field.queryset %}
+                                                <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
+                                    {% else %}
+                                        {{ field }}
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        <div class="text-danger small">{{ field.errors.as_text }}</div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                            <script src="{% static 'management/service_amount.js' %}"></script>
+                            <div class="form-group mb-0 mt-3">
+                                <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
+                            </div>
+                        </div>
+                    </form>
+                    <small id="worksheet-cutoff-message" class="text-danger d-block mt-2 {% if not is_worksheet_entry_locked %}d-none{% endif %}">Daily worksheet entry is closed after {{ cutoff_time_label }}.</small>
                 </div>
-            </form>
-            <small id="worksheet-cutoff-message" class="text-danger d-block mt-2 {% if not is_worksheet_entry_locked %}d-none{% endif %}">Daily worksheet entry is closed after {{ cutoff_time_label }}.</small>
+            </div>
         </div>
     </div>
 
@@ -912,9 +915,20 @@
         applyTheme(initialTheme);
     }
 
+    function initTokenEntryModal() {
+        const shouldOpenModal = {{ form.errors|yesno:"true,false" }};
+        if (!shouldOpenModal) {
+            return;
+        }
+        if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+            jQuery('#tokenEntryModal').modal('show');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         scheduleWorksheetCutoff();
         initWorksheetTheme();
+        initTokenEntryModal();
     });
 </script>
 

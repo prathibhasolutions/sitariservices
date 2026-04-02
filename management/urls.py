@@ -46,6 +46,7 @@ urlpatterns = [
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
     path('api/geofence_check/', views.geofence_check, name='geofence_check'),
     path('api/chatbot/reply/', views.public_chatbot_reply, name='public_chatbot_reply'),
+    path('api/assistant/chat-log/', views.assistant_chat_log, name='assistant_chat_log'),
 
 
     # Department Head: Top Up Page (renamed)
@@ -59,6 +60,7 @@ urlpatterns = [
     path('admin-dashboard/worksheet-data/', views.admin_dashboard_worksheet_data, name='admin_dashboard_worksheet_data'),
     path('admin-dashboard/managed-links/', views.admin_dashboard_managed_links, name='admin_dashboard_managed_links'),
     path('admin-dashboard/chatbot/', views.admin_dashboard_chatbot, name='admin_dashboard_chatbot'),
+    path('admin-dashboard/sitari-chat/', views.admin_dashboard_sitari_chat, name='admin_dashboard_sitari_chat'),
     path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
     path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
     path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),

@@ -164,6 +164,34 @@
       margin-left: auto;
     }
 
+    .assistant-time {
+      font-size: 0.74rem;
+      opacity: 0.7;
+      margin-top: 4px;
+      text-align: right;
+      line-height: 1;
+    }
+
+    .assistant-msg.user .assistant-time {
+      color: rgba(255, 255, 255, 0.9);
+      opacity: 0.85;
+    }
+
+    .assistant-date-row {
+      text-align: center;
+    }
+
+    .assistant-date-chip {
+      display: inline-block;
+      margin: 8px auto 10px;
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      color: #4b5563;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+    }
+
     .assistant-doc {
       margin: 2px 0 10px;
       font-size: 0.88rem;
@@ -264,8 +292,22 @@
       </div>
       {% endif %}
 
-      <div class="assistant-chat-body" id="assistantChatBody">
-        <div class="assistant-msg bot">Hi, I am Sitari Assistant. I can help with services, timings, location, and contact details.</div>
+      <div class="assistant-chat-body" id="assistantChatBody" data-last-date="{{ assistant_last_chat_date_label|default:'' }}">
+        {% if assistant_chat_messages %}
+          {% for msg in assistant_chat_messages %}
+            {% ifchanged msg.created_at|date:"d/m/Y" %}
+            <div class="assistant-date-row"><span class="assistant-date-chip">{{ msg.created_at|date:"d/m/Y" }}</span></div>
+            {% endifchanged %}
+            <div class="assistant-msg {% if msg.sender == 'customer' %}user{% else %}bot{% endif %}">
+              <div>{{ msg.message }}</div>
+              <div class="assistant-time">{{ msg.created_at|date:"H:i" }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="assistant-msg bot">
+            <div>Welcome {{ assistant_customer_name|default:"Customer" }}. I am Sitari Assistant. I can help with services, timings, location, and contact details.</div>
+          </div>
+        {% endif %}
       </div>
 
       <form class="assistant-input-wrap" id="assistantChatForm">
@@ -281,11 +323,52 @@
       var input = document.getElementById('assistantChatInput');
       var body = document.getElementById('assistantChatBody');
       var templateOptions = document.getElementById('assistantTemplateOptions');
+      var accessToken = '{{ assistant_access_token|default:""|escapejs }}';
+      var lastDateLabel = body.getAttribute('data-last-date') || '';
 
-      function addMessage(type, text) {
+      function currentDateLabel() {
+        var now = new Date();
+        var dd = String(now.getDate()).padStart(2, '0');
+        var mm = String(now.getMonth() + 1).padStart(2, '0');
+        var yyyy = now.getFullYear();
+        return dd + '/' + mm + '/' + yyyy;
+      }
+
+      function ensureDateSeparator(dateLabel) {
+        if (!dateLabel || dateLabel === lastDateLabel) {
+          return;
+        }
+        var row = document.createElement('div');
+        row.className = 'assistant-date-row';
+        var chip = document.createElement('span');
+        chip.className = 'assistant-date-chip';
+        chip.textContent = dateLabel;
+        row.appendChild(chip);
+        body.appendChild(row);
+        lastDateLabel = dateLabel;
+      }
+
+      function currentTimestamp() {
+        var now = new Date();
+        var hh = String(now.getHours()).padStart(2, '0');
+        var min = String(now.getMinutes()).padStart(2, '0');
+        return hh + ':' + min;
+      }
+
+      function addMessage(type, text, timestamp) {
+        ensureDateSeparator(currentDateLabel());
+
         var div = document.createElement('div');
         div.className = 'assistant-msg ' + type;
-        div.textContent = text;
+        var content = document.createElement('div');
+        content.textContent = text;
+        div.appendChild(content);
+
+        var stamp = document.createElement('div');
+        stamp.className = 'assistant-time';
+        stamp.textContent = timestamp || currentTimestamp();
+        div.appendChild(stamp);
+
         body.appendChild(div);
         body.scrollTop = body.scrollHeight;
       }
@@ -331,13 +414,35 @@
           });
       }
 
+      function logAssistantMessage(sender, text) {
+        if (!accessToken || !text) {
+            return;
+        }
+        fetch('{% url "assistant_chat_log" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            access: accessToken,
+            sender: sender,
+            message: text
+          })
+        }).catch(function () {
+          // Silent fail: chat UX should not be blocked by log errors.
+        });
+      }
+
       function sendAndReply(message) {
         addMessage('user', message);
+        logAssistantMessage('customer', message);
         input.value = '';
 
         window.setTimeout(function () {
           getBotReply(message).then(function (result) {
-            addMessage('bot', result.reply || 'Done.');
+            var replyText = result.reply || 'Done.';
+            addMessage('bot', replyText);
+            logAssistantMessage('bot', replyText);
             addDocumentLinks(result.documents || []);
           });
         }, 220);

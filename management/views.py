@@ -394,6 +394,10 @@ def employee_token_naming(request):
 
 
 def token_print_view(request, token_id):
+    from django.core import signing
+    from django.urls import reverse
+    from urllib.parse import quote
+
     employee_id = request.session.get('employee_id')
     session_employee = Employee.objects.filter(employee_id=employee_id).first() if employee_id else None
     is_staff_user = request.user.is_authenticated and request.user.is_staff
@@ -409,10 +413,22 @@ def token_print_view(request, token_id):
         messages.error(request, 'You can only view tokens created by you.')
         return redirect('employee_dashboard')
 
+    assistant_access_token = signing.dumps(
+        {'token_id': token.id},
+        salt='assistant-customer-link',
+    )
+    assistant_url = (
+        request.build_absolute_uri(reverse('assistant'))
+        + '?access='
+        + quote(assistant_access_token, safe='')
+    )
+    assistant_qr_url = 'https://quickchart.io/qr?size=600&text=' + quote(assistant_url, safe='')
+
     worksheet_exists = _save_token_to_worksheet(token)
     return render(request, 'token_print.html', {
         'token': token,
         'worksheet_exists': worksheet_exists,
+        'assistant_qr_url': assistant_qr_url,
     })
 
 
@@ -909,7 +925,29 @@ def home_view(request):
 
 
 def assistant_view(request):
-    from .models import ChatbotServiceTemplate
+    from django.core import signing
+    from django.http import Http404
+    from .models import ChatbotServiceTemplate, TokenChatMessage
+
+    access_token = (request.GET.get('access') or '').strip()
+    if not access_token:
+        raise Http404('Assistant page is not public.')
+
+    try:
+        payload = signing.loads(
+            access_token,
+            salt='assistant-customer-link',
+            max_age=60 * 60 * 24 * 30,
+        )
+    except signing.BadSignature:
+        raise Http404('Invalid assistant link.')
+    except signing.SignatureExpired:
+        raise Http404('Assistant link expired.')
+
+    token_id = payload.get('token_id')
+    token = Token.objects.filter(pk=token_id).only('customer_name').first()
+    if not token:
+        raise Http404('Invalid customer token.')
 
     template_options = list(
         ChatbotServiceTemplate.objects.filter(is_active=True)
@@ -917,7 +955,19 @@ def assistant_view(request):
         .order_by('sort_order', 'service_name')
         .values_list('service_name', flat=True)
     )
-    return render(request, 'assistant.html', {'assistant_template_options': template_options})
+    chat_messages = TokenChatMessage.objects.filter(token=token).order_by('created_at')
+    last_chat_message = chat_messages.last()
+    last_chat_date_label = ''
+    if last_chat_message:
+        last_chat_date_label = timezone.localtime(last_chat_message.created_at).strftime('%d/%m/%Y')
+
+    return render(request, 'assistant.html', {
+        'assistant_template_options': template_options,
+        'assistant_customer_name': token.customer_name,
+        'assistant_access_token': access_token,
+        'assistant_chat_messages': chat_messages,
+        'assistant_last_chat_date_label': last_chat_date_label,
+    })
 
 
 def contact_view(request):
@@ -2794,6 +2844,64 @@ def admin_dashboard_chatbot(request):
     return render(request, 'admin_dashboard.html', base_context)
 
 
+@staff_member_required
+def admin_dashboard_sitari_chat(request):
+    from .models import Token, TokenChatMessage
+    from django.urls import reverse
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        if action == 'send_admin_message':
+            token_id = request.POST.get('chat_token_id')
+            message_text = (request.POST.get('admin_message') or '').strip()
+            chat_token = Token.objects.filter(pk=token_id).first()
+
+            if not chat_token:
+                messages.error(request, 'Selected token not found.')
+                return redirect('admin_dashboard_sitari_chat')
+
+            if not message_text:
+                messages.error(request, 'Message cannot be empty.')
+            else:
+                TokenChatMessage.objects.create(
+                    token=chat_token,
+                    sender=TokenChatMessage.SENDER_ADMIN,
+                    message=message_text,
+                )
+
+            return redirect(f"{reverse('admin_dashboard_sitari_chat')}?token={chat_token.token_no}")
+
+    query = (request.GET.get('q') or '').strip()
+    selected_token_no = (request.GET.get('token') or '').strip()
+
+    tokens_qs = Token.objects.all().order_by('-created_at')
+    if query:
+        tokens_qs = tokens_qs.filter(
+            Q(token_no__icontains=query)
+            | Q(customer_name__icontains=query)
+            | Q(cell_no__icontains=query)
+        )
+
+    selected_chat_token = None
+    if selected_token_no:
+        selected_chat_token = Token.objects.filter(token_no=selected_token_no).first()
+    if not selected_chat_token:
+        selected_chat_token = tokens_qs.first()
+
+    selected_chat_messages = TokenChatMessage.objects.none()
+    if selected_chat_token:
+        selected_chat_messages = TokenChatMessage.objects.filter(token=selected_chat_token).order_by('created_at')
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({
+        'sitari_chat_tokens': tokens_qs[:200],
+        'sitari_chat_query': query,
+        'selected_chat_token': selected_chat_token,
+        'selected_chat_messages': selected_chat_messages,
+    })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
 def public_chatbot_reply(request):
     from .models import ChatbotServiceTemplate, ChatbotNumericTrigger
 
@@ -2837,6 +2945,59 @@ def public_chatbot_reply(request):
         'matched_service': None,
         'documents': [],
     })
+
+
+@csrf_exempt
+def assistant_chat_log(request):
+    import json
+    from django.core import signing
+    from .models import Token, TokenChatMessage
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON payload.'}, status=400)
+
+    access_token = str(payload.get('access') or '').strip()
+    sender = str(payload.get('sender') or '').strip().lower()
+    message = str(payload.get('message') or '').strip()
+
+    if not access_token:
+        return JsonResponse({'error': 'Missing access token.'}, status=400)
+    if sender not in {
+        TokenChatMessage.SENDER_CUSTOMER,
+        TokenChatMessage.SENDER_BOT,
+        TokenChatMessage.SENDER_ADMIN,
+    }:
+        return JsonResponse({'error': 'Invalid sender.'}, status=400)
+    if not message:
+        return JsonResponse({'error': 'Message is required.'}, status=400)
+
+    try:
+        signed_data = signing.loads(
+            access_token,
+            salt='assistant-customer-link',
+            max_age=60 * 60 * 24 * 30,
+        )
+    except signing.BadSignature:
+        return JsonResponse({'error': 'Invalid assistant access token.'}, status=403)
+    except signing.SignatureExpired:
+        return JsonResponse({'error': 'Assistant access token expired.'}, status=403)
+
+    token_id = signed_data.get('token_id')
+    token = Token.objects.filter(pk=token_id).first()
+    if not token:
+        return JsonResponse({'error': 'Invalid token context.'}, status=404)
+
+    TokenChatMessage.objects.create(
+        token=token,
+        sender=sender,
+        message=message,
+    )
+    return JsonResponse({'status': 'ok'})
 
 
 @staff_member_required

@@ -774,6 +774,30 @@ class Token(models.Model):
         return f"Token {self.token_no} - {self.customer_name}"
 
 
+class TokenChatMessage(models.Model):
+    SENDER_CUSTOMER = 'customer'
+    SENDER_BOT = 'bot'
+    SENDER_ADMIN = 'admin'
+    SENDER_CHOICES = (
+        (SENDER_CUSTOMER, 'Customer'),
+        (SENDER_BOT, 'Bot'),
+        (SENDER_ADMIN, 'Admin'),
+    )
+
+    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='chat_messages')
+    sender = models.CharField(max_length=20, choices=SENDER_CHOICES)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Token Chat Message'
+        verbose_name_plural = 'Token Chat Messages'
+
+    def __str__(self):
+        return f"{self.token.token_no} [{self.sender}] {self.created_at:%Y-%m-%d %H:%M}"
+
+
 # --- MODIFIED MODEL: Application ---
 class Application(models.Model):
     """
