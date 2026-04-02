@@ -228,7 +228,7 @@ def admin_dashboard(request):
         Employee.objects.update(token_naming_access=False)
         if selected_employee_ids:
             Employee.objects.filter(employee_id__in=selected_employee_ids).update(token_naming_access=True)
-        messages.success(request, 'Token Naming access updated successfully.')
+        messages.success(request, 'Token Generation access updated successfully.')
         return redirect('admin_dashboard')
 
     return render(request, 'admin_dashboard.html', _build_admin_dashboard_context())
@@ -1369,11 +1369,71 @@ def todays_absentees_view(request, employee):
     return render(request, 'todays_absentees.html', context)
 
 
+def _resolve_upi_id_for_department(employee):
+    dept_name = (employee.department.name if employee.department else '') or ''
+    dept_name = dept_name.strip().lower()
+
+    if dept_name == 'bhu bharathi':
+        return 'sainadhassociates@sbi'
+    if dept_name == 'online hub':
+        return 'srimahallaxmicommunication@sbi'
+    if dept_name == 'mee seva':
+        return 'sitarirajuxeroxandonline@sbi'
+    if dept_name == 'xerox':
+        return '8179811603@sbi'
+    return 'sainadhassociates@sbi'
+
+
+def _build_upi_payment_url(upi_id, payee_name, amount, employee_name, remarks):
+    from decimal import Decimal
+    from urllib.parse import quote
+
+    amount_text = f"{Decimal(str(amount)).quantize(Decimal('0.01'))}"
+    # Keep note compact so QR generation remains fast and robust.
+    raw_note = f"{employee_name} - {remarks} - {amount_text}"
+    note = raw_note[:80]
+    return (
+        "upi://pay"
+        f"?pa={quote(upi_id)}"
+        f"&pn={quote(payee_name)}"
+        f"&am={quote(amount_text)}"
+        "&cu=INR"
+        f"&tn={quote(note)}"
+    )
+
+
+def _build_qr_image_src(upi_url):
+    from urllib.parse import quote
+    try:
+        import base64
+        import importlib
+        import io
+        qrcode = importlib.import_module('qrcode')
+        svg_module = importlib.import_module('qrcode.image.svg')
+        SvgImage = getattr(svg_module, 'SvgImage')
+
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(upi_url)
+        qr.make(fit=True)
+
+        image = qr.make_image(image_factory=SvgImage)
+        buffer = io.BytesIO()
+        image.save(buffer)
+        encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
+        return f"data:image/svg+xml;base64,{encoded}"
+    except Exception:
+        return f"https://quickchart.io/qr?size=350&ecLevel=M&text={quote(upi_url)}"
+
+
 @require_employee
 def employee_upi_qr_view(request, employee):
     from django.utils import timezone
-    from django.db.models import Sum, Value
-    from django.db.models.functions import Concat
+    from django.db.models import Sum
     
     today = timezone.now().date()
     
@@ -1391,13 +1451,20 @@ def employee_upi_qr_view(request, employee):
     # Get service types from today's entries
     services = list(set(todays_entries.values_list('service', flat=True).exclude(service__isnull=True).exclude(service__exact='')))
     remarks = ', '.join(filter(None, services[:3]))  # Limit to top 3 services
+    upi_id = _resolve_upi_id_for_department(employee)
+    remarks_text = remarks if remarks else 'Payment'
+    upi_payee_name = 'Sainadha Associates'
+    upi_url = _build_upi_payment_url(upi_id, upi_payee_name, total_amount_val, employee.name, remarks_text)
+    qr_image_src = _build_qr_image_src(upi_url)
     
     context = {
         'employee': employee,
-        'upi_id': 'sainadhassociates@sbi',
-        'upi_payee_name': 'Sainadha Associates',
+        'upi_id': upi_id,
+        'upi_payee_name': upi_payee_name,
         'total_amount': total_amount_val,
-        'remarks': remarks if remarks else 'Payment',
+        'remarks': remarks_text,
+        'upi_url': upi_url,
+        'qr_image_src': qr_image_src,
     }
     return render(request, 'upi_qr.html', context)
 
@@ -1411,14 +1478,20 @@ def employee_upi_qr_single_view(request, employee, entry_id):
     
     # Use service and remarks from this entry
     remarks = entry.service or entry.particulars or 'Payment'
+    upi_id = _resolve_upi_id_for_department(employee)
+    upi_payee_name = 'Sainadha Associates'
+    upi_url = _build_upi_payment_url(upi_id, upi_payee_name, total_amount_val, employee.name, remarks)
+    qr_image_src = _build_qr_image_src(upi_url)
     
     context = {
         'employee': employee,
         'entry': entry,
-        'upi_id': 'sainadhassociates@sbi',
-        'upi_payee_name': 'Sainadha Associates',
+        'upi_id': upi_id,
+        'upi_payee_name': upi_payee_name,
         'total_amount': total_amount_val,
         'remarks': remarks,
+        'upi_url': upi_url,
+        'qr_image_src': qr_image_src,
         'is_single_entry': True,
     }
     return render(request, 'upi_qr.html', context)
@@ -2102,6 +2175,7 @@ def admin_dashboard_worksheet_management(request):
     now_local = timezone.localtime(timezone.now())
     cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
     cutoff_time_label = format_cutoff_time_label(cutoff_hour)
+    selected_employee_id = (request.GET.get('employee_id') or '').strip()
 
     if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
         employee_id = request.POST.get('target_employee_id')
@@ -2123,10 +2197,247 @@ def admin_dashboard_worksheet_management(request):
             target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
             messages.success(request, f'Worksheet entry override disabled for {target_employee.name}.')
 
+        if selected_employee_id.isdigit():
+            return redirect(f"{request.path}?employee_id={selected_employee_id}")
         return redirect(request.path)
 
     base_context = _build_admin_dashboard_context()
     base_context.update(_build_worksheet_management_context(now_local))
+
+    employees = Employee.objects.select_related('department').order_by('name')
+    active_employee_ids = set(
+        AttendanceSession.objects.filter(logout_time__isnull=True, session_closed=False)
+        .values_list('employee_id', flat=True)
+    )
+    selected_employee = None
+    if selected_employee_id.isdigit():
+        selected_employee = employees.filter(employee_id=int(selected_employee_id)).first()
+
+    base_context.update({
+        'active_employee_ids': active_employee_ids,
+        'selected_employee': selected_employee,
+        'selected_employee_id': int(selected_employee_id) if selected_employee_id.isdigit() else None,
+    })
+
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_leave_management(request):
+    tomorrow = next_working_day(timezone.localdate())
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'add_holiday':
+            date_str = request.POST.get('holiday_date', '').strip()
+            reason = request.POST.get('holiday_reason', '').strip()
+            if date_str:
+                try:
+                    from datetime import date as _date
+                    holiday_date = _date.fromisoformat(date_str)
+                    Holiday.objects.get_or_create(date=holiday_date, defaults={'reason': reason})
+                    messages.success(request, f"Holiday marked for {holiday_date}.")
+                except ValueError:
+                    messages.error(request, "Invalid date.")
+            else:
+                messages.error(request, "Please select a date.")
+            return redirect('admin_dashboard_leave_management')
+
+        if action == 'delete_holiday':
+            holiday_id = request.POST.get('holiday_id')
+            Holiday.objects.filter(pk=holiday_id).delete()
+            messages.success(request, "Holiday removed.")
+            return redirect('admin_dashboard_leave_management')
+
+        employee_id = request.POST.get('employee_id')
+        will_come_value = request.POST.get('will_come')
+
+        if employee_id and will_come_value in ('yes', 'no'):
+            try:
+                employee = Employee.objects.get(pk=employee_id)
+                EmployeeNextDayAvailability.objects.update_or_create(
+                    employee=employee,
+                    target_date=tomorrow,
+                    defaults={
+                        'will_come': (will_come_value == 'yes'),
+                        'response_source': EmployeeNextDayAvailability.RESPONSE_SOURCE_MANUAL,
+                        'responded_at': timezone.now(),
+                    }
+                )
+                messages.success(request, f"Updated response for {employee.name}.")
+            except Employee.DoesNotExist:
+                messages.error(request, "Employee not found.")
+        else:
+            messages.error(request, "Please choose Yes or No.")
+
+        return redirect('admin_dashboard_leave_management')
+
+    employees = Employee.objects.all().order_by('name')
+    records = []
+    for emp in employees:
+        record = EmployeeNextDayAvailability.objects.filter(employee=emp, target_date=tomorrow).order_by('-responded_at').first()
+        records.append({
+            'employee': emp,
+            'availability': record,
+        })
+
+    today = timezone.localdate()
+    upcoming_holidays = Holiday.objects.filter(date__gte=today).order_by('date')
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({
+        'records': records,
+        'tomorrow': tomorrow,
+        'upcoming_holidays': upcoming_holidays,
+        'today_iso': today.isoformat(),
+    })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_targets(request):
+    from .models import EmployeeTarget
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
+    yesterday = today - timedelta(days=1)
+
+    employees = Employee.objects.select_related('department').order_by('department__name', 'name')
+
+    if request.method == 'POST':
+        for emp in employees:
+            key = f'target_{emp.employee_id}'
+            raw = request.POST.get(key, '').strip()
+            if raw == '':
+                continue
+            try:
+                amount = Decimal(raw).quantize(Decimal('0.01'))
+            except Exception:
+                continue
+            EmployeeTarget.objects.update_or_create(
+                employee=emp,
+                date=today,
+                defaults={'target_amount': amount},
+            )
+        messages.success(request, f"Targets saved for {today.strftime('%d %b %Y')}.")
+        return redirect('admin_dashboard_targets')
+
+    yesterday_targets = {
+        t.employee_id: t
+        for t in EmployeeTarget.objects.filter(date=yesterday)
+    }
+    yesterday_collections = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date=yesterday)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+
+    for emp in employees:
+        yest_entry = yesterday_targets.get(emp.employee_id)
+        if yest_entry:
+            yest_effective = yest_entry.target_amount + yest_entry.carry_forward
+            yest_collection = yesterday_collections.get(emp.employee_id, Decimal('0.00'))
+            shortfall = max(Decimal('0.00'), (yest_effective - yest_collection).quantize(Decimal('0.01')))
+            prev_target = yest_entry.target_amount
+        else:
+            shortfall = Decimal('0.00')
+            prev_target = Decimal('0.00')
+
+        EmployeeTarget.objects.update_or_create(
+            employee=emp,
+            date=today,
+            create_defaults={'target_amount': prev_target, 'carry_forward': shortfall},
+            defaults={'carry_forward': shortfall},
+        )
+
+    today_target_objs = {
+        t.employee_id: t
+        for t in EmployeeTarget.objects.filter(date=today)
+    }
+
+    today_actuals_map = {
+        row['employee_id']: row['total_amount'] or Decimal('0.00')
+        for row in Worksheet.objects.filter(date=today)
+        .values('employee_id')
+        .annotate(total_amount=models.Sum('amount'))
+    }
+
+    rows = []
+    for emp in employees:
+        obj = today_target_objs.get(emp.employee_id)
+        target = obj.target_amount if obj else Decimal('0.00')
+        carry_forward = obj.carry_forward if obj else Decimal('0.00')
+        effective_target = target + carry_forward
+        collection = today_actuals_map.get(emp.employee_id, Decimal('0.00'))
+        balance = (effective_target - collection).quantize(Decimal('0.01'))
+        achieved = collection >= effective_target if effective_target > 0 else None
+        rows.append({
+            'employee': emp,
+            'target': target,
+            'carry_forward': carry_forward,
+            'effective_target': effective_target,
+            'collection': collection,
+            'balance': balance,
+            'achieved': achieved,
+        })
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({
+        'rows': rows,
+        'today': today,
+    })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_worksheet_data(request):
+    import os
+    from django.conf import settings as _settings
+
+    worksheet_data_root = os.path.join(_settings.MEDIA_ROOT, 'worksheet_data')
+    media_url_base = _settings.MEDIA_URL.rstrip('/')
+    tree = []
+
+    if os.path.isdir(worksheet_data_root):
+        date_folders = sorted(
+            [d for d in os.listdir(worksheet_data_root)
+             if os.path.isdir(os.path.join(worksheet_data_root, d))],
+            reverse=True
+        )
+
+        emp_map = {str(e.employee_id): e.name for e in Employee.objects.all()}
+
+        for date_str in date_folders:
+            date_path = os.path.join(worksheet_data_root, date_str)
+            emp_entries = []
+            emp_folders = sorted(
+                [e for e in os.listdir(date_path)
+                 if os.path.isdir(os.path.join(date_path, e))]
+            )
+            for emp_id in emp_folders:
+                emp_path = os.path.join(date_path, emp_id)
+                files = []
+                for fname in sorted(os.listdir(emp_path)):
+                    fpath = os.path.join(emp_path, fname)
+                    if os.path.isfile(fpath):
+                        rel = f"worksheet_data/{date_str}/{emp_id}/{fname}"
+                        url = f"{media_url_base}/{rel}"
+                        size_kb = round(os.path.getsize(fpath) / 1024, 1)
+                        ext = os.path.splitext(fname)[1].lower()
+                        is_image = ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
+                        files.append({'name': fname, 'url': url, 'size_kb': size_kb, 'is_image': is_image})
+                emp_entries.append({
+                    'emp_id': emp_id,
+                    'emp_name': emp_map.get(emp_id, emp_id),
+                    'files': files,
+                    'file_count': len(files),
+                })
+            total_files = sum(e['file_count'] for e in emp_entries)
+            tree.append({'date': date_str, 'emp_entries': emp_entries, 'total_files': total_files})
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({'tree': tree})
     return render(request, 'admin_dashboard.html', base_context)
 
 

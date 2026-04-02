@@ -305,14 +305,20 @@
             <a class="nav-link {% if request.resolver_match.url_name == 'admin_departments' %}active{% endif %}" href="{% url 'admin_departments' %}">
                 <i class="fas fa-building mr-2"></i> Departments
             </a>
-                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_employees' %}active{% endif %}" href="{% url 'admin_employees' %}">
-                            <i class="fas fa-users-cog mr-2"></i> Employees
-                        </a>
                         <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_worksheet_management' %}active{% endif %}" href="{% url 'admin_dashboard_worksheet_management' %}">
                             <i class="fas fa-clipboard-list mr-2"></i> Worksheet Management
                         </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_leave_management' %}active{% endif %}" href="{% url 'admin_dashboard_leave_management' %}">
+                            <i class="fas fa-user-check mr-2"></i> Leave Management
+                        </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_targets' %}active{% endif %}" href="{% url 'admin_dashboard_targets' %}">
+                            <i class="fas fa-bullseye mr-2"></i> Daily Targets
+                        </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_worksheet_data' %}active{% endif %}" href="{% url 'admin_dashboard_worksheet_data' %}">
+                            <i class="fas fa-folder-open mr-2"></i> Worksheet Data
+                        </a>
             <a class="nav-link {% if request.resolver_match.url_name == 'token_naming_form' %}active{% endif %}" href="{% url 'token_naming_form' %}">
-                <i class="fas fa-ticket-alt mr-2"></i> Token Naming
+                <i class="fas fa-ticket-alt mr-2"></i> Token Generation
             </a>
         </div>
 
@@ -612,7 +618,23 @@
                             <tbody>
                                 {% for row in employee_rows %}
                                 <tr>
-                                    <td>{{ row.employee.name }} (ID: {{ row.employee.employee_id }})</td>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="btn btn-link p-0 font-weight-bold text-danger ws-employee-link"
+                                            data-toggle="modal"
+                                            data-target="#worksheetEmployeeOptionsModal"
+                                            data-employee-id="{{ row.employee.employee_id }}"
+                                            data-employee-name="{{ row.employee.name|escape }}"
+                                            data-department-name="{{ row.employee.department.name|default:'-'|escape }}"
+                                            data-status-label="{% if row.employee.employee_id in active_employee_ids %}Active{% elif row.employee.locked %}Locked{% else %}Inactive{% endif %}"
+                                            data-status-class="{% if row.employee.employee_id in active_employee_ids %}badge-success{% elif row.employee.locked %}badge-danger{% else %}badge-secondary{% endif %}"
+                                            data-edit-url="/admin/management/employee/{{ row.employee.employee_id }}/change/"
+                                        >
+                                            {{ row.employee.name }}
+                                        </button>
+                                        <span class="text-muted">(ID: {{ row.employee.employee_id }})</span>
+                                    </td>
                                     <td>{{ row.employee.department.name|default:"-" }}</td>
                                     <td style="font-weight:600;">{% if row.daily_target > 0 %}&#8377; {{ row.daily_target }}{% else %}<span style="color:#9aa5b4;">-</span>{% endif %}</td>
                                     <td>{{ row.total_amount }}</td>
@@ -665,6 +687,180 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'admin_dashboard_leave_management' %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0 font-weight-bold">Leave Management - Next Working Day: {{ tomorrow|date:"l, d M Y" }}</h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.print()">Print</button>
+                    </div>
+
+                    <div class="border rounded p-3 mb-3" style="border-left:4px solid #e05c2a !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0" style="color:#e05c2a; font-weight:700;">Holiday Management</h6>
+                        </div>
+                        <form method="post" class="form-row align-items-end mb-3">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add_holiday">
+                            <div class="col-md-3">
+                                <label>Date</label>
+                                <input type="date" name="holiday_date" class="form-control" min="{{ today_iso }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label>Reason</label>
+                                <input type="text" name="holiday_reason" class="form-control" placeholder="Optional">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-warning btn-block">Save Holiday</button>
+                            </div>
+                        </form>
+                        {% if upcoming_holidays %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light">
+                                    <tr><th>Date</th><th>Day</th><th>Reason</th><th>Remove</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for h in upcoming_holidays %}
+                                    <tr>
+                                        <td>{{ h.date|date:"d M Y" }}</td>
+                                        <td>{{ h.date|date:"l" }}</td>
+                                        <td>{{ h.reason|default:"-" }}</td>
+                                        <td>
+                                            <form method="post" class="m-0" onsubmit="return confirm('Remove this holiday?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete_holiday">
+                                                <input type="hidden" name="holiday_id" value="{{ h.pk }}">
+                                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No upcoming holidays marked.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Employee ID</th><th>Name</th><th>Mobile</th><th>Will Come?</th><th>Response Source</th><th>Responded At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rec in records %}
+                                <tr>
+                                    <td>{{ rec.employee.employee_id }}</td>
+                                    <td>{{ rec.employee.name }}</td>
+                                    <td>{{ rec.employee.mobile_number }}</td>
+                                    <td>
+                                        {% if rec.availability %}{% if rec.availability.will_come %}<span class="text-success">Yes</span>{% else %}<span class="text-danger">No</span>{% endif %}{% else %}<span class="text-muted">No response</span>{% endif %}
+                                        <form method="post" class="form-inline mt-1">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="employee_id" value="{{ rec.employee.employee_id }}">
+                                            <select name="will_come" class="form-control form-control-sm mr-2">
+                                                <option value="yes" {% if rec.availability and rec.availability.will_come %}selected{% endif %}>Yes</option>
+                                                <option value="no" {% if rec.availability and not rec.availability.will_come %}selected{% endif %}>No</option>
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-success">Save</button>
+                                        </form>
+                                    </td>
+                                    <td>{% if rec.availability %}{{ rec.availability.get_response_source_display }}{% else %}-{% endif %}</td>
+                                    <td>{% if rec.availability %}{{ rec.availability.responded_at|date:'Y-m-d H:i' }}{% else %}-{% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'admin_dashboard_targets' %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="font-weight-bold mb-2">Daily Targets</h5>
+                    <p class="text-muted mb-3">Set each employee target for today: {{ today|date:"d M Y" }}</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>#</th><th>Employee</th><th>Department</th><th>Today's Target (Rs)</th><th>Pending (Carry Rs)</th><th>Collection (Rs)</th><th>Balance (Rs)</th><th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in rows %}
+                                    <tr>
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{{ row.employee.name }} <span class="text-muted">(ID: {{ row.employee.employee_id }})</span></td>
+                                        <td>{{ row.employee.department.name|default:"-" }}</td>
+                                        <td><input type="number" step="0.01" min="0" name="target_{{ row.employee.employee_id }}" value="{{ row.target }}" class="form-control form-control-sm text-right"></td>
+                                        <td class="font-weight-bold {% if row.carry_forward > 0 %}text-danger{% else %}text-muted{% endif %}">Rs {{ row.carry_forward }}</td>
+                                        <td>Rs {{ row.collection }}</td>
+                                        <td class="font-weight-bold {% if row.balance <= 0 %}text-success{% else %}text-danger{% endif %}">Rs {{ row.balance }}</td>
+                                        <td>
+                                            {% if row.achieved is None %}<span class="badge badge-secondary">No Target</span>
+                                            {% elif row.achieved %}<span class="badge badge-success">Achieved</span>
+                                            {% else %}<span class="badge badge-warning">Pending</span>{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-3">Save Targets</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'admin_dashboard_worksheet_data' %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="font-weight-bold mb-3">Worksheet Data</h5>
+                    {% if not tree %}
+                    <div class="text-center text-muted py-4">No worksheet images have been uploaded yet.</div>
+                    {% else %}
+                    {% for day in tree %}
+                    <div class="border rounded mb-3">
+                        <div class="bg-light p-2 d-flex justify-content-between align-items-center" onclick="this.nextElementSibling.classList.toggle('d-none')" style="cursor:pointer;">
+                            <strong>{{ day.date }}</strong>
+                            <span class="badge badge-info">{{ day.emp_entries|length }} employees · {{ day.total_files }} files</span>
+                        </div>
+                        <div class="p-2 d-none">
+                            <div class="row">
+                                {% for emp in day.emp_entries %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="border rounded h-100">
+                                        <div class="bg-light p-2"><strong>{{ emp.emp_name }}</strong> <span class="text-muted">#{{ emp.emp_id }}</span></div>
+                                        <ul class="list-group list-group-flush">
+                                            {% for f in emp.files %}
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                <a href="{{ f.url }}" target="_blank">{{ f.name }}</a>
+                                                <small class="text-muted">{{ f.size_kb }} KB</small>
+                                            </li>
+                                            {% empty %}
+                                            <li class="list-group-item text-muted">No files</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -824,8 +1020,8 @@
                 <div class="col-12">
                     <div class="card border-0 shadow-sm">
                         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                            <span class="font-weight-bold">Token Naming Access</span>
-                            <small class="text-muted">Select employees who can use Token Naming in employee dashboard</small>
+                            <span class="font-weight-bold">Token Generation Access</span>
+                            <small class="text-muted">Select employees who can use Token Generation in employee dashboard</small>
                         </div>
                         <div class="card-body">
                             <form method="post">
@@ -958,6 +1154,49 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="worksheetEmployeeOptionsModal" tabindex="-1" role="dialog" aria-labelledby="worksheetEmployeeOptionsLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="worksheetEmployeeOptionsLabel">Employee Full Options</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="border rounded p-3 mb-3" style="background:#fff;">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <div class="small text-muted">Employee ID</div>
+                            <div class="font-weight-bold" id="wsModalEmployeeId">-</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Name</div>
+                            <div class="font-weight-bold" id="wsModalEmployeeName">-</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <div class="small text-muted">Department</div>
+                            <div class="font-weight-bold" id="wsModalDepartmentName">-</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Status</div>
+                            <span class="badge" id="wsModalStatusBadge">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-start">
+                <a href="#" class="btn btn-primary" id="wsModalEditLink">Open Edit Form</a>
+                <a href="#" class="btn btn-outline-primary" id="wsModalEditLinkNewTab" target="_blank" rel="noopener noreferrer">Open in New Tab</a>
+                <a href="/admin/management/employee/" class="btn btn-outline-secondary">View All in Admin</a>
             </div>
         </div>
     </div>
@@ -1128,6 +1367,33 @@
                 window.location.href = destination;
             }
         });
+    });
+
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('.ws-employee-link');
+        if (!trigger) {
+            return;
+        }
+
+        var employeeId = trigger.getAttribute('data-employee-id') || '-';
+        var employeeName = trigger.getAttribute('data-employee-name') || '-';
+        var departmentName = trigger.getAttribute('data-department-name') || '-';
+        var statusLabel = trigger.getAttribute('data-status-label') || 'Inactive';
+        var statusClass = trigger.getAttribute('data-status-class') || 'badge-secondary';
+        var editUrl = trigger.getAttribute('data-edit-url') || '#';
+
+        document.getElementById('wsModalEmployeeId').textContent = employeeId;
+        document.getElementById('wsModalEmployeeName').textContent = employeeName;
+        document.getElementById('wsModalDepartmentName').textContent = departmentName;
+
+        var statusBadge = document.getElementById('wsModalStatusBadge');
+        statusBadge.textContent = statusLabel;
+        statusBadge.className = 'badge ' + statusClass;
+
+        var editLink = document.getElementById('wsModalEditLink');
+        var editLinkNewTab = document.getElementById('wsModalEditLinkNewTab');
+        editLink.setAttribute('href', editUrl);
+        editLinkNewTab.setAttribute('href', editUrl);
     });
 </script>
 </body>

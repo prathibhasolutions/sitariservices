@@ -49,6 +49,9 @@ urlpatterns = [
     # Admin Dashboard
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/worksheet-management/', views.admin_dashboard_worksheet_management, name='admin_dashboard_worksheet_management'),
+    path('admin-dashboard/leave-management/', views.admin_dashboard_leave_management, name='admin_dashboard_leave_management'),
+    path('admin-dashboard/targets/', views.admin_dashboard_targets, name='admin_dashboard_targets'),
+    path('admin-dashboard/worksheet-data/', views.admin_dashboard_worksheet_data, name='admin_dashboard_worksheet_data'),
     path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
     path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
     path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),
@@ -76,8 +79,6 @@ urlpatterns = [
     path('ttd/individual-darshan/<int:darshan_id>/print/', views.ttd_individual_darshan_print, name='ttd_individual_darshan_print'),
     path('ttd/print-all/', views.ttd_print_all, name='ttd_print_all'),
 
-    # Admin: Employees Section
-    path('admin-dashboard/employees/', views.admin_employees, name='admin_employees'),
     path('admin-dashboard/employees/<int:employee_id>/edit/', views.admin_employee_edit, name='admin_employee_edit'),
 
     # Admin: Departments Section
