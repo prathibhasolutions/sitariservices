@@ -474,6 +474,7 @@ def admin_ttd_print_all(request):
 @staff_member_required
 def admin_departments(request):
     base_context = _build_admin_dashboard_context()
+    base_context['departments'] = Department.objects.select_related('department_head').prefetch_related('employees').order_by('name')
 
     selected_department = None
     filtered_employee = None
@@ -483,11 +484,24 @@ def admin_departments(request):
     report_rows = []
     total_amount = 0
     total_payment = 0
+    department_report_headers = []
+    department_report_rows = []
+    department_total_amount = 0
+    department_total_payment = 0
 
     department_id = request.GET.get('department_id')
     employee_id = request.GET.get('employee_id')
     from_date = (request.GET.get('from_date') or '').strip()
     to_date = (request.GET.get('to_date') or '').strip()
+    department_from_date = (request.GET.get('department_from_date') or '').strip()
+    department_to_date = (request.GET.get('department_to_date') or '').strip()
+    print_today = request.GET.get('print_today') == '1'
+    auto_print_department = request.GET.get('auto_print') == '1'
+
+    if print_today and not (department_from_date or department_to_date):
+        today = timezone.localdate().isoformat()
+        department_from_date = today
+        department_to_date = today
 
     if department_id:
         selected_department = Department.objects.filter(pk=department_id).select_related('department_head').first()
@@ -499,6 +513,110 @@ def admin_departments(request):
 
     if selected_department and employee_id:
         filtered_employee = department_employees.filter(employee_id=employee_id).first()
+
+    def _display(value):
+        return '-' if value in (None, '') else str(value)
+
+    def _money(value):
+        return f"{value:.2f}" if value is not None else '0.00'
+
+    def _get_department_columns(department_name):
+        if department_name in ('Mee Seva', 'Online Hub'):
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Transaction Num', lambda entry: _display(entry.transaction_num)),
+                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
+                ('Payment', lambda entry: _money(entry.payment)),
+                ('Amount', lambda entry: _money(entry.amount)),
+            ]
+        if department_name == 'Aadhaar':
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Enrollment No', lambda entry: _display(entry.enrollment_no)),
+                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
+                ('Payment', lambda entry: _money(entry.payment)),
+                ('Amount', lambda entry: _money(entry.amount)),
+            ]
+        if department_name == 'Bhu Bharathi':
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Login Mobile', lambda entry: _display(entry.login_mobile_no)),
+                ('Application No', lambda entry: _display(entry.application_no)),
+                ('Status', lambda entry: _display(entry.status)),
+                ('Payment', lambda entry: _money(entry.payment)),
+                ('Amount', lambda entry: _money(entry.amount)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+            ]
+        if department_name == 'Forms':
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Stocks Used', lambda entry: _display(entry.stocks_used)),
+                ('Amount', lambda entry: _money(entry.amount)),
+            ]
+        if department_name == 'Xerox':
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Mobile No.', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Payment', lambda entry: _money(entry.payment)),
+                ('Amount', lambda entry: _money(entry.amount)),
+            ]
+        if department_name == 'Notary and Bonds':
+            return [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Bonds Sl. No', lambda entry: _display(entry.bonds_sno)),
+                ('Payment', lambda entry: _money(entry.payment)),
+                ('Amount', lambda entry: _money(entry.amount)),
+            ]
+        return [
+            ('Service', lambda entry: _display(entry.service)),
+            ('Particulars', lambda entry: _display(entry.particulars)),
+            ('Payment', lambda entry: _money(entry.payment)),
+            ('Amount', lambda entry: _money(entry.amount)),
+        ]
+
+    if selected_department and (department_from_date or department_to_date):
+        department_entries = Worksheet.objects.filter(
+            department_name=selected_department.name,
+        ).select_related('employee').order_by('-date', '-created_at')
+
+        if department_from_date and department_to_date:
+            department_entries = department_entries.filter(date__range=[department_from_date, department_to_date])
+        elif department_from_date:
+            department_entries = department_entries.filter(date__gte=department_from_date)
+        elif department_to_date:
+            department_entries = department_entries.filter(date__lte=department_to_date)
+
+        department_columns = _get_department_columns(selected_department.name)
+        department_report_headers = ['Date', 'Employee'] + [header for header, _ in department_columns]
+        department_report_rows = [
+            [
+                entry.date.strftime('%d-%m-%Y') if entry.date else '-',
+                _display(entry.employee.name if entry.employee_id else '-'),
+                *[extractor(entry) for _, extractor in department_columns],
+            ]
+            for entry in department_entries
+        ]
+
+        department_totals = department_entries.aggregate(total_amount=Sum('amount'), total_payment=Sum('payment'))
+        department_total_amount = department_totals['total_amount'] or 0
+        department_total_payment = department_totals['total_payment'] or 0
 
     if selected_department and filtered_employee and (from_date or to_date):
         worksheet_entries = Worksheet.objects.filter(
@@ -513,82 +631,12 @@ def admin_departments(request):
         elif to_date:
             worksheet_entries = worksheet_entries.filter(date__lte=to_date)
 
-        def _display(value):
-            return '-' if value in (None, '') else str(value)
+        dynamic_columns = _get_department_columns(selected_department.name)
 
-        def _money(value):
-            return f"{value:.2f}" if value is not None else '0.00'
-
-        dynamic_columns = []
-        if selected_department.name in ('Mee Seva', 'Online Hub'):
-            dynamic_columns = [
-                ('Token No', lambda entry: _display(entry.token_no)),
-                ('Customer Name', lambda entry: _display(entry.customer_name)),
-                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-                ('Transaction Num', lambda entry: _display(entry.transaction_num)),
-                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-        elif selected_department.name == 'Aadhaar':
-            dynamic_columns = [
-                ('Token No', lambda entry: _display(entry.token_no)),
-                ('Customer Name', lambda entry: _display(entry.customer_name)),
-                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-                ('Enrollment No', lambda entry: _display(entry.enrollment_no)),
-                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-        elif selected_department.name == 'Bhu Bharathi':
-            dynamic_columns = [
-                ('Token No', lambda entry: _display(entry.token_no)),
-                ('Customer Name', lambda entry: _display(entry.customer_name)),
-                ('Login Mobile', lambda entry: _display(entry.login_mobile_no)),
-                ('Application No', lambda entry: _display(entry.application_no)),
-                ('Status', lambda entry: _display(entry.status)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-        elif selected_department.name == 'Forms':
-            dynamic_columns = [
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-            ]
-        elif selected_department.name == 'Xerox':
-            dynamic_columns = [
-                ('Token No', lambda entry: _display(entry.token_no)),
-                ('Customer Name', lambda entry: _display(entry.customer_name)),
-                ('Mobile No.', lambda entry: _display(entry.customer_mobile)),
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-        elif selected_department.name == 'Notary and Bonds':
-            dynamic_columns = [
-                ('Token No', lambda entry: _display(entry.token_no)),
-                ('Customer Name', lambda entry: _display(entry.customer_name)),
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-                ('Bonds Sl. No', lambda entry: _display(entry.bonds_sno)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-        else:
-            dynamic_columns = [
-                ('Service', lambda entry: _display(entry.service)),
-                ('Particulars', lambda entry: _display(entry.particulars)),
-                ('Payment', lambda entry: _money(entry.payment)),
-            ]
-
-        report_headers = ['Date', 'Created At'] + [header for header, _ in dynamic_columns] + ['Amount', 'Approved']
+        report_headers = [header for header, _ in dynamic_columns]
         report_rows = [
             [
-                entry.date.strftime('%d-%m-%Y') if entry.date else '-',
-                timezone.localtime(entry.created_at).strftime('%d-%m-%Y %I:%M %p') if entry.created_at else '-',
                 *[extractor(entry) for _, extractor in dynamic_columns],
-                _money(entry.amount),
-                'Yes' if entry.approved else 'No',
             ]
             for entry in worksheet_entries
         ]
@@ -601,6 +649,13 @@ def admin_departments(request):
         'selected_department': selected_department,
         'selected_employee': filtered_employee,
         'department_employees': department_employees,
+        'department_report_headers': department_report_headers,
+        'department_report_rows': department_report_rows,
+        'department_total_amount': department_total_amount,
+        'department_total_payment': department_total_payment,
+        'department_filter_from_date': department_from_date,
+        'department_filter_to_date': department_to_date,
+        'auto_print_department': auto_print_department,
         'worksheet_report_headers': report_headers,
         'worksheet_report_rows': report_rows,
         'worksheet_total_amount': total_amount,
@@ -614,10 +669,36 @@ def admin_departments(request):
 # --- Admin: Employees Section ---
 @staff_member_required
 def admin_employees(request):
+    base_context = _build_admin_dashboard_context()
     employees = Employee.objects.select_related('department').order_by('name')
-    return render(request, 'management/admin_employees.html', {
+    active_employee_ids = set(
+        AttendanceSession.objects.filter(logout_time__isnull=True, session_closed=False)
+        .values_list('employee_id', flat=True)
+    )
+    selected_employee = None
+    selected_employee_id = (request.GET.get('employee_id') or '').strip()
+    if selected_employee_id.isdigit():
+        selected_employee = employees.filter(employee_id=int(selected_employee_id)).first()
+    if not selected_employee:
+        selected_employee = employees.first()
+
+    admin_change_url = None
+    if selected_employee:
+        admin_change_url = f"/admin/management/employee/{selected_employee.employee_id}/change/"
+
+    base_context.update({
         'employees': employees,
+        'active_employee_ids': active_employee_ids,
+        'selected_employee': selected_employee,
+        'admin_employee_change_url': admin_change_url,
     })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_employee_edit(request, employee_id):
+    employee = get_object_or_404(Employee, employee_id=employee_id)
+    return redirect(f"/admin/management/employee/{employee.employee_id}/change/")
 
 
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
@@ -1890,38 +1971,10 @@ def worksheet_view(request, employee):
     return render(request, 'worksheet.html', context)
 
 
-@staff_member_required
-def admin_worksheet_management(request):
-    now_local = timezone.localtime(timezone.now())
+def _build_worksheet_management_context(now_local):
     today = now_local.date()
     cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
     cutoff_time_label = format_cutoff_time_label(cutoff_hour)
-
-    if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
-        employee_id = request.POST.get('target_employee_id')
-        target_employee = get_object_or_404(Employee, employee_id=employee_id)
-        
-        if target_employee.worksheet_entry_force_unlock_until is None:
-            # Grant permission with expiration time based on current time
-            if now_local.hour < cutoff_hour:
-                # Before 5 PM: permission expires at 5 PM today
-                expiration = now_local.replace(hour=cutoff_hour, minute=0, second=0, microsecond=0)
-                msg = f"Worksheet entry override enabled for {target_employee.name} until {cutoff_time_label} today."
-            else:
-                # At/after 5 PM: permission expires at midnight tonight
-                expiration = (now_local + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-                msg = f"Worksheet entry override enabled for {target_employee.name} until midnight tonight."
-            
-            target_employee.worksheet_entry_force_unlock_until = expiration
-            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
-            messages.success(request, msg)
-        else:
-            # Revoke permission
-            target_employee.worksheet_entry_force_unlock_until = None
-            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
-            messages.success(request, f'Worksheet entry override disabled for {target_employee.name}.')
-
-        return redirect(request.path)
 
     employees = Employee.objects.select_related('department').order_by('name')
 
@@ -1978,7 +2031,6 @@ def admin_worksheet_management(request):
         is_locked = is_worksheet_entry_locked_now(employee=emp, now_local=now_local, cutoff_hour=cutoff_hour)
         employee_totals = todays_totals_map.get(emp.employee_id, {})
 
-        # Check if override is currently active
         has_active_override = emp.worksheet_entry_force_unlock_until and now_local < emp.worksheet_entry_force_unlock_until
 
         weekly_amount = weekly_totals_map.get(emp.employee_id, Decimal('0.00'))
@@ -1998,16 +2050,84 @@ def admin_worksheet_management(request):
             'monthly_commission': _calc_commission(monthly_amount, monthly_target),
         })
 
-    context = {
+    return {
         'employee_rows': employee_rows,
         'now_local': now_local,
         'today': today,
         'cutoff_hour': cutoff_hour,
         'cutoff_time_label': cutoff_time_label,
     }
+
+
+@staff_member_required
+def admin_worksheet_management(request):
+    now_local = timezone.localtime(timezone.now())
+    cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+    cutoff_time_label = format_cutoff_time_label(cutoff_hour)
+
+    if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
+        employee_id = request.POST.get('target_employee_id')
+        target_employee = get_object_or_404(Employee, employee_id=employee_id)
+        
+        if target_employee.worksheet_entry_force_unlock_until is None:
+            # Grant permission with expiration time based on current time
+            if now_local.hour < cutoff_hour:
+                # Before 5 PM: permission expires at 5 PM today
+                expiration = now_local.replace(hour=cutoff_hour, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until {cutoff_time_label} today."
+            else:
+                # At/after 5 PM: permission expires at midnight tonight
+                expiration = (now_local + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until midnight tonight."
+            
+            target_employee.worksheet_entry_force_unlock_until = expiration
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, msg)
+        else:
+            # Revoke permission
+            target_employee.worksheet_entry_force_unlock_until = None
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, f'Worksheet entry override disabled for {target_employee.name}.')
+
+        return redirect(request.path)
+
+    context = _build_worksheet_management_context(now_local)
     admin_context = admin.site.each_context(request)
     admin_context.update(context)
     return render(request, 'admin/worksheet_management.html', admin_context)
+
+
+@staff_member_required
+def admin_dashboard_worksheet_management(request):
+    now_local = timezone.localtime(timezone.now())
+    cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+    cutoff_time_label = format_cutoff_time_label(cutoff_hour)
+
+    if request.method == 'POST' and request.POST.get('action') == 'toggle_entry_access':
+        employee_id = request.POST.get('target_employee_id')
+        target_employee = get_object_or_404(Employee, employee_id=employee_id)
+
+        if target_employee.worksheet_entry_force_unlock_until is None:
+            if now_local.hour < cutoff_hour:
+                expiration = now_local.replace(hour=cutoff_hour, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until {cutoff_time_label} today."
+            else:
+                expiration = (now_local + timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                msg = f"Worksheet entry override enabled for {target_employee.name} until midnight tonight."
+
+            target_employee.worksheet_entry_force_unlock_until = expiration
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, msg)
+        else:
+            target_employee.worksheet_entry_force_unlock_until = None
+            target_employee.save(update_fields=['worksheet_entry_force_unlock_until'])
+            messages.success(request, f'Worksheet entry override disabled for {target_employee.name}.')
+
+        return redirect(request.path)
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update(_build_worksheet_management_context(now_local))
+    return render(request, 'admin_dashboard.html', base_context)
 
 
 @staff_member_required
@@ -2397,6 +2517,7 @@ def admin_employee_targets(request):
 @require_employee
 def worksheet_entry_edit_view(request, employee, entry_id):
     entry = get_object_or_404(Worksheet, pk=entry_id, employee=employee)
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
     if entry.approved:
         messages.error(request, "This entry is approved and cannot be edited.")
@@ -2408,17 +2529,19 @@ def worksheet_entry_edit_view(request, employee, entry_id):
             form.save()
             messages.success(request, "Worksheet entry updated successfully.")
             return redirect('worksheet')
-        else:
-            context = {'form': form, 'entry_id': entry_id}
-            return render(request, 'partials/worksheet_edit_form.html', context)
     else:
         form = WorksheetEntryEditForm(instance=entry)
 
     context = {
         'form': form,
-        'entry_id': entry_id
+        'entry_id': entry_id,
+        'entry': entry,
+        'employee': employee,
     }
-    return render(request, 'partials/worksheet_edit_form.html', context)
+
+    if is_ajax:
+        return render(request, 'partials/worksheet_edit_form.html', context)
+    return render(request, 'management/worksheet_entry_edit.html', context)
 
 
 
@@ -2498,8 +2621,36 @@ def upload_file_view(request):
             # You can loop through form.errors for more specific messages if needed
             messages.error(request, 'There was an error with your upload. Please check the form and try again.')
             
-    # Redirect back to the dashboard whether the upload was successful or not
-    return redirect('employee_dashboard')
+    # Redirect to the dedicated uploads page whether success or failure
+    return redirect('employee_uploads')
+
+
+@require_employee
+def employee_uploads_view(request, employee):
+    has_token_naming_access = bool(employee.token_naming_access and not employee.locked)
+    is_department_head = bool(employee.department and employee.department.department_head_id == employee.employee_id)
+
+    upload_form = EmployeeUploadForm()
+    if request.method == 'POST':
+        upload_form = EmployeeUploadForm(request.POST, request.FILES)
+        if upload_form.is_valid():
+            upload = upload_form.save(commit=False)
+            upload.employee = employee
+            upload.save()
+            messages.success(request, 'File uploaded successfully.')
+            return redirect('employee_uploads')
+        messages.error(request, 'Please correct the upload form errors and try again.')
+
+    uploads = employee.file_uploads.select_related('service').order_by('-uploaded_at')
+
+    context = {
+        'employee': employee,
+        'uploads': uploads,
+        'upload_form': upload_form,
+        'is_department_head': is_department_head,
+        'has_token_naming_access': has_token_naming_access,
+    }
+    return render(request, 'uploads.html', context)
 
 
 

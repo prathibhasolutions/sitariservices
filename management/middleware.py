@@ -17,7 +17,7 @@ class EmployeeAttendanceSessionMiddleware(MiddlewareMixin):
         # List of URL prefixes for employee-only pages
         employee_prefixes = [
             '/employee/dashboard/', '/employee/attendance/', '/employee/attendance_ping/', '/employee/refresh_session/',
-            '/worksheet/', '/notifications/', '/change-password/', '/upload-file/', '/todos/', '/applications/', '/links/',
+            '/worksheet/', '/notifications/', '/change-password/', '/upload-file/', '/uploads/', '/todos/', '/applications/', '/links/',
             '/assigned-tasks/', '/create-invoice/', '/invoice/'
         ]
         # Exclude admin, api, and logout URLs

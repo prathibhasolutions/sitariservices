@@ -250,6 +250,29 @@
         }
     }
 
+    .worksheet-panels {
+        display: grid;
+        grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.35fr);
+        gap: 18px;
+        align-items: start;
+    }
+
+    .worksheet-panel-left,
+    .worksheet-panel-right {
+        min-width: 0;
+    }
+
+    .worksheet-panel-left .card,
+    .worksheet-panel-right .card {
+        margin-bottom: 18px;
+    }
+
+    @media (max-width: 991px) {
+        .worksheet-panels {
+            grid-template-columns: 1fr;
+        }
+    }
+
     @media print {
         .worksheet-crystal {
             background: #fff !important;
@@ -283,6 +306,9 @@
         <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
         <h3 class="mb-4 col-6">Department: <span class="text-primary">{{ department.name }}</span></h3>
     </div>
+
+    <div class="worksheet-panels">
+        <div class="worksheet-panel-left">
     
     <!-- Section to Add New Entry -->
     <div class="card mb-4 shadow-sm">
@@ -461,6 +487,9 @@
 
 
  <!-- Section for Today's Entries -->
+        </div>
+
+        <div class="worksheet-panel-right">
     <div class="card mb-4 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>Today's Entries ({{ today|date:"d M Y" }})</h4>
@@ -537,9 +566,9 @@
                             </td>
                             <td class="no-print" style="text-align: center;">
                                 {% if not entry.approved %}
-                                    <button type="button" class="btn btn-primary btn-sm edit-btn" data-url="{% url 'worksheet-edit' entry.id %}">
+                                    <a href="{% url 'worksheet-edit' entry.id %}" class="btn btn-primary btn-sm">
                                         Edit
-                                    </button>
+                                    </a>
                                 {% else %}
                                     -
                                 {% endif %}
@@ -742,6 +771,9 @@
             {% endif %}
         </div>
     </div>
+
+        </div>
+    </div>
 </div>
 
 
@@ -755,24 +787,6 @@
 </style>
 
 
-
-
-<!-- Bootstrap Modal for the Edit Form (Unchanged) -->
-<div class="modal fade" id="editEntryModal" tabindex="-1" role="dialog" aria-labelledby="editEntryModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="editEntryModalLabel">Edit Worksheet Entry</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body" id="edit-form-container">
-        <div class="text-center">Loading...</div>
-      </div>
-    </div>
-  </div>
-</div>
 
 
 <script>
@@ -817,36 +831,26 @@
     }
 
     function printHistoricalReport() {
-        var printHeader = document.getElementById('historical-print-header').innerHTML;
-        var printContent = document.getElementById('historical-report-printable').innerHTML;
-        var originalContent = document.body.innerHTML;
-        
-        document.body.innerHTML = '<html><head><title>Print Historical Report</title>' +
-            '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' +
-            '</head><body>' + printHeader + printContent + '</body></html>';
-        
-        window.print();
-        
-        document.body.innerHTML = originalContent;
-        location.reload(); 
+        const headerEl = document.getElementById('historical-print-header');
+        const reportEl = document.getElementById('historical-report-printable');
+        const headerHTML = headerEl ? headerEl.innerHTML : '';
+        const reportHTML = reportEl ? reportEl.innerHTML : '';
+
+        const printWindow = window.open('', '', 'height=800,width=1000');
+        printWindow.document.write('<html><head><title>Print Historical Report</title>');
+        printWindow.document.write('<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">');
+        printWindow.document.write('<style>body { padding: 20px; } .form-row, .btn, .edit-btn, .no-print { display: none !important; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(headerHTML + reportHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
     }
-
-
-
-    document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('edit-btn')) {
-            const url = event.target.dataset.url;
-            
-            fetch(url)
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('edit-form-container').innerHTML = html;
-                    $('#editEntryModal').modal('show');
-                })
-                .catch(err => console.error('Failed to load edit form:', err));
-        }
-    });
 
     function lockWorksheetEntryUI() {
         const addBtn = document.getElementById('worksheet-add-entry-btn');

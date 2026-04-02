@@ -34,6 +34,7 @@ urlpatterns = [
     path('notifications/mark-as-read/<int:pk>/', views.mark_notification_as_read, name='mark_notification_as_read'),
     path('change-password/', views.change_password_request, name='change_password_request'),
     path('change-password/verify/', views.change_password_verify, name='change_password_verify'),
+    path('uploads/', views.employee_uploads_view, name='employee_uploads'),
     path('upload-file/', views.upload_file_view, name='upload_file'),
     path('todos/', views.todo_page_view, name='todo_page'),
     path('api/todos/get/', views.get_employee_todos, name='todos_get'),
@@ -47,6 +48,7 @@ urlpatterns = [
 
     # Admin Dashboard
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin-dashboard/worksheet-management/', views.admin_dashboard_worksheet_management, name='admin_dashboard_worksheet_management'),
     path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
     path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
     path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),
@@ -76,6 +78,7 @@ urlpatterns = [
 
     # Admin: Employees Section
     path('admin-dashboard/employees/', views.admin_employees, name='admin_employees'),
+    path('admin-dashboard/employees/<int:employee_id>/edit/', views.admin_employee_edit, name='admin_employee_edit'),
 
     # Admin: Departments Section
     path('admin-dashboard/departments/', views.admin_departments, name='admin_departments'),
