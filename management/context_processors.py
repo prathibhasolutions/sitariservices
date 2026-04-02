@@ -12,11 +12,13 @@ def notifications_context(request):
         employee_id = request.session.get('employee_id')
         count = UserNotificationStatus.objects.filter(employee_id=employee_id, is_read=False).count()
         is_department_head = Department.objects.filter(department_head__employee_id=employee_id).exists()
+        has_token_naming_access = Employee.objects.filter(employee_id=employee_id, token_naming_access=True).exists()
         return {
             'unread_notification_count': count,
             'is_department_head': is_department_head,
+            'has_token_naming_access': has_token_naming_access,
         }
-    return {'unread_notification_count': 0, 'is_department_head': False}
+    return {'unread_notification_count': 0, 'is_department_head': False, 'has_token_naming_access': False}
 
 
 def employee_next_day_alert_context(request):

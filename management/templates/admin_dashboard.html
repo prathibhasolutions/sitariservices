@@ -128,6 +128,31 @@
             #content { width: 100%; margin-left: 0; }
             #content.active { width: 100%; margin-left: 0; }
         }
+        @media print {
+            @page { size: A4 landscape; margin: 8mm; }
+            body * { visibility: hidden; }
+            #worksheetPrintArea, #worksheetPrintArea * { visibility: visible; }
+            #worksheetPrintArea {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+            }
+            #worksheetPrintArea h5,
+            #worksheetPrintArea .text-muted { font-size: 9pt; }
+            #worksheetPrintArea table {
+                width: 100%;
+                table-layout: auto;
+                font-size: 7.5pt;
+                word-break: break-word;
+            }
+            #worksheetPrintArea th,
+            #worksheetPrintArea td {
+                padding: 2px 4px !important;
+                white-space: normal !important;
+            }
+            #worksheetPrintArea .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -217,7 +242,8 @@
                 </div>
                 {% for dept in departments %}
                 <div class="col-md-4 mb-3">
-                    <div class="card border-0 shadow-sm">
+                    <a href="{% url 'admin_departments' %}?department_id={{ dept.id }}" class="text-decoration-none text-reset d-block">
+                    <div class="card border-0 shadow-sm {% if selected_department and selected_department.id == dept.id %}border border-danger{% endif %}">
                         <div class="card-body d-flex align-items-center">
                             <div class="rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:48px;height:48px;background:#e3f2fd;">
                                 <i class="fas fa-building" style="color:#1565c0;font-size:20px;"></i>
@@ -228,13 +254,100 @@
                             </div>
                         </div>
                     </div>
+                    </a>
                 </div>
                 {% empty %}
                 <div class="col-12"><div class="alert alert-info">No departments found.</div></div>
                 {% endfor %}
             </div>
+
+            {% if selected_department %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">{{ selected_department.name }} Worksheet Filter</h5>
+                        <a href="{% url 'admin_departments' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                    </div>
+                    <form method="get">
+                        <input type="hidden" name="department_id" value="{{ selected_department.id }}">
+                        <div class="form-row align-items-end">
+                            <div class="form-group col-md-3">
+                                <label for="employee_id">Employee</label>
+                                <select name="employee_id" id="employee_id" class="form-control">
+                                    <option value="">-- Select Employee --</option>
+                                    {% for employee in department_employees %}
+                                    <option value="{{ employee.employee_id }}" {% if selected_employee and selected_employee.employee_id == employee.employee_id %}selected{% endif %}>{{ employee.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="from_date">From</label>
+                                <input type="date" name="from_date" id="from_date" class="form-control" value="{{ filter_from_date }}">
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="to_date">To</label>
+                                <input type="date" name="to_date" id="to_date" class="form-control" value="{{ filter_to_date }}">
+                            </div>
+                            <div class="form-group col-md-3">
+                                <button type="submit" class="btn btn-danger btn-block">Get Worksheet Data</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if selected_employee and worksheet_report_headers %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body" id="worksheetPrintArea">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Worksheet Data</h5>
+                            <div class="text-muted small">Employee: {{ selected_employee.name }}{% if filter_from_date or filter_to_date %} | Range: {{ filter_from_date|default:'-' }} to {{ filter_to_date|default:'-' }}{% endif %}</div>
+                        </div>
+                        <button onclick="window.print()" class="btn btn-sm btn-outline-danger no-print" title="Print / Save as PDF"><i class="fas fa-file-pdf mr-1"></i>Print PDF</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    {% for header in worksheet_report_headers %}
+                                    <th>{{ header }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in worksheet_report_rows %}
+                                <tr>
+                                    {% for cell in row %}
+                                    <td>{{ cell }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="{{ worksheet_report_headers|length }}" class="text-center text-muted">No worksheet data found for the selected filters.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            {% if worksheet_report_rows %}
+                            <tfoot class="thead-light font-weight-bold">
+                                <tr>
+                                    <td colspan="{{ worksheet_report_headers|length }}" class="text-right">
+                                        Total Payment: &#8377;{{ worksheet_total_payment|floatformat:2 }}
+                                        &nbsp;&nbsp;&nbsp;
+                                        Total Amount: &#8377;{{ worksheet_total_amount|floatformat:2 }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
             {% endif %}
 
+            {% if request.resolver_match.url_name == 'admin_dashboard' %}
             <!-- Summary Cards -->
             <div class="row mb-4">
                 <div class="col-md-4 mb-3">
@@ -278,6 +391,55 @@
                 </div>
             </div>
 
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <span class="font-weight-bold">Token Naming Access</span>
+                            <small class="text-muted">Select employees who can use Token Naming in employee dashboard</small>
+                        </div>
+                        <div class="card-body">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="update_token_naming_access">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-3">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th style="width: 70px;">Allow</th>
+                                                <th>Employee</th>
+                                                <th>Department</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in employee_data %}
+                                            <tr>
+                                                <td class="text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="token_access_employee_ids"
+                                                        value="{{ item.employee.employee_id }}"
+                                                        {% if item.employee.token_naming_access %}checked{% endif %}
+                                                    >
+                                                </td>
+                                                <td>{{ item.employee.name }}</td>
+                                                <td>{{ item.employee.department.name|default:"-" }}</td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr>
+                                                <td colspan="3" class="text-center text-muted">No employees found.</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm">Save Token Access</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             <!-- Active and Inactive Employees List -->
             <div class="row">
@@ -310,6 +472,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
         </div>
     </div><!-- /#content -->

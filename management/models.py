@@ -247,6 +247,10 @@ from calendar import monthrange
 
 class Employee(models.Model):
     locked = models.BooleanField(default=False, help_text="If checked, this employee is locked and cannot access the system.")
+    token_naming_access = models.BooleanField(
+        default=False,
+        help_text="If enabled, employee can use Token Naming section from employee dashboard.",
+    )
     worksheet_entry_force_unlock_until = models.DateTimeField(
         null=True,
         blank=True,

@@ -367,6 +367,10 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="nav flex-column">
             {% url 'employee_dashboard' as profile_url %}
             <a class="nav-link mb-2 {% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}">Profile</a>
+            {% if has_token_naming_access %}
+            {% url 'employee_token_naming' as employee_token_naming_url %}
+            <a class="nav-link mb-2 {% if request.path == employee_token_naming_url %}active{% endif %}" href="{{ employee_token_naming_url }}">Token Generation</a>
+            {% endif %}
             {% url 'attendance' as attendance_url %}
             <a class="nav-link mb-2 {% if request.path == attendance_url %}active{% endif %}" href="{{ attendance_url }}">Attendance</a>
             {% url 'worksheet' as worksheet_url %}

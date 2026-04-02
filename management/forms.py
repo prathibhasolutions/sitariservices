@@ -38,15 +38,7 @@ class TokenNamingForm(forms.ModelForm):
         self.fields['department'].empty_label = '-- Select Department --'
         self.fields['service_type'].queryset = ServiceType.objects.none()
         self.fields['service_type'].empty_label = '-- Select Service Type --'
-        self.fields['operator_name'].queryset = (
-            Employee.objects.filter(
-                locked=False,
-                attendance_sessions__logout_time__isnull=True,
-                attendance_sessions__session_closed=False,
-            )
-            .distinct()
-            .order_by('name')
-        )
+        self.fields['operator_name'].queryset = Employee.objects.none()
         self.fields['operator_name'].empty_label = '-- Select Active Operator --'
 
         department_id = None
@@ -59,13 +51,29 @@ class TokenNamingForm(forms.ModelForm):
             self.fields['service_type'].queryset = ServiceType.objects.filter(
                 departments__id=department_id
             ).order_by('name')
+            self.fields['operator_name'].queryset = (
+                Employee.objects.filter(
+                    department_id=department_id,
+                    locked=False,
+                    attendance_sessions__logout_time__isnull=True,
+                    attendance_sessions__session_closed=False,
+                )
+                .distinct()
+                .order_by('name')
+            )
 
     def clean(self):
         cleaned_data = super().clean()
         department = cleaned_data.get('department')
         service_type = cleaned_data.get('service_type')
+        operator_name = cleaned_data.get('operator_name')
         if department and service_type and not service_type.departments.filter(pk=department.pk).exists():
             self.add_error('service_type', 'Selected service type does not belong to the selected department.')
+        if department and operator_name:
+            if operator_name.department_id != department.id:
+                self.add_error('operator_name', 'Selected operator does not belong to the selected department.')
+            elif not operator_name.attendance_sessions.filter(logout_time__isnull=True, session_closed=False).exists():
+                self.add_error('operator_name', 'Selected operator is not currently active.')
         return cleaned_data
 
 

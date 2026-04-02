@@ -9,6 +9,7 @@ urlpatterns = [
     path('assigned-tasks/self/', views.assign_task_to_self, name='assign_task_to_self'),
     path('', views.employee_login, name='login'),
     path('employee/dashboard/', views.employee_dashboard, name='employee_dashboard'),
+    path('employee/token-naming/', views.employee_token_naming, name='employee_token_naming'),
     path('employee/attendance/', views.attendance_view, name='attendance'),
     path('logout/', views.logout_view, name='logout'),
     path('create-invoice/', views.create_invoice, name='create_invoice'),

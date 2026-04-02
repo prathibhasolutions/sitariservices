@@ -185,10 +185,7 @@ def admin_leave_management(request):
 
 
 # --- Admin Dashboard ---
-def admin_dashboard(request):
-    if not (request.user.is_authenticated and request.user.is_staff):
-        return redirect('/admin/login/?next=/admin-dashboard/')
-    from .models import Employee, Department
+def _build_admin_dashboard_context():
     employees = Employee.objects.select_related('department').order_by('name')
     employee_data = [
         {
@@ -197,7 +194,7 @@ def admin_dashboard(request):
         }
         for emp in employees
     ]
-    active_count = sum(1 for e in employee_data if e['is_active'])
+    active_count = sum(1 for item in employee_data if item['is_active'])
     inactive_count = len(employee_data) - active_count
 
     departments_overview = []
@@ -210,13 +207,31 @@ def admin_dashboard(request):
             'topup_balance': total_topup,
         })
 
-    return render(request, 'admin_dashboard.html', {
+    return {
         'employee_data': employee_data,
         'active_count': active_count,
         'inactive_count': inactive_count,
         'total_count': len(employee_data),
         'departments_overview': departments_overview,
-    })
+        'employees': employees,
+        'departments': departments,
+    }
+
+
+def admin_dashboard(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/?next=/admin-dashboard/')
+    from django.contrib import messages
+
+    if request.method == 'POST' and request.POST.get('action') == 'update_token_naming_access':
+        selected_employee_ids = set(request.POST.getlist('token_access_employee_ids'))
+        Employee.objects.update(token_naming_access=False)
+        if selected_employee_ids:
+            Employee.objects.filter(employee_id__in=selected_employee_ids).update(token_naming_access=True)
+        messages.success(request, 'Token Naming access updated successfully.')
+        return redirect('admin_dashboard')
+
+    return render(request, 'admin_dashboard.html', _build_admin_dashboard_context())
 
 
 def admin_token_search(request):
@@ -279,14 +294,77 @@ def token_naming_form(request):
     })
 
 
+def employee_token_naming(request):
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return redirect('login')
+
+    try:
+        employee = Employee.objects.get(employee_id=employee_id)
+    except Employee.DoesNotExist:
+        request.session.flush()
+        return redirect('login')
+
+    if employee.locked or not employee.token_naming_access:
+        return redirect('employee_dashboard')
+
+    from .forms import TokenNamingForm
+
+    def _build_employee_token_form(data=None):
+        form = TokenNamingForm(data=data, initial={'operator_name': employee.employee_id})
+        form.fields['operator_name'].queryset = Employee.objects.filter(employee_id=employee.employee_id)
+        form.fields['operator_name'].initial = employee.employee_id
+        return form
+
+    if request.method == 'POST':
+        token_payload = request.POST.copy()
+        token_payload['operator_name'] = str(employee.employee_id)
+        form = _build_employee_token_form(data=token_payload)
+        if form.is_valid():
+            token = form.save()
+            if request.POST.get('print_token') == '1':
+                _save_token_to_worksheet(token)
+                return redirect('token_print_view', token_id=token.id)
+            messages.success(request, 'Token created successfully.')
+            return redirect('employee_token_naming')
+        messages.error(request, 'Please fix token form errors and try again.')
+    else:
+        form = _build_employee_token_form()
+
+    recent_tokens = Token.objects.select_related('department', 'service_type', 'operator_name').filter(
+        operator_name=employee
+    ).order_by('-created_at')[:100]
+
+    from .models import Announcement
+    active_announcements = Announcement.objects.filter(active=True).order_by('-created_at')
+    is_department_head = bool(employee.department and employee.department.department_head_id == employee.employee_id)
+
+    context = {
+        'employee': employee,
+        'active_announcements': active_announcements,
+        'is_department_head': is_department_head,
+        'token_form': form,
+        'recent_tokens': recent_tokens,
+        'has_token_naming_access': True,
+    }
+    return render(request, 'employee_token_naming.html', context)
+
+
 def token_print_view(request, token_id):
-    if not (request.user.is_authenticated and request.user.is_staff):
+    employee_id = request.session.get('employee_id')
+    session_employee = Employee.objects.filter(employee_id=employee_id).first() if employee_id else None
+    is_staff_user = request.user.is_authenticated and request.user.is_staff
+    if not is_staff_user and not (session_employee and session_employee.token_naming_access):
         return redirect('/admin/login/?next=/admin/token-naming/')
 
     token = get_object_or_404(
         Token.objects.select_related('department', 'service_type', 'operator_name'),
         pk=token_id,
     )
+
+    if not is_staff_user and token.operator_name_id != session_employee.employee_id:
+        messages.error(request, 'You can only view tokens created by you.')
+        return redirect('employee_dashboard')
 
     worksheet_exists = _save_token_to_worksheet(token)
     return render(request, 'token_print.html', {
@@ -329,7 +407,12 @@ def _save_token_to_worksheet(token):
 
 
 def get_department_services(request):
-    if not (request.user.is_authenticated and request.user.is_staff):
+    is_staff_user = request.user.is_authenticated and request.user.is_staff
+    employee_id = request.session.get('employee_id')
+    session_employee = Employee.objects.filter(employee_id=employee_id).first() if employee_id else None
+    has_employee_token_access = bool(session_employee and session_employee.token_naming_access)
+
+    if not is_staff_user and not has_employee_token_access:
         return JsonResponse({'services': []}, status=403)
 
     department_id = request.GET.get('department_id')
@@ -337,8 +420,19 @@ def get_department_services(request):
         return JsonResponse({'services': []})
 
     services = ServiceType.objects.filter(departments__id=department_id).order_by('name')
+    operators = (
+        Employee.objects.filter(
+            department_id=department_id,
+            locked=False,
+            attendance_sessions__logout_time__isnull=True,
+            attendance_sessions__session_closed=False,
+        )
+        .distinct()
+        .order_by('name')
+    )
     return JsonResponse({
-        'services': [{'id': item.id, 'name': item.name} for item in services]
+        'services': [{'id': item.id, 'name': item.name} for item in services],
+        'operators': [{'id': item.employee_id, 'name': item.name} for item in operators],
     })
 
 
@@ -379,10 +473,142 @@ def admin_ttd_print_all(request):
 # --- Admin: Departments Section ---
 @staff_member_required
 def admin_departments(request):
-    departments = Department.objects.all().select_related('department_head')
-    return render(request, 'management/admin_dashboard.html', {
-        'departments': departments,
+    base_context = _build_admin_dashboard_context()
+
+    selected_department = None
+    filtered_employee = None
+    department_employees = Employee.objects.none()
+    worksheet_entries = Worksheet.objects.none()
+    report_headers = []
+    report_rows = []
+    total_amount = 0
+    total_payment = 0
+
+    department_id = request.GET.get('department_id')
+    employee_id = request.GET.get('employee_id')
+    from_date = (request.GET.get('from_date') or '').strip()
+    to_date = (request.GET.get('to_date') or '').strip()
+
+    if department_id:
+        selected_department = Department.objects.filter(pk=department_id).select_related('department_head').first()
+        if selected_department:
+            department_employees = Employee.objects.filter(
+                department=selected_department,
+                locked=False,
+            ).order_by('name')
+
+    if selected_department and employee_id:
+        filtered_employee = department_employees.filter(employee_id=employee_id).first()
+
+    if selected_department and filtered_employee and (from_date or to_date):
+        worksheet_entries = Worksheet.objects.filter(
+            employee=filtered_employee,
+            department_name=selected_department.name,
+        ).order_by('-date', '-created_at')
+
+        if from_date and to_date:
+            worksheet_entries = worksheet_entries.filter(date__range=[from_date, to_date])
+        elif from_date:
+            worksheet_entries = worksheet_entries.filter(date__gte=from_date)
+        elif to_date:
+            worksheet_entries = worksheet_entries.filter(date__lte=to_date)
+
+        def _display(value):
+            return '-' if value in (None, '') else str(value)
+
+        def _money(value):
+            return f"{value:.2f}" if value is not None else '0.00'
+
+        dynamic_columns = []
+        if selected_department.name in ('Mee Seva', 'Online Hub'):
+            dynamic_columns = [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Transaction Num', lambda entry: _display(entry.transaction_num)),
+                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+        elif selected_department.name == 'Aadhaar':
+            dynamic_columns = [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Customer Mobile', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Enrollment No', lambda entry: _display(entry.enrollment_no)),
+                ('Certificate Num', lambda entry: _display(entry.certificate_number)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+        elif selected_department.name == 'Bhu Bharathi':
+            dynamic_columns = [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Login Mobile', lambda entry: _display(entry.login_mobile_no)),
+                ('Application No', lambda entry: _display(entry.application_no)),
+                ('Status', lambda entry: _display(entry.status)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+        elif selected_department.name == 'Forms':
+            dynamic_columns = [
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+            ]
+        elif selected_department.name == 'Xerox':
+            dynamic_columns = [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Mobile No.', lambda entry: _display(entry.customer_mobile)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+        elif selected_department.name == 'Notary and Bonds':
+            dynamic_columns = [
+                ('Token No', lambda entry: _display(entry.token_no)),
+                ('Customer Name', lambda entry: _display(entry.customer_name)),
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Bonds Sl. No', lambda entry: _display(entry.bonds_sno)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+        else:
+            dynamic_columns = [
+                ('Service', lambda entry: _display(entry.service)),
+                ('Particulars', lambda entry: _display(entry.particulars)),
+                ('Payment', lambda entry: _money(entry.payment)),
+            ]
+
+        report_headers = ['Date', 'Created At'] + [header for header, _ in dynamic_columns] + ['Amount', 'Approved']
+        report_rows = [
+            [
+                entry.date.strftime('%d-%m-%Y') if entry.date else '-',
+                timezone.localtime(entry.created_at).strftime('%d-%m-%Y %I:%M %p') if entry.created_at else '-',
+                *[extractor(entry) for _, extractor in dynamic_columns],
+                _money(entry.amount),
+                'Yes' if entry.approved else 'No',
+            ]
+            for entry in worksheet_entries
+        ]
+
+        totals = worksheet_entries.aggregate(total_amount=Sum('amount'), total_payment=Sum('payment'))
+        total_amount = totals['total_amount'] or 0
+        total_payment = totals['total_payment'] or 0
+
+    base_context.update({
+        'selected_department': selected_department,
+        'selected_employee': filtered_employee,
+        'department_employees': department_employees,
+        'worksheet_report_headers': report_headers,
+        'worksheet_report_rows': report_rows,
+        'worksheet_total_amount': total_amount,
+        'worksheet_total_payment': total_payment,
+        'filter_from_date': from_date,
+        'filter_to_date': to_date,
     })
+    return render(request, 'admin_dashboard.html', base_context)
 
 
 # --- Admin: Employees Section ---
@@ -768,6 +994,8 @@ def employee_dashboard(request):
     except Employee.DoesNotExist:
         request.session.flush()
         return redirect('login')
+
+    has_token_naming_access = bool(employee.token_naming_access and not employee.locked)
     
     # 2. Handle Profile Picture Upload (Unchanged)
     if request.method == 'POST' and 'upload_profile_pic' in request.POST:
@@ -860,6 +1088,7 @@ def employee_dashboard(request):
         'upload_form': upload_form,
         'active_announcements': active_announcements,
         'is_department_head': is_department_head,
+        'has_token_naming_access': has_token_naming_access,
     }
 
     # 6. Perform Session Cleanup (Unchanged)

@@ -259,13 +259,19 @@
 
     const departmentSelect = document.getElementById('id_department');
     const serviceTypeSelect = document.getElementById('id_service_type');
+    const operatorSelect = document.getElementById('id_operator_name');
 
     function resetServiceTypes() {
         serviceTypeSelect.innerHTML = '<option value="">-- Select Service Type --</option>';
     }
 
-    function loadServiceTypes(departmentId, selectedServiceId) {
+    function resetOperators() {
+        operatorSelect.innerHTML = '<option value="">-- Select Active Operator --</option>';
+    }
+
+    function loadDepartmentData(departmentId, selectedServiceId, selectedOperatorId) {
         resetServiceTypes();
+        resetOperators();
         if (!departmentId) {
             return;
         }
@@ -282,20 +288,31 @@
                     }
                     serviceTypeSelect.appendChild(option);
                 });
+                (data.operators || []).forEach(operator => {
+                    const option = document.createElement('option');
+                    option.value = operator.id;
+                    option.textContent = operator.name;
+                    if (selectedOperatorId && String(selectedOperatorId) === String(operator.id)) {
+                        option.selected = true;
+                    }
+                    operatorSelect.appendChild(option);
+                });
             })
             .catch(() => {
                 resetServiceTypes();
+                resetOperators();
             });
     }
 
     departmentSelect.addEventListener('change', function () {
-        loadServiceTypes(this.value, null);
+        loadDepartmentData(this.value, null, null);
     });
 
     const initialDepartment = '{{ form.department.value|default:""|escapejs }}';
     const initialServiceType = '{{ form.service_type.value|default:""|escapejs }}';
+    const initialOperator = '{{ form.operator_name.value|default:""|escapejs }}';
     if (initialDepartment) {
-        loadServiceTypes(initialDepartment, initialServiceType);
+        loadDepartmentData(initialDepartment, initialServiceType, initialOperator);
     }
 </script>
 </body>
