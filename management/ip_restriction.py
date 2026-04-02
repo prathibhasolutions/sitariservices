@@ -7,8 +7,16 @@ logger = logging.getLogger(__name__)
 class RestrictIPMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
+        self.ip_bypass_prefixes = (
+            '/assistant/',
+            '/api/chatbot/reply/',
+            '/api/assistant/chat-log/',
+        )
 
     def __call__(self, request):
+        if any(request.path.startswith(prefix) for prefix in self.ip_bypass_prefixes):
+            return self.get_response(request)
+
         ip = get_client_ip(request)
         
         # Check if IP is allowed
