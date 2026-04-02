@@ -133,6 +133,12 @@
             <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_worksheet_data' %}active{% endif %}" href="{% url 'admin_dashboard_worksheet_data' %}">
                 <i class="fas fa-folder-open mr-2"></i> Worksheet Data
             </a>
+            <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_managed_links' %}active{% endif %}" href="{% url 'admin_dashboard_managed_links' %}">
+                <i class="fas fa-link mr-2"></i> Managed Links
+            </a>
+            <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_chatbot' %}active{% endif %}" href="{% url 'admin_dashboard_chatbot' %}">
+                <i class="fas fa-robot mr-2"></i> Chatbot
+            </a>
             <a class="nav-link {% if request.resolver_match.url_name == 'token_naming_form' %}active{% endif %}" href="{% url 'token_naming_form' %}">
                 <i class="fas fa-ticket-alt mr-2"></i> Token Generation
             </a>

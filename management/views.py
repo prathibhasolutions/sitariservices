@@ -262,6 +262,49 @@ def admin_token_search(request):
     })
 
 
+def employee_token_search(request):
+    from django.http import JsonResponse
+
+    employee_id = request.session.get('employee_id')
+    if not employee_id:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    employee = Employee.objects.select_related('department').filter(employee_id=employee_id).first()
+    if not employee:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    token_no = (request.GET.get('token_no') or '').strip()
+    if not token_no:
+        return JsonResponse({'error': 'Token number is required.'}, status=400)
+
+    token = Token.objects.select_related('department', 'service_type', 'operator_name').filter(token_no=token_no).first()
+    if not token:
+        return JsonResponse({'error': 'Token not found.'}, status=404)
+
+    worksheet_exists = Worksheet.objects.filter(token_no=token.token_no).exists()
+
+    is_service_linked_to_employee_department = False
+    if employee.department_id and token.service_type_id:
+        is_service_linked_to_employee_department = token.service_type.departments.filter(
+            id=employee.department_id
+        ).exists()
+
+    if not is_service_linked_to_employee_department:
+        return JsonResponse({'error': 'Access restricted'}, status=403)
+
+    return JsonResponse({
+        'token_no': token.token_no,
+        'created_at': timezone.localtime(token.created_at).strftime('%d-%m-%Y %I:%M %p') if token.created_at else '-',
+        'customer_name': token.customer_name or '-',
+        'cell_no': token.cell_no or '-',
+        'department': token.department.name if token.department else '-',
+        'service_type': token.service_type.name if token.service_type else '-',
+        'operator_name': token.operator_name.name if token.operator_name else '-',
+        'worksheet_saved': worksheet_exists,
+        'department_scope': 'Matched',
+    })
+
+
 def token_naming_form(request):
     if not (request.user.is_authenticated and request.user.is_staff):
         return redirect('/admin/login/?next=/admin/token-naming/')
@@ -853,6 +896,34 @@ from django.dispatch import receiver
 
 
 # Password-based employee login (replaces OTP login)
+def home_view(request):
+    from .models import ChatbotServiceTemplate
+
+    template_options = list(
+        ChatbotServiceTemplate.objects.filter(is_active=True)
+        .exclude(service_name='')
+        .order_by('sort_order', 'service_name')
+        .values_list('service_name', flat=True)
+    )
+    return render(request, 'home.html', {'assistant_template_options': template_options})
+
+
+def assistant_view(request):
+    from .models import ChatbotServiceTemplate
+
+    template_options = list(
+        ChatbotServiceTemplate.objects.filter(is_active=True)
+        .exclude(service_name='')
+        .order_by('sort_order', 'service_name')
+        .values_list('service_name', flat=True)
+    )
+    return render(request, 'assistant.html', {'assistant_template_options': template_options})
+
+
+def contact_view(request):
+    return render(request, 'contact.html')
+
+
 def employee_login(request):
     from auditlog.models import LogEntry
     from django.contrib.contenttypes.models import ContentType
@@ -1774,11 +1845,13 @@ from .models import Worksheet, ResourceRepairReport, Employee
 from decimal import Decimal
 
 
-def is_worksheet_entry_locked_now(employee=None, now_local=None, cutoff_hour=None):
+def is_worksheet_entry_locked_now(employee=None, now_local=None, cutoff_hour=None, secondary_cutoff_hour=None):
     if now_local is None:
         now_local = timezone.localtime(timezone.now())
     if cutoff_hour is None:
         cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_CUTOFF_HOUR', 17)
+    if secondary_cutoff_hour is None:
+        secondary_cutoff_hour = getattr(settings, 'WORKSHEET_ENTRY_SECONDARY_CUTOFF_HOUR', 0)
 
     # Check if user has time-based permission override
     if employee and employee.worksheet_entry_force_unlock_until:
@@ -1789,8 +1862,8 @@ def is_worksheet_entry_locked_now(employee=None, now_local=None, cutoff_hour=Non
         employee.worksheet_entry_force_unlock_until = None
         employee.save(update_fields=['worksheet_entry_force_unlock_until'])
 
-    # After cutoff hour, entries are locked
-    base_locked = now_local.hour >= cutoff_hour
+    # Entries are locked at the evening cutoff and again at midnight hour.
+    base_locked = now_local.hour >= cutoff_hour or now_local.hour == secondary_cutoff_hour
     return base_locked
 
 
@@ -2439,6 +2512,331 @@ def admin_dashboard_worksheet_data(request):
     base_context = _build_admin_dashboard_context()
     base_context.update({'tree': tree})
     return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_managed_links(request):
+    from django.core.exceptions import ValidationError
+    from django.core.validators import URLValidator
+    from .models import ManagedLink
+
+    validator = URLValidator()
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+        description = (request.POST.get('description') or '').strip()
+        url = (request.POST.get('url') or '').strip()
+
+        if action == 'add':
+            if not description or not url:
+                messages.error(request, 'Description and URL are required.')
+            else:
+                try:
+                    validator(url)
+                    ManagedLink.objects.create(description=description, url=url)
+                    messages.success(request, 'Managed link added successfully.')
+                except ValidationError:
+                    messages.error(request, 'Please enter a valid URL (example: https://example.com).')
+
+        elif action == 'edit':
+            link_id = request.POST.get('link_id')
+            link = ManagedLink.objects.filter(pk=link_id).first()
+            if not link:
+                messages.error(request, 'Managed link not found.')
+            elif not description or not url:
+                messages.error(request, 'Description and URL are required.')
+            else:
+                try:
+                    validator(url)
+                    link.description = description
+                    link.url = url
+                    link.save(update_fields=['description', 'url'])
+                    messages.success(request, 'Managed link updated successfully.')
+                except ValidationError:
+                    messages.error(request, 'Please enter a valid URL (example: https://example.com).')
+
+        elif action == 'delete':
+            link_id = request.POST.get('link_id')
+            deleted_count, _ = ManagedLink.objects.filter(pk=link_id).delete()
+            if deleted_count:
+                messages.success(request, 'Managed link deleted successfully.')
+            else:
+                messages.error(request, 'Managed link not found.')
+
+        return redirect('admin_dashboard_managed_links')
+
+    query = (request.GET.get('q') or '').strip()
+    managed_links = ManagedLink.objects.all().order_by('description')
+    if query:
+        managed_links = managed_links.filter(Q(description__icontains=query) | Q(url__icontains=query))
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({
+        'managed_links': managed_links,
+        'managed_links_query': query,
+    })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_chatbot(request):
+    from .models import ChatbotServiceTemplate, ChatbotNumericTrigger
+
+    def _is_checked(value):
+        return str(value).lower() in ('1', 'true', 'on', 'yes')
+
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+
+        if action == 'load_trial_data':
+            trial_templates = [
+                {
+                    'service_name': 'MeeSeva Services',
+                    'keywords': 'meeseva,certificate,income certificate,caste certificate',
+                    'template_text': 'We provide MeeSeva services including income, caste, nativity and other certificate applications with fast processing support.',
+                    'sort_order': 10,
+                },
+                {
+                    'service_name': 'Aadhaar Services',
+                    'keywords': 'aadhaar,uid,update aadhaar,mobile update',
+                    'template_text': 'For Aadhaar services, we assist with mobile update, demographic corrections, and new enrollment guidance as per availability.',
+                    'sort_order': 20,
+                },
+                {
+                    'service_name': 'PAN and Tax Services',
+                    'keywords': 'pan,pan card,tax,itr',
+                    'template_text': 'We support PAN card application, correction, and basic tax filing assistance. Please carry valid ID and address proof.',
+                    'sort_order': 30,
+                },
+                {
+                    'service_name': 'Bill Payments',
+                    'keywords': 'bill,current bill,electricity,water bill,recharge',
+                    'template_text': 'You can pay electricity, water, and other utility bills at our center. Please share your consumer number for quick service.',
+                    'sort_order': 40,
+                },
+                {
+                    'service_name': 'Travel and Booking',
+                    'keywords': 'ticket,booking,travel,bus,train,flight',
+                    'template_text': 'We help with bus, train, and flight booking support depending on slot and provider availability.',
+                    'sort_order': 50,
+                },
+            ]
+
+            created = 0
+            skipped = 0
+            for item in trial_templates:
+                obj, was_created = ChatbotServiceTemplate.objects.get_or_create(
+                    service_name=item['service_name'],
+                    defaults={
+                        'keywords': item['keywords'],
+                        'template_text': item['template_text'],
+                        'sort_order': item['sort_order'],
+                        'is_active': True,
+                    },
+                )
+                if was_created:
+                    created += 1
+                else:
+                    skipped += 1
+
+            messages.success(
+                request,
+                f'Trial data loaded. Templates -> Created: {created}, Skipped: {skipped}.',
+            )
+            return redirect('admin_dashboard_chatbot')
+
+        if action == 'add_trigger':
+            trigger_number = (request.POST.get('trigger_number') or '').strip()
+            response_text = (request.POST.get('trigger_response_text') or '').strip()
+            trigger_sort_order_raw = (request.POST.get('trigger_sort_order') or '100').strip()
+            trigger_pdf = request.FILES.get('trigger_response_pdf')
+
+            try:
+                trigger_sort_order = int(trigger_sort_order_raw)
+            except ValueError:
+                trigger_sort_order = 100
+
+            trigger_is_active = _is_checked(request.POST.get('trigger_is_active', '1'))
+
+            if not trigger_number.isdigit():
+                messages.error(request, 'Trigger must be numeric only.')
+            elif not response_text:
+                messages.error(request, 'Trigger response text is required.')
+            elif ChatbotNumericTrigger.objects.filter(trigger_number=trigger_number).exists():
+                messages.error(request, 'This trigger number already exists.')
+            else:
+                ChatbotNumericTrigger.objects.create(
+                    trigger_number=trigger_number,
+                    response_text=response_text,
+                    response_pdf=trigger_pdf,
+                    sort_order=trigger_sort_order,
+                    is_active=trigger_is_active,
+                )
+                messages.success(request, 'Numeric trigger added successfully.')
+            return redirect('admin_dashboard_chatbot')
+
+        if action == 'edit_trigger':
+            trigger_id = request.POST.get('trigger_id')
+            trigger_obj = ChatbotNumericTrigger.objects.filter(pk=trigger_id).first()
+            trigger_number = (request.POST.get('trigger_number') or '').strip()
+            response_text = (request.POST.get('trigger_response_text') or '').strip()
+            trigger_sort_order_raw = (request.POST.get('trigger_sort_order') or '100').strip()
+            trigger_pdf = request.FILES.get('trigger_response_pdf')
+
+            try:
+                trigger_sort_order = int(trigger_sort_order_raw)
+            except ValueError:
+                trigger_sort_order = 100
+
+            trigger_is_active = _is_checked(request.POST.get('trigger_is_active', '1'))
+
+            if not trigger_obj:
+                messages.error(request, 'Numeric trigger not found.')
+            elif not trigger_number.isdigit():
+                messages.error(request, 'Trigger must be numeric only.')
+            elif not response_text:
+                messages.error(request, 'Trigger response text is required.')
+            elif ChatbotNumericTrigger.objects.filter(trigger_number=trigger_number).exclude(pk=trigger_obj.pk).exists():
+                messages.error(request, 'Another trigger already uses this number.')
+            else:
+                trigger_obj.trigger_number = trigger_number
+                trigger_obj.response_text = response_text
+                trigger_obj.sort_order = trigger_sort_order
+                trigger_obj.is_active = trigger_is_active
+                if trigger_pdf:
+                    trigger_obj.response_pdf = trigger_pdf
+                trigger_obj.save(
+                    update_fields=['trigger_number', 'response_text', 'response_pdf', 'sort_order', 'is_active', 'updated_at']
+                )
+                messages.success(request, 'Numeric trigger updated successfully.')
+            return redirect('admin_dashboard_chatbot')
+
+        if action == 'delete_trigger':
+            trigger_id = request.POST.get('trigger_id')
+            deleted_count, _ = ChatbotNumericTrigger.objects.filter(pk=trigger_id).delete()
+            if deleted_count:
+                messages.success(request, 'Numeric trigger deleted successfully.')
+            else:
+                messages.error(request, 'Numeric trigger not found.')
+            return redirect('admin_dashboard_chatbot')
+
+        service_name = (request.POST.get('service_name') or '').strip()
+        keywords = (request.POST.get('keywords') or '').strip()
+        template_text = (request.POST.get('template_text') or '').strip()
+        sort_order_raw = (request.POST.get('sort_order') or '100').strip()
+
+        try:
+            sort_order = int(sort_order_raw)
+        except ValueError:
+            sort_order = 100
+
+        is_active = _is_checked(request.POST.get('is_active', '0'))
+
+        if action == 'add':
+            if not service_name or not template_text:
+                messages.error(request, 'Service name and template text are required.')
+            elif ChatbotServiceTemplate.objects.filter(service_name__iexact=service_name).exists():
+                messages.error(request, 'A template with this service name already exists.')
+            else:
+                ChatbotServiceTemplate.objects.create(
+                    service_name=service_name,
+                    keywords=keywords,
+                    template_text=template_text,
+                    sort_order=sort_order,
+                    is_active=is_active,
+                )
+                messages.success(request, 'Chatbot template added successfully.')
+            return redirect('admin_dashboard_chatbot')
+
+        if action == 'edit':
+            template_id = request.POST.get('template_id')
+            template_obj = ChatbotServiceTemplate.objects.filter(pk=template_id).first()
+            if not template_obj:
+                messages.error(request, 'Template not found.')
+            elif not service_name or not template_text:
+                messages.error(request, 'Service name and template text are required.')
+            elif ChatbotServiceTemplate.objects.filter(service_name__iexact=service_name).exclude(pk=template_obj.pk).exists():
+                messages.error(request, 'Another template already uses this service name.')
+            else:
+                template_obj.service_name = service_name
+                template_obj.keywords = keywords
+                template_obj.template_text = template_text
+                template_obj.sort_order = sort_order
+                template_obj.is_active = is_active
+                template_obj.save(update_fields=['service_name', 'keywords', 'template_text', 'sort_order', 'is_active', 'updated_at'])
+                messages.success(request, 'Chatbot template updated successfully.')
+            return redirect('admin_dashboard_chatbot')
+
+        if action == 'delete':
+            template_id = request.POST.get('template_id')
+            deleted_count, _ = ChatbotServiceTemplate.objects.filter(pk=template_id).delete()
+            if deleted_count:
+                messages.success(request, 'Chatbot template deleted successfully.')
+            else:
+                messages.error(request, 'Template not found.')
+            return redirect('admin_dashboard_chatbot')
+
+    query = (request.GET.get('q') or '').strip()
+    templates_qs = ChatbotServiceTemplate.objects.all().order_by('sort_order', 'service_name')
+    if query:
+        templates_qs = templates_qs.filter(
+            Q(service_name__icontains=query)
+            | Q(keywords__icontains=query)
+            | Q(template_text__icontains=query)
+        )
+
+    base_context = _build_admin_dashboard_context()
+    base_context.update({
+        'chatbot_templates': templates_qs,
+        'chatbot_query': query,
+        'chatbot_numeric_triggers': ChatbotNumericTrigger.objects.all().order_by('sort_order', 'trigger_number'),
+    })
+    return render(request, 'admin_dashboard.html', base_context)
+
+
+def public_chatbot_reply(request):
+    from .models import ChatbotServiceTemplate, ChatbotNumericTrigger
+
+    user_message = (request.GET.get('message') or request.POST.get('message') or '').strip()
+    if not user_message:
+        return JsonResponse({'error': 'Message is required.'}, status=400)
+
+    # Exact-number trigger flow: message must be numeric only and exactly match a configured trigger.
+    if user_message.isdigit():
+        trigger = ChatbotNumericTrigger.objects.filter(
+            is_active=True,
+            trigger_number=user_message,
+        ).first()
+        if trigger:
+            documents = []
+            if trigger.response_pdf:
+                documents.append({
+                    'name': trigger.response_pdf.name.rsplit('/', 1)[-1],
+                    'url': trigger.response_pdf.url,
+                })
+            return JsonResponse({
+                'reply': trigger.response_text,
+                'matched_service': None,
+                'matched_trigger': trigger.trigger_number,
+                'documents': documents,
+            })
+
+    normalized = user_message.lower()
+    templates_qs = ChatbotServiceTemplate.objects.filter(is_active=True).order_by('sort_order', 'service_name')
+
+    for item in templates_qs:
+        if item.service_name and item.service_name.lower() in normalized:
+            return JsonResponse({'reply': item.template_text, 'matched_service': item.service_name, 'documents': []})
+
+        keywords = [k.strip().lower() for k in (item.keywords or '').split(',') if k.strip()]
+        if any(keyword in normalized for keyword in keywords):
+            return JsonResponse({'reply': item.template_text, 'matched_service': item.service_name, 'documents': []})
+
+    return JsonResponse({
+        'reply': 'I can help with services, timings, address, and contact details. For quick support, use the WhatsApp icon on the right.',
+        'matched_service': None,
+        'documents': [],
+    })
 
 
 @staff_member_required

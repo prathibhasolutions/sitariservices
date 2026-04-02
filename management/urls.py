@@ -7,9 +7,13 @@ urlpatterns = [
         # Admin: Leave Management Report
         path('admin/leave-management/', views.admin_leave_management, name='admin_leave_management'),
     path('assigned-tasks/self/', views.assign_task_to_self, name='assign_task_to_self'),
-    path('', views.employee_login, name='login'),
+    path('', views.home_view, name='home'),
+    path('assistant/', views.assistant_view, name='assistant'),
+    path('contact/', views.contact_view, name='contact'),
+    path('login/', views.employee_login, name='login'),
     path('employee/dashboard/', views.employee_dashboard, name='employee_dashboard'),
     path('employee/token-naming/', views.employee_token_naming, name='employee_token_naming'),
+    path('employee/token-search/', views.employee_token_search, name='employee_token_search'),
     path('employee/attendance/', views.attendance_view, name='attendance'),
     path('logout/', views.logout_view, name='logout'),
     path('create-invoice/', views.create_invoice, name='create_invoice'),
@@ -41,6 +45,7 @@ urlpatterns = [
     path('api/todos/add/', views.add_employee_todo, name='todos_add'),
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
     path('api/geofence_check/', views.geofence_check, name='geofence_check'),
+    path('api/chatbot/reply/', views.public_chatbot_reply, name='public_chatbot_reply'),
 
 
     # Department Head: Top Up Page (renamed)
@@ -52,6 +57,8 @@ urlpatterns = [
     path('admin-dashboard/leave-management/', views.admin_dashboard_leave_management, name='admin_dashboard_leave_management'),
     path('admin-dashboard/targets/', views.admin_dashboard_targets, name='admin_dashboard_targets'),
     path('admin-dashboard/worksheet-data/', views.admin_dashboard_worksheet_data, name='admin_dashboard_worksheet_data'),
+    path('admin-dashboard/managed-links/', views.admin_dashboard_managed_links, name='admin_dashboard_managed_links'),
+    path('admin-dashboard/chatbot/', views.admin_dashboard_chatbot, name='admin_dashboard_chatbot'),
     path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
     path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
     path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),

@@ -1066,6 +1066,75 @@ class TodoTask(models.Model):
 
     def __str__(self):
         return self.description
+
+
+class ChatbotServiceTemplate(models.Model):
+    service_name = models.CharField(max_length=120, unique=True)
+    keywords = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Comma-separated keywords used to match user queries.',
+    )
+    template_text = models.TextField(help_text='Static response shown by chatbot for this service.')
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'service_name']
+
+    def __str__(self):
+        return self.service_name
+
+
+class ChatbotQuickOption(models.Model):
+    label = models.CharField(max_length=80, unique=True)
+    prompt_text = models.CharField(max_length=200, help_text='Text sent to chatbot when option is clicked.')
+    followup_answer = models.TextField(
+        blank=True,
+        help_text='Auto reply shown when this option is selected. If empty, chatbot reply API is used.',
+    )
+    followup_options = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Comma-separated option labels to show as next-step choices.',
+    )
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'label']
+
+    def __str__(self):
+        return self.label
+
+
+class ChatbotNumericTrigger(models.Model):
+    trigger_number = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text='Exact numeric trigger. Example: 101',
+    )
+    response_text = models.TextField(help_text='Response sent when trigger number is matched exactly.')
+    response_pdf = models.FileField(
+        upload_to='chatbot_trigger_pdfs/',
+        null=True,
+        blank=True,
+        help_text='Optional PDF returned along with the response text.',
+    )
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'trigger_number']
+
+    def __str__(self):
+        return f"Trigger {self.trigger_number}"
     
 
 

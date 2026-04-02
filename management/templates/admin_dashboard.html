@@ -317,6 +317,12 @@
                         <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_worksheet_data' %}active{% endif %}" href="{% url 'admin_dashboard_worksheet_data' %}">
                             <i class="fas fa-folder-open mr-2"></i> Worksheet Data
                         </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_managed_links' %}active{% endif %}" href="{% url 'admin_dashboard_managed_links' %}">
+                            <i class="fas fa-link mr-2"></i> Managed Links
+                        </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'admin_dashboard_chatbot' %}active{% endif %}" href="{% url 'admin_dashboard_chatbot' %}">
+                            <i class="fas fa-robot mr-2"></i> Chatbot
+                        </a>
             <a class="nav-link {% if request.resolver_match.url_name == 'token_naming_form' %}active{% endif %}" href="{% url 'token_naming_form' %}">
                 <i class="fas fa-ticket-alt mr-2"></i> Token Generation
             </a>
@@ -861,6 +867,403 @@
                     </div>
                     {% endfor %}
                     {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'admin_dashboard_managed_links' %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="font-weight-bold mb-0">Managed Links</h5>
+                        <a href="{% url 'admin_dashboard_managed_links' %}" class="btn btn-sm btn-outline-secondary">Reset</a>
+                    </div>
+
+                    <form method="get" class="form-row align-items-end mb-3">
+                        <div class="col-md-10">
+                            <label for="managed-links-search" class="mb-1">Search</label>
+                            <input type="text" id="managed-links-search" name="q" value="{{ managed_links_query }}" class="form-control" placeholder="Search by description or URL">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-block">Search</button>
+                        </div>
+                    </form>
+
+                    <form method="post" class="border rounded p-3 mb-3" style="background:#fafcff;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add">
+                        <h6 class="font-weight-bold mb-2">Add New Link</h6>
+                        <div class="form-row">
+                            <div class="form-group col-md-4 mb-2">
+                                <label class="small mb-1">Description</label>
+                                <input type="text" name="description" class="form-control" placeholder="Link description" required>
+                            </div>
+                            <div class="form-group col-md-6 mb-2">
+                                <label class="small mb-1">URL</label>
+                                <input type="url" name="url" class="form-control" placeholder="https://example.com" required>
+                            </div>
+                            <div class="form-group col-md-2 mb-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-success btn-block">Add</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 24%;">Description</th>
+                                    <th style="width: 50%;">URL</th>
+                                    <th style="width: 16%;">Created</th>
+                                    <th style="width: 10%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for link in managed_links %}
+                                <tr>
+                                    <td>
+                                        <form method="post" class="m-0">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="edit">
+                                            <input type="hidden" name="link_id" value="{{ link.id }}">
+                                            <input type="text" name="description" value="{{ link.description }}" class="form-control form-control-sm" required>
+                                    </td>
+                                    <td>
+                                            <input type="url" name="url" value="{{ link.url }}" class="form-control form-control-sm" required>
+                                    </td>
+                                    <td>{{ link.created_at|date:"d-m-Y H:i" }}</td>
+                                    <td>
+                                            <button type="submit" class="btn btn-sm btn-primary mb-1 btn-block">Save</button>
+                                        </form>
+                                        <form method="post" class="m-0" onsubmit="return confirm('Delete this managed link?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="link_id" value="{{ link.id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger btn-block">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">No managed links found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <hr class="my-4">
+
+                    <h6 class="font-weight-bold mb-2">Numeric Triggers (Exact Match Only)</h6>
+                    <p class="text-muted small mb-3">Message must contain only this number (no extra text) to trigger the mapped response and optional PDF.</p>
+
+                    <form method="post" enctype="multipart/form-data" class="border rounded p-3 mb-3" style="background:#f8fbff;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_trigger">
+                        <div class="form-row">
+                            <div class="form-group col-md-2 mb-2">
+                                <label class="small mb-1">Trigger Number</label>
+                                <input type="text" name="trigger_number" class="form-control" placeholder="101" required>
+                            </div>
+                            <div class="form-group col-md-4 mb-2">
+                                <label class="small mb-1">Response Text</label>
+                                <input type="text" name="trigger_response_text" class="form-control" placeholder="Auto reply for this number" required>
+                            </div>
+                            <div class="form-group col-md-3 mb-2">
+                                <label class="small mb-1">PDF (optional)</label>
+                                <input type="file" name="trigger_response_pdf" class="form-control-file" accept="application/pdf">
+                            </div>
+                            <div class="form-group col-md-1 mb-2">
+                                <label class="small mb-1">Order</label>
+                                <input type="number" name="trigger_sort_order" class="form-control" value="100" min="0">
+                            </div>
+                            <div class="form-group col-md-1 mb-2 d-flex align-items-center">
+                                <div class="form-check mt-4">
+                                    <input type="hidden" name="trigger_is_active" value="0">
+                                    <input type="checkbox" name="trigger_is_active" value="1" class="form-check-input" id="trigger_add_active" checked>
+                                    <label class="form-check-label" for="trigger_add_active">Active</label>
+                                </div>
+                            </div>
+                            <div class="form-group col-md-1 mb-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-success btn-block btn-sm">Add</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 12%;">Trigger</th>
+                                    <th style="width: 42%;">Response Text</th>
+                                    <th style="width: 22%;">PDF</th>
+                                    <th style="width: 8%;">Order</th>
+                                    <th style="width: 7%;">Active</th>
+                                    <th style="width: 9%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trig in chatbot_numeric_triggers %}
+                                <tr>
+                                    <form method="post" enctype="multipart/form-data">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="edit_trigger">
+                                        <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                        <td><input type="text" name="trigger_number" value="{{ trig.trigger_number }}" class="form-control form-control-sm" required></td>
+                                        <td><input type="text" name="trigger_response_text" value="{{ trig.response_text }}" class="form-control form-control-sm" required></td>
+                                        <td>
+                                            {% if trig.response_pdf %}
+                                            <a href="{{ trig.response_pdf.url }}" target="_blank" rel="noopener">{{ trig.response_pdf.name|cut:'chatbot_trigger_pdfs/' }}</a>
+                                            {% else %}
+                                            <span class="text-muted">No PDF</span>
+                                            {% endif %}
+                                            <input type="file" name="trigger_response_pdf" class="form-control-file mt-1" accept="application/pdf">
+                                        </td>
+                                        <td><input type="number" name="trigger_sort_order" value="{{ trig.sort_order }}" class="form-control form-control-sm" min="0"></td>
+                                        <td class="text-center align-middle">
+                                            <input type="hidden" name="trigger_is_active" value="0">
+                                            <input type="checkbox" name="trigger_is_active" value="1" {% if trig.is_active %}checked{% endif %}>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-sm btn-primary mb-1 btn-block">Save</button>
+                                    </form>
+                                            <form method="post" class="m-0" onsubmit="return confirm('Delete this numeric trigger?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete_trigger">
+                                                <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger btn-block">Delete</button>
+                                            </form>
+                                        </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No numeric triggers configured yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6 class="font-weight-bold mb-2">Existing Numeric Triggers</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Trigger</th>
+                                        <th>Response</th>
+                                        <th>PDF</th>
+                                        <th style="width:130px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trig in chatbot_numeric_triggers %}
+                                    <tr>
+                                        <form method="post" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="edit_trigger">
+                                            <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                            <td><input type="text" name="trigger_number" value="{{ trig.trigger_number }}" class="form-control form-control-sm" required></td>
+                                            <td><input type="text" name="trigger_response_text" value="{{ trig.response_text }}" class="form-control form-control-sm" required></td>
+                                            <td>
+                                                {% if trig.response_pdf %}<a href="{{ trig.response_pdf.url }}" target="_blank" rel="noopener">View PDF</a>{% else %}<span class="text-muted">No PDF</span>{% endif %}
+                                                <input type="file" name="trigger_response_pdf" class="form-control-file mt-1" accept="application/pdf">
+                                            </td>
+                                            <td>
+                                                <button type="submit" class="btn btn-sm btn-primary btn-block mb-1">Save</button>
+                                        </form>
+                                                <form method="post" class="m-0" onsubmit="return confirm('Delete this trigger?');">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="delete_trigger">
+                                                    <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger btn-block">Delete</button>
+                                                </form>
+                                            </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="4" class="text-center text-muted">No numeric triggers yet.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if request.resolver_match.url_name == 'admin_dashboard_chatbot' %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="font-weight-bold mb-0">Chatbot Templates</h5>
+                        <div>
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="load_trial_data">
+                                <button type="submit" class="btn btn-sm btn-outline-success">Load Trial Data</button>
+                            </form>
+                            <a href="{% url 'admin_dashboard_chatbot' %}" class="btn btn-sm btn-outline-secondary">Reset</a>
+                        </div>
+                    </div>
+
+                    <h6 class="font-weight-bold mb-2">Numeric Triggers (Exact Match Only)</h6>
+                    <p class="text-muted small mb-3">Message must be only the trigger number (for example: 101).</p>
+                    <form method="post" enctype="multipart/form-data" class="border rounded p-3 mb-3" style="background:#f8fbff;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add_trigger">
+                        <div class="form-row">
+                            <div class="form-group col-md-2 mb-2"><input type="text" name="trigger_number" class="form-control" placeholder="Trigger #" required></div>
+                            <div class="form-group col-md-5 mb-2"><input type="text" name="trigger_response_text" class="form-control" placeholder="Response text" required></div>
+                            <div class="form-group col-md-3 mb-2"><input type="file" name="trigger_response_pdf" class="form-control-file" accept="application/pdf"></div>
+                            <div class="form-group col-md-1 mb-2 d-flex align-items-center">
+                                <div class="form-check mt-1">
+                                    <input type="hidden" name="trigger_is_active" value="0">
+                                    <input type="checkbox" name="trigger_is_active" value="1" class="form-check-input" id="chatbot_add_trigger_active" checked>
+                                    <label class="form-check-label" for="chatbot_add_trigger_active">Active</label>
+                                </div>
+                            </div>
+                            <div class="form-group col-md-1 mb-2"><button type="submit" class="btn btn-success btn-block btn-sm">Add</button></div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-bordered table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 12%;">Trigger</th>
+                                    <th style="width: 38%;">Response Text</th>
+                                    <th style="width: 24%;">PDF</th>
+                                    <th style="width: 8%;">Order</th>
+                                    <th style="width: 7%;">Active</th>
+                                    <th style="width: 11%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for trig in chatbot_numeric_triggers %}
+                                <tr>
+                                    <form method="post" enctype="multipart/form-data">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="edit_trigger">
+                                        <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                        <td><input type="text" name="trigger_number" value="{{ trig.trigger_number }}" class="form-control form-control-sm" required></td>
+                                        <td><input type="text" name="trigger_response_text" value="{{ trig.response_text }}" class="form-control form-control-sm" required></td>
+                                        <td>
+                                            {% if trig.response_pdf %}<a href="{{ trig.response_pdf.url }}" target="_blank" rel="noopener">View PDF</a>{% else %}<span class="text-muted">No PDF</span>{% endif %}
+                                            <input type="file" name="trigger_response_pdf" class="form-control-file mt-1" accept="application/pdf">
+                                        </td>
+                                        <td><input type="number" name="trigger_sort_order" value="{{ trig.sort_order }}" class="form-control form-control-sm" min="0"></td>
+                                        <td class="text-center align-middle">
+                                            <input type="hidden" name="trigger_is_active" value="0">
+                                            <input type="checkbox" name="trigger_is_active" value="1" {% if trig.is_active %}checked{% endif %}>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-sm btn-primary btn-block mb-1">Save</button>
+                                    </form>
+                                            <form method="post" class="m-0" onsubmit="return confirm('Delete this trigger?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete_trigger">
+                                                <input type="hidden" name="trigger_id" value="{{ trig.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger btn-block">Delete</button>
+                                            </form>
+                                        </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted">No numeric triggers yet.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <form method="get" class="form-row align-items-end mb-3">
+                        <div class="col-md-10">
+                            <label for="chatbot-search" class="mb-1">Search Templates</label>
+                            <input type="text" id="chatbot-search" name="q" value="{{ chatbot_query }}" class="form-control" placeholder="Search by service name, keyword, or response template">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-block">Search</button>
+                        </div>
+                    </form>
+
+                    <form method="post" class="border rounded p-3 mb-3" style="background:#f8fbff;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add">
+                        <h6 class="font-weight-bold mb-2">Add New Chatbot Template</h6>
+                        <div class="form-row">
+                            <div class="form-group col-md-3 mb-2">
+                                <label class="small mb-1">Service Name</label>
+                                <input type="text" name="service_name" class="form-control" placeholder="Example: MeeSeva Services" required>
+                            </div>
+                            <div class="form-group col-md-3 mb-2">
+                                <label class="small mb-1">Keywords (comma-separated)</label>
+                                <input type="text" name="keywords" class="form-control" placeholder="meeseva, certificate, income">
+                            </div>
+                            <div class="form-group col-md-4 mb-2">
+                                <label class="small mb-1">Template Response</label>
+                                <textarea name="template_text" class="form-control" rows="2" placeholder="Response shown to user..." required></textarea>
+                            </div>
+                            <div class="form-group col-md-1 mb-2">
+                                <label class="small mb-1">Order</label>
+                                <input type="number" name="sort_order" class="form-control" value="100" min="0">
+                            </div>
+                            <div class="form-group col-md-1 mb-2 d-flex align-items-center">
+                                <div class="form-check mt-4">
+                                    <input type="hidden" name="is_active" value="0">
+                                    <input type="checkbox" name="is_active" value="1" class="form-check-input" id="chatbot_add_active" checked>
+                                    <label class="form-check-label" for="chatbot_add_active">Active</label>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm">Add Template</button>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 16%;">Service</th>
+                                    <th style="width: 20%;">Keywords</th>
+                                    <th style="width: 40%;">Response Template</th>
+                                    <th style="width: 8%;">Order</th>
+                                    <th style="width: 7%;">Active</th>
+                                    <th style="width: 9%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tpl in chatbot_templates %}
+                                <tr>
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="edit">
+                                        <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                                        <td><input type="text" name="service_name" value="{{ tpl.service_name }}" class="form-control form-control-sm" required></td>
+                                        <td><input type="text" name="keywords" value="{{ tpl.keywords }}" class="form-control form-control-sm"></td>
+                                        <td><textarea name="template_text" rows="2" class="form-control form-control-sm" required>{{ tpl.template_text }}</textarea></td>
+                                        <td><input type="number" name="sort_order" value="{{ tpl.sort_order }}" class="form-control form-control-sm" min="0"></td>
+                                        <td class="text-center align-middle">
+                                            <input type="hidden" name="is_active" value="0">
+                                            <input type="checkbox" name="is_active" value="1" {% if tpl.is_active %}checked{% endif %}>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-sm btn-primary btn-block mb-1">Save</button>
+                                    </form>
+                                            <form method="post" class="m-0" onsubmit="return confirm('Delete this chatbot template?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger btn-block">Delete</button>
+                                            </form>
+                                        </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No chatbot templates found. Click "Load Trial Data" to create sample templates.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             {% endif %}
