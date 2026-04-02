@@ -46,10 +46,18 @@ urlpatterns = [
 
     # Admin Dashboard
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
     path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
     path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),
     path('admin-dashboard/ttd/individual/<int:darshan_id>/print/', views.admin_ttd_individual_print, name='admin_ttd_individual_print'),
     path('admin-dashboard/ttd/print-all/', views.admin_ttd_print_all, name='admin_ttd_print_all'),
+
+    # API: Department Services
+    path('api/department-services/', views.get_department_services, name='get_department_services'),
+
+    # Token Naming
+    path('admin/token-naming/', views.token_naming_form, name='token_naming_form'),
+    path('admin/token-naming/print/<int:token_id>/', views.token_print_view, name='token_print_view'),
 
     # Admin print event logging endpoint
     path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),
@@ -71,4 +79,3 @@ urlpatterns = [
     # Admin: Departments Section
     path('admin-dashboard/departments/', views.admin_departments, name='admin_departments'),
 ]
-

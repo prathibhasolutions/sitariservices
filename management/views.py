@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.db.models import Sum
-from .models import Department, DepartmentTopUp, DepartmentStock, Employee, ServiceType, Worksheet
+from .models import Department, DepartmentTopUp, DepartmentStock, Employee, ServiceType, Worksheet, Token
 # --- Department Head: Top Up Page ---
 @login_required
 def department_topup_view(request):
@@ -65,7 +65,7 @@ def department_topup_view(request):
                 service=st.name,
                 date=stock_date,
             )
-            used_count = day_qs.count()
+            used_count = day_qs.aggregate(total=Sum('stocks_used'))['total'] or 0
             total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
             remaining = max(0, stock_obj.quantity - used_count)
             price = stock_obj.price
@@ -188,7 +188,7 @@ def admin_leave_management(request):
 def admin_dashboard(request):
     if not (request.user.is_authenticated and request.user.is_staff):
         return redirect('/admin/login/?next=/admin-dashboard/')
-    from .models import Employee
+    from .models import Employee, Department
     employees = Employee.objects.select_related('department').order_by('name')
     employee_data = [
         {
@@ -199,11 +199,146 @@ def admin_dashboard(request):
     ]
     active_count = sum(1 for e in employee_data if e['is_active'])
     inactive_count = len(employee_data) - active_count
+
+    departments_overview = []
+    departments = Department.objects.select_related('department_head').order_by('name')
+    for dept in departments:
+        total_topup = dept.topups.aggregate(total=Sum('amount'))['total'] or 0
+        departments_overview.append({
+            'name': dept.name,
+            'head_name': dept.department_head.name if dept.department_head else '-',
+            'topup_balance': total_topup,
+        })
+
     return render(request, 'admin_dashboard.html', {
         'employee_data': employee_data,
         'active_count': active_count,
         'inactive_count': inactive_count,
         'total_count': len(employee_data),
+        'departments_overview': departments_overview,
+    })
+
+
+def admin_token_search(request):
+    from django.http import JsonResponse
+
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    token_no = (request.GET.get('token_no') or '').strip()
+    if not token_no:
+        return JsonResponse({'error': 'Token number is required.'}, status=400)
+
+    token = Token.objects.select_related('department', 'service_type', 'operator_name').filter(token_no=token_no).first()
+    if not token:
+        return JsonResponse({'error': 'Token not found.'}, status=404)
+
+    worksheet_exists = Worksheet.objects.filter(token_no=token.token_no).exists()
+
+    return JsonResponse({
+        'token_no': token.token_no,
+        'created_at': timezone.localtime(token.created_at).strftime('%d-%m-%Y %I:%M %p') if token.created_at else '-',
+        'customer_name': token.customer_name or '-',
+        'cell_no': token.cell_no or '-',
+        'department': token.department.name if token.department else '-',
+        'service_type': token.service_type.name if token.service_type else '-',
+        'operator_name': token.operator_name.name if token.operator_name else '-',
+        'worksheet_saved': worksheet_exists,
+    })
+
+
+def token_naming_form(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/?next=/admin/token-naming/')
+
+    from django.contrib import messages
+    from .forms import TokenNamingForm
+
+    if request.method == 'POST':
+        form = TokenNamingForm(request.POST)
+        if form.is_valid():
+            token = form.save()
+            if request.POST.get('print_token') == '1':
+                _save_token_to_worksheet(token)
+                return redirect('token_print_view', token_id=token.id)
+            messages.success(request, 'Token created successfully.')
+            return redirect('token_naming_form')
+        messages.error(request, 'Please fix the form errors and try again.')
+    else:
+        form = TokenNamingForm()
+
+    recent_tokens = Token.objects.select_related(
+        'department',
+        'service_type',
+        'operator_name',
+    ).order_by('-created_at')[:100]
+
+    return render(request, 'token_naming_form.html', {
+        'form': form,
+        'recent_tokens': recent_tokens,
+    })
+
+
+def token_print_view(request, token_id):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return redirect('/admin/login/?next=/admin/token-naming/')
+
+    token = get_object_or_404(
+        Token.objects.select_related('department', 'service_type', 'operator_name'),
+        pk=token_id,
+    )
+
+    worksheet_exists = _save_token_to_worksheet(token)
+    return render(request, 'token_print.html', {
+        'token': token,
+        'worksheet_exists': worksheet_exists,
+    })
+
+
+def _save_token_to_worksheet(token):
+    """Create worksheet entry from token once; return True if it exists/was created."""
+    if Worksheet.objects.filter(token_no=token.token_no).exists():
+        return True
+
+    if not token.operator_name:
+        return False
+
+    department_name = ''
+    if token.operator_name.department:
+        department_name = token.operator_name.department.name
+    elif token.department:
+        department_name = token.department.name
+
+    if not department_name:
+        return False
+
+    particulars = (
+        f"Token No: {token.token_no}, Customer Name: {token.customer_name}, Cell No: {token.cell_no}"
+    )[:255]
+
+    Worksheet.objects.create(
+        employee=token.operator_name,
+        department_name=department_name,
+        token_no=token.token_no,
+        customer_name=token.customer_name,
+        customer_mobile=token.cell_no,
+        service=(token.service_type.name if token.service_type else None),
+        particulars=particulars,
+    )
+    return True
+
+
+def get_department_services(request):
+    if not (request.user.is_authenticated and request.user.is_staff):
+        return JsonResponse({'services': []}, status=403)
+
+    department_id = request.GET.get('department_id')
+    if not department_id:
+        return JsonResponse({'services': []})
+
+    services = ServiceType.objects.filter(departments__id=department_id).order_by('name')
+    return JsonResponse({
+        'services': [{'id': item.id, 'name': item.name} for item in services]
     })
 
 
@@ -1290,18 +1425,8 @@ def resolve_notary_bond_type(service_value):
     else:
         service_text = str(service_value)
 
-    normalized_text = ' '.join(service_text.upper().split())
-    if 'BOND' not in normalized_text:
-        return None
-
-    if '100' in normalized_text:
-        return DepartmentInventoryEntry.BOND_TYPE_100
-    if '50' in normalized_text:
-        return DepartmentInventoryEntry.BOND_TYPE_50
-    if '20' in normalized_text:
-        return DepartmentInventoryEntry.BOND_TYPE_20
-
-    return None
+    normalized_text = ' '.join(service_text.split()).strip()
+    return normalized_text or None
 
 
 def _calc_commission(collection, target):
@@ -1445,13 +1570,21 @@ def worksheet_view(request, employee):
     _today_target = (_today_target_obj.target_amount + _today_target_obj.carry_forward) if _today_target_obj else Decimal('0.00')
     todays_commission = _calc_commission(todays_total_amount, _today_target)
     
-    all_entries = Worksheet.objects.filter(employee=employee)
-    start_date_str = request.GET.get('start_date'); end_date_str = request.GET.get('end_date')
-    if start_date_str and end_date_str:
-        all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
-    mobile_filter = request.GET.get('mobile_number')
-    if mobile_filter:
-        all_entries = all_entries.filter(Q(customer_mobile__icontains=mobile_filter) | Q(login_mobile_no__icontains=mobile_filter))
+    all_entries = Worksheet.objects.none()
+    start_date_str = (request.GET.get('start_date') or '').strip()
+    end_date_str = (request.GET.get('end_date') or '').strip()
+    mobile_filter = (request.GET.get('mobile_number') or '').strip()
+    has_history_filters = bool(start_date_str or end_date_str or mobile_filter)
+    if has_history_filters:
+        all_entries = Worksheet.objects.filter(employee=employee)
+        if start_date_str and end_date_str:
+            all_entries = all_entries.filter(date__range=[start_date_str, end_date_str])
+        elif start_date_str:
+            all_entries = all_entries.filter(date__gte=start_date_str)
+        elif end_date_str:
+            all_entries = all_entries.filter(date__lte=end_date_str)
+        if mobile_filter:
+            all_entries = all_entries.filter(Q(customer_mobile__icontains=mobile_filter) | Q(login_mobile_no__icontains=mobile_filter))
     
     # ### START OF THE DEBUGGING FIX ###
     
@@ -1514,6 +1647,7 @@ def worksheet_view(request, employee):
         'todays_commission': todays_commission,
         'todays_repair_report': todays_repair_report,
         'all_entries': all_entries.order_by('-date'),
+        'has_history_filters': has_history_filters,
         'today': today,
         'todays_attendance_wage': todays_attendance_wage,
         'max_daily_wage': max_daily_wage,
@@ -2043,7 +2177,7 @@ def worksheet_entry_edit_view(request, employee, entry_id):
         form = WorksheetEntryEditForm(request.POST, instance=entry)
         if form.is_valid():
             form.save()
-            messages.success(request, "Certificate number updated successfully.")
+            messages.success(request, "Worksheet entry updated successfully.")
             return redirect('worksheet')
         else:
             context = {'form': form, 'entry_id': entry_id}

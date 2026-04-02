@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Print - {{ token.token_no }}</title>
+    <style>
+        :root {
+            --paper-width:75mm;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+            background: #fff;
+            color: #000;
+            font-size: 16px;
+            line-height: 1.2;
+        }
+
+        .receipt {
+            width: var(--paper-width);
+            margin: 2px auto;
+            padding: 2px 4px;
+            box-sizing: border-box;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .title {
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 0;
+            margin-bottom: 1px;
+        }
+
+        .subtitle {
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .footnote {
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        .line {
+            border-top: 1px dashed #000;
+            margin: 3px 0;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 2px;
+            word-break: break-word;
+        }
+
+        .label {
+            font-weight: 400;
+            min-width: 42%;
+        }
+
+        .value {
+            text-align: right;
+            min-width: 54%;
+        }
+
+        .token-no {
+            font-size: 20px;
+            font-weight: 400;
+            margin: 2px 0 3px;
+        }
+
+        .actions {
+            width: var(--paper-width);
+            margin: 4px auto 4px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        .actions button,
+        .actions a {
+            padding: 6px 10px;
+            border: 1px solid #111;
+            border-radius: 4px;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+            text-decoration: none;
+            margin: 0 4px;
+            font-size: 12px;
+        }
+
+        @page {
+            size: 80mm auto;
+            margin: 0;
+        }
+
+        @media print {
+            .actions {
+                display: none;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt">
+        <div class="center subtitle">Token Receipt</div>
+        <div class="line"></div>
+
+        <div class="center">Token Number</div>
+        <div class="center token-no">{{ token.token_no }}</div>
+
+        <div class="line"></div>
+
+        <div class="row">
+            <div class="label">Date & Time</div>
+            <div class="value">{{ token.created_at|date:"d-m-Y h:i A" }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Customer Name</div>
+            <div class="value">{{ token.customer_name }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Cell No</div>
+            <div class="value">{{ token.cell_no }}</div>
+        </div>
+        <div class="row">
+            <div class="label">Operator Name</div>
+            <div class="value">{{ token.operator_name.name|default:"-" }}</div>
+        </div>
+
+        <div class="line"></div>
+        <div class="center">Please keep this token safely.</div>
+        <div class="center footnote">Temporary reference purpose only.</div>
+    </div>
+
+    <div class="actions">
+        <button type="button" onclick="window.print()">Print Again</button>
+        <button type="button" disabled style="opacity: 0.7; cursor: default;">Saved To Worksheet: {% if worksheet_exists %}Yes{% else %}No{% endif %}</button>
+        <a href="{% url 'token_naming_form' %}">Back</a>
+    </div>
+
+    <script>
+        window.addEventListener('load', function () {
+            window.print();
+        });
+    </script>
+</body>
+</html>

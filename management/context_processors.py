@@ -68,6 +68,7 @@ def employee_daily_stats_context(request):
             'navbar_daily_collected': None,
             'navbar_daily_balance': None,
             'navbar_daily_commission': None,
+            'navbar_department_balance': None,
         }
 
     today = timezone.localtime(timezone.now()).date()
@@ -101,9 +102,16 @@ def employee_daily_stats_context(request):
 
     commission_due = commission_earned - Decimal(str(commission_paid))
 
+    headed_department = Department.objects.filter(department_head__employee_id=employee_id).first()
+    if headed_department:
+        department_balance = headed_department.topups.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    else:
+        department_balance = None
+
     return {
         'navbar_daily_target': target,
         'navbar_daily_collected': collected,
         'navbar_daily_balance': balance,
         'navbar_daily_commission': commission_due,
+        'navbar_department_balance': department_balance,
     }

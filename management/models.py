@@ -119,17 +119,8 @@ class DepartmentTopUp(models.Model):
 
 
 class DepartmentInventoryEntry(models.Model):
-    BOND_TYPE_100 = '100'
-    BOND_TYPE_50 = '50'
-    BOND_TYPE_20 = '20'
-    BOND_TYPE_CHOICES = (
-        (BOND_TYPE_100, '100 RPS BONDS'),
-        (BOND_TYPE_50, '50 RPS BONDS'),
-        (BOND_TYPE_20, '20 RPS BONDS'),
-    )
-
     department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='inventory_entries')
-    bond_type = models.CharField(max_length=3, choices=BOND_TYPE_CHOICES)
+    bond_type = models.CharField(max_length=200)
     quantity = models.IntegerField()
     note = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -138,7 +129,7 @@ class DepartmentInventoryEntry(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.get_bond_type_display()} x {self.quantity} for {self.department.name}"
+        return f"{self.bond_type} x {self.quantity} for {self.department.name}"
 
 
 class DepartmentStock(models.Model):
@@ -717,6 +708,68 @@ class ServiceType(models.Model):
         return self.name
 
 
+def generate_token_no():
+    """Generate token number in yymmddNNN format with a daily reset counter."""
+    date_prefix = timezone.localdate().strftime('%y%m%d')
+
+    last_today_token = (
+        Token.objects.filter(token_no__startswith=date_prefix)
+        .order_by('-token_no')
+        .values_list('token_no', flat=True)
+        .first()
+    )
+
+    sequence = 1
+    if last_today_token and len(last_today_token) == 9 and last_today_token[6:].isdigit():
+        sequence = int(last_today_token[6:]) + 1
+
+    while sequence <= 999:
+        token_no = f"{date_prefix}{sequence:03d}"
+        if not Token.objects.filter(token_no=token_no).exists():
+            return token_no
+        sequence += 1
+
+    raise ValueError('Daily token limit reached for today (999).')
+
+
+class Token(models.Model):
+    token_no = models.CharField(
+        max_length=9,
+        unique=True,
+        default=generate_token_no,
+        help_text='9-digit token number in yymmddNNN format',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text='Auto-generated date and time')
+    customer_name = models.CharField(max_length=255, help_text='Name of the customer')
+    cell_no = models.CharField(max_length=15, help_text='Contact number')
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select department',
+    )
+    service_type = models.ForeignKey(
+        'ServiceType',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select service type for the selected department',
+    )
+    operator_name = models.ForeignKey(
+        'Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select active operator/employee',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Token'
+        verbose_name_plural = 'Tokens'
+
+    def __str__(self):
+        return f"Token {self.token_no} - {self.customer_name}"
+
+
 # --- MODIFIED MODEL: Application ---
 class Application(models.Model):
     """
@@ -857,6 +910,9 @@ class Worksheet(models.Model):
     
     # NEW field for 'Notary and Bonds'
     bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
+
+    # Number of stocks deducted per entry (Forms department only)
+    stocks_used = models.PositiveIntegerField(default=1)
 
     # Image attachments
     particulars_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)

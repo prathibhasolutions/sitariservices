@@ -3,7 +3,271 @@
 
 
 {% block content %}
-<div class="container mt-4">
+<style>
+    .worksheet-crystal {
+        --spot-1: rgba(34, 211, 238, 0.18);
+        --spot-2: rgba(96, 165, 250, 0.2);
+        --bg-top: #0f172a;
+        --bg-mid: #111827;
+        --accent: #22d3ee;
+        --accent-2: #60a5fa;
+        --text-main: #e5e7eb;
+        --text-soft: #9ca3af;
+        --glass: rgba(255, 255, 255, 0.08);
+        --glass-border: rgba(255, 255, 255, 0.16);
+        --primary-text: #67e8f9;
+        --header-bg: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(96, 165, 250, 0.22));
+        --input-bg: rgba(15, 23, 42, 0.46);
+        --input-border: rgba(148, 163, 184, 0.4);
+        --table-bg: rgba(2, 6, 23, 0.22);
+        --thead-dark-bg: linear-gradient(120deg, rgba(14, 116, 144, 0.9), rgba(30, 64, 175, 0.9));
+        --thead-light-bg: rgba(30, 41, 59, 0.86);
+        --thead-light-text: #e2e8f0;
+        --btn-success-bg: linear-gradient(135deg, #06b6d4, #2563eb);
+        --btn-primary-bg: linear-gradient(135deg, #0ea5e9, #4f46e5);
+        --btn-secondary-bg: rgba(148, 163, 184, 0.25);
+        background:
+            radial-gradient(circle at 8% 10%, var(--spot-1) 0%, transparent 35%),
+            radial-gradient(circle at 92% 2%, var(--spot-2) 0%, transparent 33%),
+            linear-gradient(160deg, var(--bg-top), var(--bg-mid));
+        color: var(--text-main);
+        border-radius: 22px;
+        padding: 18px;
+        box-shadow: 0 18px 35px rgba(2, 6, 23, 0.35);
+    }
+
+    .worksheet-crystal[data-theme='dark'] {
+        --spot-1: rgba(56, 189, 248, 0.12);
+        --spot-2: rgba(99, 102, 241, 0.14);
+        --bg-top: #0b1020;
+        --bg-mid: #0f172a;
+        --accent: #38bdf8;
+        --accent-2: #818cf8;
+        --text-main: #dbeafe;
+        --glass: rgba(255, 255, 255, 0.06);
+        --glass-border: rgba(148, 163, 184, 0.2);
+        --primary-text: #7dd3fc;
+    }
+
+    .worksheet-crystal[data-theme='light'] {
+        --spot-1: rgba(14, 165, 233, 0.08);
+        --spot-2: rgba(59, 130, 246, 0.1);
+        --bg-top: #f8fbff;
+        --bg-mid: #eef6ff;
+        --accent: #0284c7;
+        --accent-2: #2563eb;
+        --text-main: #0f172a;
+        --text-soft: #475569;
+        --glass: rgba(255, 255, 255, 0.78);
+        --glass-border: rgba(2, 132, 199, 0.18);
+        --primary-text: #0c4a6e;
+        --header-bg: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(59, 130, 246, 0.14));
+        --input-bg: rgba(255, 255, 255, 0.94);
+        --input-border: rgba(14, 116, 144, 0.24);
+        --table-bg: rgba(255, 255, 255, 0.86);
+        --thead-dark-bg: linear-gradient(120deg, rgba(14, 116, 144, 0.85), rgba(29, 78, 216, 0.85));
+        --thead-light-bg: rgba(226, 232, 240, 0.95);
+        --thead-light-text: #0f172a;
+        --btn-success-bg: linear-gradient(135deg, #0891b2, #2563eb);
+        --btn-primary-bg: linear-gradient(135deg, #0284c7, #1d4ed8);
+        --btn-secondary-bg: rgba(148, 163, 184, 0.3);
+    }
+
+    .worksheet-crystal h1,
+    .worksheet-crystal h3,
+    .worksheet-crystal h4,
+    .worksheet-crystal h5,
+    .worksheet-crystal label,
+    .worksheet-crystal strong,
+    .worksheet-crystal p,
+    .worksheet-crystal th,
+    .worksheet-crystal td {
+        color: var(--text-main);
+    }
+
+    .worksheet-crystal .text-primary {
+        color: var(--primary-text) !important;
+    }
+
+    .worksheet-crystal .card {
+        background: var(--glass);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.28);
+    }
+
+    .worksheet-crystal .card-header {
+        background: var(--header-bg);
+        border-bottom: 1px solid var(--glass-border);
+        border-top-left-radius: 16px !important;
+        border-top-right-radius: 16px !important;
+    }
+
+    .worksheet-crystal .form-control,
+    .worksheet-crystal .service-dropdown {
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        color: var(--text-main);
+        border-radius: 12px;
+    }
+
+    .worksheet-crystal .form-control:focus,
+    .worksheet-crystal .service-dropdown:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 0.18rem rgba(34, 211, 238, 0.22);
+    }
+
+    .worksheet-crystal .btn {
+        border-radius: 12px;
+        border: none;
+    }
+
+    .worksheet-crystal .btn-success {
+        background: var(--btn-success-bg);
+    }
+
+    .worksheet-crystal .btn-secondary {
+        background: var(--btn-secondary-bg);
+        color: #e5e7eb;
+    }
+
+    .worksheet-crystal .btn-primary {
+        background: var(--btn-primary-bg);
+    }
+
+    .worksheet-crystal .table {
+        background: var(--table-bg);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .worksheet-crystal .table-bordered td,
+    .worksheet-crystal .table-bordered th {
+        border-color: rgba(148, 163, 184, 0.28);
+    }
+
+    .worksheet-crystal .thead-dark th {
+        background: var(--thead-dark-bg);
+        border-color: rgba(148, 163, 184, 0.2);
+    }
+
+    .worksheet-crystal .thead-light th {
+        background: var(--thead-light-bg);
+        color: var(--thead-light-text);
+    }
+
+    .worksheet-crystal .theme-switcher {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-border);
+        background: var(--glass);
+    }
+
+    .worksheet-crystal .theme-btn {
+        border: 1px solid var(--glass-border);
+        background: rgba(15, 23, 42, 0.2);
+        color: var(--text-main);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+    }
+
+    .worksheet-crystal .theme-btn.active {
+        background: var(--btn-primary-bg);
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 0 0 0.12rem rgba(34, 211, 238, 0.22);
+    }
+
+    .worksheet-crystal[data-theme='light'] .btn-secondary,
+    .worksheet-crystal[data-theme='light'] .theme-btn.active {
+        color: #fff;
+    }
+
+    .worksheet-crystal .table-hover tbody tr:hover,
+    .worksheet-crystal .table-striped tbody tr:nth-of-type(odd) {
+        background: rgba(148, 163, 184, 0.08);
+    }
+
+    .worksheet-crystal table tfoot tr,
+    .worksheet-crystal table tfoot td,
+    .worksheet-crystal table tfoot th,
+    .worksheet-crystal tr.bg-light td,
+    .worksheet-crystal tr.bg-light th {
+        background: rgba(15, 23, 42, 0.78) !important;
+        color: #eaf2ff !important;
+        border-color: rgba(148, 163, 184, 0.28) !important;
+    }
+
+    .worksheet-crystal table tfoot .text-right,
+    .worksheet-crystal table tfoot .font-weight-bold {
+        color: #eaf2ff !important;
+    }
+
+    .worksheet-crystal[data-theme='dark'] table tfoot tr,
+    .worksheet-crystal[data-theme='dark'] table tfoot td,
+    .worksheet-crystal[data-theme='dark'] table tfoot th,
+    .worksheet-crystal[data-theme='dark'] tr.bg-light td,
+    .worksheet-crystal[data-theme='dark'] tr.bg-light th {
+        background: rgba(2, 6, 23, 0.88) !important;
+        color: #dbeafe !important;
+    }
+
+    .worksheet-crystal[data-theme='light'] table tfoot tr,
+    .worksheet-crystal[data-theme='light'] table tfoot td,
+    .worksheet-crystal[data-theme='light'] table tfoot th,
+    .worksheet-crystal[data-theme='light'] tr.bg-light td,
+    .worksheet-crystal[data-theme='light'] tr.bg-light th {
+        background: rgba(226, 232, 240, 0.95) !important;
+        color: #0f172a !important;
+    }
+
+    .worksheet-crystal .badge-success {
+        background: #10b981;
+    }
+
+    .worksheet-crystal .badge-warning {
+        background: #f59e0b;
+        color: #111827;
+    }
+
+    @media (max-width: 768px) {
+        .worksheet-crystal {
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .worksheet-crystal h1 {
+            font-size: 1.7rem;
+        }
+    }
+
+    @media print {
+        .worksheet-crystal {
+            background: #fff !important;
+            color: #000 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+
+<div class="container mt-4 worksheet-crystal">
+    <div class="theme-switcher">
+        <span><strong>Theme:</strong></span>
+        <button type="button" class="theme-btn" data-theme="light">Light</button>
+        <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+        <button type="button" class="theme-btn" data-theme="radiant">Radiant</button>
+    </div>
+
     {% if messages %}
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -125,35 +389,31 @@
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <input type="hidden" name="form_type" value="worksheet_entry">
-                <div class="form-row align-items-end g-3">
+                <div>
                     {% for field in form %}
                         {% if field.name == 'particulars_image' %}{% else %}
-                        <div class="col mb-2">
-                            <div class="form-group mb-0">
-                                {{ field.label_tag }}
-                                {% if field.name == 'service' %}
-                                    <select name="service" class="form-control service-dropdown">
-                                        <option value="">-- Select a Service --</option>
-                                        {% for st in field.field.queryset %}
-                                            <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
-                                {% else %}
-                                    {{ field }}
-                                {% endif %}
-                                {% if field.errors %}
-                                    <div class="text-danger small">{{ field.errors.as_text }}</div>
-                                {% endif %}
-                            </div>
+                        <div class="form-group mb-2">
+                            {{ field.label_tag }}
+                            {% if field.name == 'service' %}
+                                <select name="service" class="form-control service-dropdown">
+                                    <option value="">-- Select a Service --</option>
+                                    {% for st in field.field.queryset %}
+                                        <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
+                            {% if field.errors %}
+                                <div class="text-danger small">{{ field.errors.as_text }}</div>
+                            {% endif %}
                         </div>
                         {% endif %}
                     {% endfor %}
                     <script src="{% static 'management/service_amount.js' %}"></script>
-                    <div class="col-auto mb-2 d-flex align-items-end">
-                        <div class="form-group mb-0 w-100">
-                            <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success w-100" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
-                        </div>
+                    <div class="form-group mb-0 mt-3">
+                        <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
                     </div>
                 </div>
             </form>
@@ -239,6 +499,7 @@
                             <th>Amount (₹)</th>
                             <th class="no-print">QR</th>
                             <th class="no-print">Image</th>
+                            <th class="no-print">Edit</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -273,6 +534,16 @@
                                     <input type="file" name="particulars_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem; display:inline-block; width:80px; padding:2px 4px; margin-right:2px;">
                                     <button type="submit" class="btn btn-sm btn-info" style="padding:4px 8px;"><i class="fas fa-upload"></i></button>
                                 </form>
+                            </td>
+                            <td class="no-print" style="text-align: center;">
+                                {% if not entry.approved %}
+                                    <button type="button" class="btn btn-primary btn-sm edit-btn" data-url="{% url 'worksheet-edit' entry.id %}">
+                                        Edit
+                                    </button>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No entries for today.</td></tr>
@@ -298,6 +569,7 @@
                             {% endif %}
                             <td>₹{{ todays_total_amount|floatformat:2 }}</td>
                             <td class="no-print"></td>
+                            <td class="no-print"></td>
                         </tr>
                         <tr class="font-weight-bold bg-light">
                             {% if department.name == 'Mee Seva' or department.name == 'Online Hub' or department.name == 'Aadhaar' %}
@@ -312,6 +584,7 @@
                                 <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% endif %}
                             <td></td>
+                            <td class="no-print"></td>
                         </tr>
                         </tr>
                     </tfoot>
@@ -365,9 +638,11 @@
     <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>All Entries</h4>
+            {% if has_history_filters %}
             <button class="btn btn-secondary btn-sm" onclick="printHistoricalReport()">
                 <i class="fas fa-print"></i> Print Report
             </button>
+            {% endif %}
         </div>
         <div class="card-body" id="historical-report-printable">
             <div class="d-none" id="historical-print-header">
@@ -402,7 +677,8 @@
                     <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear</a>
                 </div>
             </form>
-            
+
+            {% if has_history_filters %}
             <div class="table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead class="thead-light">
@@ -424,7 +700,6 @@
                             {% endif %}
                             <th>Amount (₹)</th>
                             <th>Status</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -453,14 +728,6 @@
                                     <span class="badge badge-warning">Pending</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if not entry.approved %}
-                                    <button type="button" class="btn btn-primary btn-sm edit-btn" 
-                                            data-url="{% url 'worksheet-edit' entry.id %}">
-                                        Edit
-                                    </button>
-                                {% endif %}
-                            </td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No historical entries found for the selected filter.</td></tr>
@@ -468,6 +735,11 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                Select a date range or enter a mobile number to view historical entries.
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -603,7 +875,43 @@
         window.setTimeout(lockWorksheetEntryUI, msUntilCutoff);
     }
 
-    document.addEventListener('DOMContentLoaded', scheduleWorksheetCutoff);
+    function initWorksheetTheme() {
+        const wrapper = document.querySelector('.worksheet-crystal');
+        if (!wrapper) {
+            return;
+        }
+
+        const buttons = Array.from(document.querySelectorAll('.theme-btn'));
+        const storedTheme = localStorage.getItem('worksheetTheme') || 'radiant';
+        const validThemes = ['light', 'dark', 'radiant'];
+        const initialTheme = validThemes.includes(storedTheme) ? storedTheme : 'radiant';
+
+        const applyTheme = (themeName) => {
+            const normalized = themeName === 'radiant' ? '' : themeName;
+            if (normalized) {
+                wrapper.setAttribute('data-theme', normalized);
+            } else {
+                wrapper.removeAttribute('data-theme');
+            }
+            localStorage.setItem('worksheetTheme', themeName);
+            buttons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.theme === themeName);
+            });
+        };
+
+        buttons.forEach((btn) => {
+            btn.addEventListener('click', function () {
+                applyTheme(this.dataset.theme);
+            });
+        });
+
+        applyTheme(initialTheme);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        scheduleWorksheetCutoff();
+        initWorksheetTheme();
+    });
 </script>
 
 

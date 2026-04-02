@@ -436,6 +436,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             {% if navbar_daily_balance is not None %}₹{{ navbar_daily_balance|floatformat:0 }}{% else %}—{% endif %}
                         </div>
                     </div>
+                    {% if navbar_department_balance is not None %}
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Dept. Balance</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">₹{{ navbar_department_balance|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
                     <!-- Commission widget (rightmost before timer) -->

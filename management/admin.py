@@ -1237,10 +1237,10 @@ class DepartmentAdmin(admin.ModelAdmin):
 
         if obj.name == 'Notary and Bonds':
             inventory_entries = DepartmentInventoryEntry.objects.filter(department=obj)
-            total_100 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0
-            total_50 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0
-            total_20 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0
-            return f"100 RPS: {total_100} | 50 RPS: {total_50} | 20 RPS: {total_20}"
+            totals = inventory_entries.values('bond_type').annotate(total=Sum('quantity')).order_by('bond_type')
+            if not totals:
+                return 'No inventory records yet.'
+            return ' | '.join([f"{row['bond_type']}: {row['total'] or 0}" for row in totals])
 
         total = obj.topups.aggregate(total=Sum('amount'))['total'] or 0
         return f"Balance: ₹ {total}"
@@ -1284,13 +1284,38 @@ class DepartmentAdmin(admin.ModelAdmin):
             employees = Employee.objects.filter(department=department).order_by('name')
             topup_history = DepartmentTopUp.objects.filter(department=department).order_by('-created_at')
             inventory_history = DepartmentInventoryEntry.objects.filter(department=department).order_by('-created_at')
-
-            inventory_balance = {
-                '100': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0,
-                '50': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0,
-                '20': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0,
-            }
             is_notary_bonds = department.name == 'Notary and Bonds'
+
+            inventory_balance_rows = []
+            bond_type_options = []
+            if is_notary_bonds:
+                service_names = list(
+                    ServiceType.objects.filter(departments=department)
+                    .order_by('name')
+                    .values_list('name', flat=True)
+                )
+                totals_by_type = {
+                    row['bond_type']: (row['total'] or 0)
+                    for row in inventory_history.values('bond_type').annotate(total=Sum('quantity'))
+                }
+
+                seen_types = set()
+                for service_name in service_names:
+                    inventory_balance_rows.append({
+                        'name': service_name,
+                        'total': totals_by_type.get(service_name, 0),
+                    })
+                    seen_types.add(service_name)
+
+                # Keep legacy/renamed types visible if they exist in history.
+                for bond_type_name in sorted(totals_by_type.keys()):
+                    if bond_type_name not in seen_types:
+                        inventory_balance_rows.append({
+                            'name': bond_type_name,
+                            'total': totals_by_type.get(bond_type_name, 0),
+                        })
+
+                bond_type_options = service_names
 
             # Build stock rows for departments that have service types
             dept_service_types = ServiceType.objects.filter(departments=department).order_by('name')
@@ -1314,7 +1339,7 @@ class DepartmentAdmin(admin.ModelAdmin):
                         service=st.name,
                         date=stock_date,
                     )
-                    used_count = day_qs.count()
+                    used_count = day_qs.aggregate(total=Sum('stocks_used'))['total'] or 0
                     total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
                     remaining = max(0, stock_obj.quantity - used_count)
                     price = stock_obj.price
@@ -1344,7 +1369,8 @@ class DepartmentAdmin(admin.ModelAdmin):
                 'department_head': department.department_head,
                 'topup_history': topup_history,
                 'inventory_history': inventory_history,
-                'inventory_balance': inventory_balance,
+                'inventory_balance_rows': inventory_balance_rows,
+                'bond_type_options': bond_type_options,
                 'is_notary_bonds': is_notary_bonds,
                 'is_forms_dept': is_forms_dept,
                 'stock_rows': stock_rows,
@@ -1393,15 +1419,18 @@ class DepartmentAdmin(admin.ModelAdmin):
                 self.message_user(request, 'Inventory is available only for Notary and Bonds department.', messages.ERROR)
                 return HttpResponseRedirect(request.get_full_path())
 
+            from .models import ServiceType
+
             bond_type = (request.POST.get('bond_type') or '').strip()
             raw_qty = (request.POST.get('inventory_quantity') or '').strip()
             note = (request.POST.get('inventory_note') or '').strip()
 
-            valid_types = {
-                DepartmentInventoryEntry.BOND_TYPE_100,
-                DepartmentInventoryEntry.BOND_TYPE_50,
-                DepartmentInventoryEntry.BOND_TYPE_20,
-            }
+            valid_types = set(
+                ServiceType.objects.filter(departments=obj).values_list('name', flat=True)
+            )
+            if not valid_types:
+                self.message_user(request, 'Please add service types to this department before adding inventory.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
             if bond_type not in valid_types:
                 self.message_user(request, 'Please select a valid bond type.', messages.ERROR)
                 return HttpResponseRedirect(request.get_full_path())

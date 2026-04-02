@@ -82,6 +82,30 @@
     .stock-table tbody tr:nth-child(even) { background:#fcfdff; }
     .stock-table input[type=number] { width:100px; padding:4px 6px; }
     .stock-balance { font-weight:600; color:#16a34a; }
+    .inv-balance-table {
+        width: 320px;
+        max-width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+    .inv-balance-table th,
+    .inv-balance-table td {
+        border: 1px solid #e5e7eb;
+        padding: 6px 10px;
+        text-align: left;
+    }
+    .inv-balance-table th {
+        background: #f8fafc;
+        font-weight: 600;
+        color: #374151;
+        width: 70%;
+    }
+    .inv-balance-table td {
+        font-weight: 700;
+        color: #111827;
+        width: 30%;
+    }
 </style>
 {% endblock %}
 
@@ -91,18 +115,29 @@
     <h2>{% if is_notary_bonds %}Inventory Balance{% elif is_forms_dept %}Stock{% else %}Department Top Up{% endif %}</h2>
     <div class="panel-body">
         {% if is_notary_bonds %}
-            <div class="topup-row" style="margin-bottom:10px;">
-                <div class="topup-field"><strong>100 RPS BONDS:</strong> {{ inventory_balance.100 }}</div>
-                <div class="topup-field"><strong>50 RPS BONDS:</strong> {{ inventory_balance.50 }}</div>
-                <div class="topup-field"><strong>20 RPS BONDS:</strong> {{ inventory_balance.20 }}</div>
-            </div>
+            <table class="inv-balance-table">
+                <tbody>
+                    {% for row in inventory_balance_rows %}
+                    <tr>
+                        <th>{{ row.name }}</th>
+                        <td>{{ row.total }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <th colspan="2">No inventory types available. Assign service types to this department first.</th>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             <div class="topup-row">
                 <div class="topup-field">
                     <label for="id_bond_type">Bond Type</label>
                     <select id="id_bond_type" name="bond_type">
-                        <option value="100">100 RPS BONDS</option>
-                        <option value="50">50 RPS BONDS</option>
-                        <option value="20">20 RPS BONDS</option>
+                        {% for option in bond_type_options %}
+                        <option value="{{ option }}">{{ option }}</option>
+                        {% empty %}
+                        <option value="">No service types available</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="topup-field">
@@ -318,7 +353,7 @@
                     {% for item in inventory_history %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ item.get_bond_type_display }}</td>
+                        <td>{{ item.bond_type }}</td>
                         <td>
                             {% if item.quantity < 0 %}
                                 <span style="color:#c0392b;font-weight:600;">Deduction</span>

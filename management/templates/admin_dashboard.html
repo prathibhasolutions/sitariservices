@@ -69,6 +69,37 @@
             color: #fff;
         }
 
+        .dept-nav .dropdown-menu {
+            min-width: 320px;
+            max-height: 65vh;
+            overflow-y: auto;
+            border: 0;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        }
+
+        .dept-nav-item {
+            padding: 8px 14px;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .dept-nav-item:last-child {
+            border-bottom: 0;
+        }
+
+        .dept-nav-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 2px;
+        }
+
+        .dept-nav-sub {
+            font-size: 12px;
+            color: #4b5563;
+            margin: 0;
+            line-height: 1.35;
+        }
+
         /* ── Content area ── */
         #content {
             width: calc(100% - 250px);
@@ -125,7 +156,11 @@
                         <a class="nav-link {% if request.resolver_match.url_name == 'admin_employees' %}active{% endif %}" href="{% url 'admin_employees' %}">
                             <i class="fas fa-users-cog mr-2"></i> Employees
                         </a>
+            <a class="nav-link {% if request.resolver_match.url_name == 'token_naming_form' %}active{% endif %}" href="{% url 'token_naming_form' %}">
+                <i class="fas fa-ticket-alt mr-2"></i> Token Naming
+            </a>
         </div>
+
     </nav>
 
     <!-- Main Content -->
@@ -136,6 +171,30 @@
                 <i class="fas fa-bars"></i>
             </button>
             <span class="navbar-brand mb-0 h6">Admin Dashboard</span>
+
+            <div class="ml-auto d-flex align-items-center">
+                <button class="btn btn-sm btn-light mr-2" type="button" id="openTokenSearchBtn">
+                    <i class="fas fa-search mr-1"></i> Token Search
+                </button>
+                <div class="dropdown dept-nav">
+                    <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" id="deptHeadsDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Department Heads
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="deptHeadsDropdown">
+                        {% for dept in departments_overview %}
+                        <div class="dept-nav-item">
+                            <div class="dept-nav-name">{{ dept.name }}</div>
+                            <p class="dept-nav-sub">Head: {{ dept.head_name }}</p>
+                            <p class="dept-nav-sub">Topup: ₹{{ dept.topup_balance|floatformat:2 }}</p>
+                        </div>
+                        {% empty %}
+                        <div class="dept-nav-item">
+                            <p class="dept-nav-sub mb-0">No departments found.</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </nav>
 
         <!-- Page Body -->
@@ -256,6 +315,62 @@
     </div><!-- /#content -->
 </div><!-- /.wrapper -->
 
+<div class="modal fade" id="tokenSearchInputModal" tabindex="-1" role="dialog" aria-labelledby="tokenSearchInputLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tokenSearchInputLabel">Token Search</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="tokenSearchForm">
+                <div class="modal-body">
+                    <div class="form-group mb-2">
+                        <label for="tokenSearchInput">Enter Token No</label>
+                        <input type="text" class="form-control" id="tokenSearchInput" placeholder="e.g. 260401001" maxlength="20" required>
+                    </div>
+                    <small id="tokenSearchError" class="text-danger d-none"></small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="tokenSearchResultModal" tabindex="-1" role="dialog" aria-labelledby="tokenSearchResultLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tokenSearchResultLabel">Token Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm table-bordered mb-0">
+                    <tbody>
+                        <tr><th style="width: 40%;">Token No</th><td id="resultTokenNo">-</td></tr>
+                        <tr><th>Date &amp; Time</th><td id="resultCreatedAt">-</td></tr>
+                        <tr><th>Customer Name</th><td id="resultCustomerName">-</td></tr>
+                        <tr><th>Cell No</th><td id="resultCellNo">-</td></tr>
+                        <tr><th>Department</th><td id="resultDepartment">-</td></tr>
+                        <tr><th>Service Type</th><td id="resultServiceType">-</td></tr>
+                        <tr><th>Operator Name</th><td id="resultOperatorName">-</td></tr>
+                        <tr><th>Saved To Worksheet</th><td id="resultWorksheet">-</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -263,6 +378,64 @@
     document.getElementById('sidebarCollapse').addEventListener('click', function () {
         document.getElementById('sidebar').classList.toggle('active');
         document.getElementById('content').classList.toggle('active');
+    });
+
+    var openTokenSearchBtn = document.getElementById('openTokenSearchBtn');
+    var tokenSearchForm = document.getElementById('tokenSearchForm');
+    var tokenSearchInput = document.getElementById('tokenSearchInput');
+    var tokenSearchError = document.getElementById('tokenSearchError');
+
+    function setTokenResult(data) {
+        document.getElementById('resultTokenNo').textContent = data.token_no || '-';
+        document.getElementById('resultCreatedAt').textContent = data.created_at || '-';
+        document.getElementById('resultCustomerName').textContent = data.customer_name || '-';
+        document.getElementById('resultCellNo').textContent = data.cell_no || '-';
+        document.getElementById('resultDepartment').textContent = data.department || '-';
+        document.getElementById('resultServiceType').textContent = data.service_type || '-';
+        document.getElementById('resultOperatorName').textContent = data.operator_name || '-';
+        document.getElementById('resultWorksheet').textContent = data.worksheet_saved ? 'Yes' : 'No';
+    }
+
+    function showTokenSearchError(message) {
+        tokenSearchError.textContent = message;
+        tokenSearchError.classList.remove('d-none');
+    }
+
+    openTokenSearchBtn.addEventListener('click', function () {
+        tokenSearchInput.value = '';
+        tokenSearchError.classList.add('d-none');
+        tokenSearchError.textContent = '';
+        $('#tokenSearchInputModal').modal('show');
+        setTimeout(function () { tokenSearchInput.focus(); }, 250);
+    });
+
+    tokenSearchForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var tokenNo = (tokenSearchInput.value || '').trim();
+        tokenSearchError.classList.add('d-none');
+        tokenSearchError.textContent = '';
+
+        if (!tokenNo) {
+            showTokenSearchError('Please enter a token number.');
+            return;
+        }
+
+        fetch('{% url "admin_token_search" %}?token_no=' + encodeURIComponent(tokenNo))
+            .then(async function (response) {
+                var payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Unable to find token.');
+                }
+                return payload;
+            })
+            .then(function (data) {
+                setTokenResult(data);
+                $('#tokenSearchInputModal').modal('hide');
+                $('#tokenSearchResultModal').modal('show');
+            })
+            .catch(function (error) {
+                showTokenSearchError(error.message || 'Unable to find token.');
+            });
     });
 
     // Employee filter buttons
