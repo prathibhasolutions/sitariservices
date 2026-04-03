@@ -397,6 +397,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <a class="nav-link mb-2 {% if request.path == invoice_url %}active{% endif %}" href="{{ invoice_url }}">Generate Invoice</a>
             {% url 'assigned_links' as links_url %}
             <a class="nav-link mb-2 {% if request.path == links_url %}active{% endif %}" href="{{ links_url }}">Links</a>
+            {% url 'employee_sitari_chat' as employee_sitari_chat_url %}
+            <a class="nav-link mb-2 {% if request.path == employee_sitari_chat_url %}active{% endif %}" href="{{ employee_sitari_chat_url }}">Sitari Chat</a>
             {% url 'employee_uploads' as uploads_url %}
             <a class="nav-link mb-2 {% if request.path == uploads_url %}active{% endif %}" href="{{ uploads_url }}">Uploads</a>
             {% url 'change_password_request' as change_pass_url %}
@@ -576,7 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <div class="modal fade" id="employeeTokenSearchResultModal" tabindex="-1" role="dialog" aria-labelledby="employeeTokenSearchResultLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 980px;">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="employeeTokenSearchResultLabel">Token Details</h5>
@@ -584,21 +586,54 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
                 <table class="table table-sm table-bordered mb-0">
                     <tbody>
                         <tr><th style="width: 40%;">Token No</th><td id="employeeResultTokenNo">-</td></tr>
                         <tr><th>Date &amp; Time</th><td id="employeeResultCreatedAt">-</td></tr>
-                        <tr><th>Customer Name</th><td id="employeeResultCustomerName">-</td></tr>
-                        <tr><th>Cell No</th><td id="employeeResultCellNo">-</td></tr>
+                        <tr><th>Customer Name</th><td><input type="text" id="employeeResultCustomerName" class="form-control form-control-sm" maxlength="255"></td></tr>
+                        <tr><th>Cell No</th><td><input type="text" id="employeeResultCellNo" class="form-control form-control-sm" maxlength="15"></td></tr>
                         <tr><th>Department</th><td id="employeeResultDepartment">-</td></tr>
                         <tr><th>Service Type</th><td id="employeeResultServiceType">-</td></tr>
                         <tr><th>Operator Name</th><td id="employeeResultOperatorName">-</td></tr>
                         <tr><th>Saved To Worksheet</th><td id="employeeResultWorksheet">-</td></tr>
                     </tbody>
                 </table>
+                <div class="mt-3">
+                    <div class="font-weight-bold mb-2">Worksheet Details</div>
+                    <div id="employeeWorksheetDynamicFields" class="border rounded p-2" style="background:#fafbfc;"></div>
+                    <div class="d-flex flex-wrap align-items-center mt-2" style="gap:8px;">
+                        <a id="employeeWorksheetQrBtn" href="#" class="btn btn-sm btn-outline-info disabled" target="_blank" rel="noopener">QR</a>
+                        <input type="file" id="employeeWorksheetImageInput" accept="image/*" class="form-control form-control-sm" style="max-width:220px;">
+                        <button type="button" id="employeeWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload Image</button>
+                        <a id="employeeWorksheetImageViewBtn" href="#" class="btn btn-sm btn-outline-secondary d-none" target="_blank" rel="noopener">View Image</a>
+                    </div>
+                </div>
+                <small id="employeeTokenResultError" class="text-danger d-none mt-2 d-block"></small>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="employeeTokenSaveBtn">Save</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newChatAssignedModal" tabindex="-1" role="dialog" aria-labelledby="newChatAssignedModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-success">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="newChatAssignedModalLabel">New Chat Assigned</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">A new token chat has been assigned to you.</p>
+                <ul id="newChatAssignedList" class="mb-0 pl-3"></ul>
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'employee_sitari_chat' %}" class="btn btn-success">Open Sitari Chat</a>
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
             </div>
         </div>
@@ -829,6 +864,231 @@ document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('employeeTokenSearchForm');
     var input = document.getElementById('employeeTokenSearchInput');
     var errorEl = document.getElementById('employeeTokenSearchError');
+    var saveBtn = document.getElementById('employeeTokenSaveBtn');
+    var resultErrorEl = document.getElementById('employeeTokenResultError');
+    var worksheetContainer = document.getElementById('employeeWorksheetDynamicFields');
+    var worksheetQrBtn = document.getElementById('employeeWorksheetQrBtn');
+    var worksheetImageInput = document.getElementById('employeeWorksheetImageInput');
+    var worksheetImageUploadBtn = document.getElementById('employeeWorksheetImageUploadBtn');
+    var worksheetImageViewBtn = document.getElementById('employeeWorksheetImageViewBtn');
+    var employeeQrUrlTemplate = '{% url "employee_upi_qr_single" 0 %}';
+    var currentEmployeeTokenData = null;
+    var employeeWorksheetFieldDefs = {
+        'mee seva': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'transaction_num', label: 'Transaction Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'online hub': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'transaction_num', label: 'Transaction Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'aadhaar': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'enrollment_no', label: 'Enrollment Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'bhu bharathi': [
+            { name: 'login_mobile_no', label: 'Login Mobile No' },
+            { name: 'application_no', label: 'Application No' },
+            { name: 'status', label: 'Status' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'forms': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'stocks_used', label: 'Stocks Used', type: 'number', step: '1' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'xerox': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'notary and bonds': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'bonds_sno', label: 'Bonds Sl. No' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ]
+    };
+
+    function normalizeDepartmentName(name) {
+        return String(name || '').trim().toLowerCase();
+    }
+
+    function getWorksheetDefs(departmentName) {
+        var key = normalizeDepartmentName(departmentName);
+        return employeeWorksheetFieldDefs[key] || [
+            { name: 'service', label: 'Service' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ];
+    }
+
+    function loadDepartmentServices(departmentId) {
+        if (!departmentId) {
+            return Promise.resolve([]);
+        }
+        return fetch('{% url "get_department_services" %}?department_id=' + encodeURIComponent(departmentId))
+            .then(function (response) {
+                if (!response.ok) {
+                    return [];
+                }
+                return response.json();
+            })
+            .then(function (payload) {
+                return payload.services || [];
+            })
+            .catch(function () {
+                return [];
+            });
+    }
+
+    function renderWorksheetFields(data) {
+        if (!worksheetContainer) {
+            return;
+        }
+
+        var worksheetData = (data && data.worksheet) ? data.worksheet : null;
+        if (!worksheetData || !worksheetData.exists) {
+            worksheetContainer.innerHTML = '<div class="text-muted small">No worksheet entry is linked to this token yet.</div>';
+            return;
+        }
+
+        var values = worksheetData.values || {};
+        var defs = getWorksheetDefs(data.department);
+        var departmentId = data.department_id || '';
+        loadDepartmentServices(departmentId).then(function (services) {
+            var html = '<div class="form-row">';
+            defs.forEach(function (field) {
+                var inputType = field.type || 'text';
+                var inputStep = field.step ? (' step="' + field.step + '"') : '';
+                var safeValue = String(values[field.name] || '').replace(/"/g, '&quot;');
+                html += '<div class="form-group col-md-6 mb-2">';
+                html += '<label class="mb-1 small font-weight-bold" for="employeeWorksheetField_' + field.name + '">' + field.label + '</label>';
+                if (inputType === 'service_select') {
+                    html += '<select class="form-control form-control-sm" id="employeeWorksheetField_' + field.name + '" data-field-name="' + field.name + '">';
+                    html += '<option value="">-- Select Service --</option>';
+                    services.forEach(function (item) {
+                        var selected = String(safeValue) === String(item.name) ? ' selected' : '';
+                        html += '<option value="' + String(item.name).replace(/"/g, '&quot;') + '"' + selected + '>' + item.name + '</option>';
+                    });
+                    html += '</select>';
+                } else {
+                    html += '<input type="' + inputType + '" class="form-control form-control-sm" id="employeeWorksheetField_' + field.name + '" data-field-name="' + field.name + '" value="' + safeValue + '"' + inputStep + '>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            worksheetContainer.innerHTML = html;
+            bindWorksheetFieldEvents();
+            refreshWorksheetQrButtonStyle();
+        });
+    }
+
+    function getWorksheetAmountValue() {
+        var amountInput = document.getElementById('employeeWorksheetField_amount');
+        if (!amountInput) {
+            return 0;
+        }
+        var num = parseFloat((amountInput.value || '').trim());
+        return isNaN(num) ? 0 : num;
+    }
+
+    function refreshWorksheetQrButtonStyle() {
+        if (!worksheetQrBtn || worksheetQrBtn.classList.contains('disabled')) {
+            return;
+        }
+        var amountValue = getWorksheetAmountValue();
+        if (amountValue > 0) {
+            worksheetQrBtn.classList.remove('btn-outline-info');
+            worksheetQrBtn.classList.add('btn-danger');
+            worksheetQrBtn.style.boxShadow = '0 0 10px rgba(220, 53, 69, 0.65)';
+        } else {
+            worksheetQrBtn.classList.remove('btn-danger');
+            worksheetQrBtn.classList.add('btn-outline-info');
+            worksheetQrBtn.style.boxShadow = '';
+        }
+    }
+
+    function bindWorksheetFieldEvents() {
+        var amountInput = document.getElementById('employeeWorksheetField_amount');
+        if (!amountInput) {
+            return;
+        }
+        amountInput.addEventListener('input', refreshWorksheetQrButtonStyle);
+        amountInput.addEventListener('change', refreshWorksheetQrButtonStyle);
+    }
+
+    function updateWorksheetActions(data) {
+        var worksheetData = data && data.worksheet ? data.worksheet : null;
+        var hasEntry = !!(worksheetData && worksheetData.exists && worksheetData.entry_id);
+
+        if (worksheetQrBtn) {
+            if (hasEntry) {
+                worksheetQrBtn.href = employeeQrUrlTemplate.replace('/0/', '/' + worksheetData.entry_id + '/');
+                worksheetQrBtn.classList.remove('disabled');
+                worksheetQrBtn.classList.add('btn-outline-info');
+                worksheetQrBtn.classList.remove('btn-danger');
+                worksheetQrBtn.style.boxShadow = '';
+            } else {
+                worksheetQrBtn.href = '#';
+                worksheetQrBtn.classList.add('disabled');
+                worksheetQrBtn.classList.remove('btn-danger');
+                worksheetQrBtn.classList.add('btn-outline-info');
+                worksheetQrBtn.style.boxShadow = '';
+            }
+        }
+
+        if (worksheetImageUploadBtn) {
+            worksheetImageUploadBtn.disabled = !hasEntry;
+        }
+
+        if (worksheetImageViewBtn) {
+            var imageUrl = (worksheetData && worksheetData.particulars_image_url) ? worksheetData.particulars_image_url : '';
+            if (imageUrl) {
+                worksheetImageViewBtn.href = imageUrl;
+                worksheetImageViewBtn.classList.remove('d-none');
+            } else {
+                worksheetImageViewBtn.href = '#';
+                worksheetImageViewBtn.classList.add('d-none');
+            }
+        }
+
+        if (worksheetImageInput) {
+            worksheetImageInput.value = '';
+        }
+    }
+
+    function collectWorksheetPayload(data) {
+        if (!worksheetContainer || !data || !data.worksheet || !data.worksheet.exists) {
+            return {};
+        }
+        var defs = getWorksheetDefs(data.department);
+        var payload = {};
+        defs.forEach(function (field) {
+            var el = document.getElementById('employeeWorksheetField_' + field.name);
+            if (el) {
+                payload[field.name] = el.value;
+            }
+        });
+        return payload;
+    }
 
     if (!openBtn || !form || !input || !errorEl) {
         return;
@@ -844,15 +1104,39 @@ document.addEventListener('DOMContentLoaded', function () {
         errorEl.classList.add('d-none');
     }
 
+    function showResultError(message, isSuccess) {
+        if (!resultErrorEl) {
+            return;
+        }
+        resultErrorEl.textContent = message;
+        resultErrorEl.classList.remove('d-none');
+        resultErrorEl.classList.toggle('text-danger', !isSuccess);
+        resultErrorEl.classList.toggle('text-success', !!isSuccess);
+    }
+
+    function clearResultError() {
+        if (!resultErrorEl) {
+            return;
+        }
+        resultErrorEl.textContent = '';
+        resultErrorEl.classList.add('d-none');
+        resultErrorEl.classList.remove('text-success');
+        resultErrorEl.classList.add('text-danger');
+    }
+
     function setResult(data) {
+        currentEmployeeTokenData = data;
         document.getElementById('employeeResultTokenNo').textContent = data.token_no || '-';
         document.getElementById('employeeResultCreatedAt').textContent = data.created_at || '-';
-        document.getElementById('employeeResultCustomerName').textContent = data.customer_name || '-';
-        document.getElementById('employeeResultCellNo').textContent = data.cell_no || '-';
+        document.getElementById('employeeResultCustomerName').value = data.customer_name === '-' ? '' : (data.customer_name || '');
+        document.getElementById('employeeResultCellNo').value = data.cell_no === '-' ? '' : (data.cell_no || '');
         document.getElementById('employeeResultDepartment').textContent = data.department || '-';
         document.getElementById('employeeResultServiceType').textContent = data.service_type || '-';
         document.getElementById('employeeResultOperatorName').textContent = data.operator_name || '-';
         document.getElementById('employeeResultWorksheet').textContent = data.worksheet_saved ? 'Yes' : 'No';
+        renderWorksheetFields(data);
+        updateWorksheetActions(data);
+        clearResultError();
     }
 
     openBtn.addEventListener('click', function () {
@@ -891,6 +1175,220 @@ document.addEventListener('DOMContentLoaded', function () {
                 showError('Unable to search token right now. Please try again.');
             });
     });
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            if (!currentEmployeeTokenData || !currentEmployeeTokenData.token_no) {
+                showResultError('Please search for a token first.');
+                return;
+            }
+
+            clearResultError();
+
+            var payload = {
+                token_no: currentEmployeeTokenData.token_no,
+                customer_name: document.getElementById('employeeResultCustomerName').value,
+                cell_no: document.getElementById('employeeResultCellNo').value,
+                worksheet_fields: collectWorksheetPayload(currentEmployeeTokenData)
+            };
+
+            fetch('{% url "employee_token_update" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, payload: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to update token.');
+                        return;
+                    }
+                    setResult(result.payload.token || {});
+                    showResultError('Token updated successfully.', true);
+                })
+                .catch(function () {
+                    showResultError('Unable to update token right now. Please try again.');
+                });
+        });
+    }
+
+    if (worksheetQrBtn) {
+        worksheetQrBtn.addEventListener('click', function (event) {
+            var worksheetData = currentEmployeeTokenData && currentEmployeeTokenData.worksheet ? currentEmployeeTokenData.worksheet : null;
+            if (!worksheetData || !worksheetData.exists || !worksheetData.entry_id) {
+                event.preventDefault();
+                showResultError('No worksheet entry linked to this token.');
+                return;
+            }
+
+            event.preventDefault();
+            clearResultError();
+
+            var payload = {
+                token_no: currentEmployeeTokenData.token_no,
+                customer_name: document.getElementById('employeeResultCustomerName').value,
+                cell_no: document.getElementById('employeeResultCellNo').value,
+                worksheet_fields: collectWorksheetPayload(currentEmployeeTokenData)
+            };
+
+            fetch('{% url "employee_token_update" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, payload: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to update token before QR.');
+                        return;
+                    }
+
+                    if (result.payload.token) {
+                        setResult(result.payload.token);
+                    }
+
+                    var latestToken = (result.payload.token || currentEmployeeTokenData || {});
+                    var latestWorksheet = latestToken.worksheet || {};
+                    if (!latestWorksheet.entry_id) {
+                        showResultError('Worksheet entry not found for QR generation.');
+                        return;
+                    }
+
+                    var qrUrl = employeeQrUrlTemplate.replace('/0/', '/' + latestWorksheet.entry_id + '/');
+                    window.open(qrUrl, '_blank', 'noopener');
+                })
+                .catch(function () {
+                    showResultError('Unable to generate QR right now. Please try again.');
+                });
+        });
+    }
+
+    if (worksheetImageUploadBtn) {
+        worksheetImageUploadBtn.addEventListener('click', function () {
+            var worksheetData = currentEmployeeTokenData && currentEmployeeTokenData.worksheet ? currentEmployeeTokenData.worksheet : null;
+            if (!worksheetData || !worksheetData.exists || !worksheetData.entry_id) {
+                showResultError('No worksheet entry linked to this token.');
+                return;
+            }
+            if (!worksheetImageInput || !worksheetImageInput.files || !worksheetImageInput.files.length) {
+                showResultError('Please choose an image file first.');
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('worksheet_entry_id', worksheetData.entry_id);
+            formData.append('particulars_image', worksheetImageInput.files[0]);
+
+            fetch('{% url "employee_token_search_upload_image" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: formData
+            })
+                .then(function (response) {
+                    return response.json().then(function (payload) {
+                        return { ok: response.ok, payload: payload };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to upload image.');
+                        return;
+                    }
+                    if (result.payload.token) {
+                        setResult(result.payload.token);
+                    }
+                    showResultError(result.payload.message || 'Image uploaded successfully.', true);
+                })
+                .catch(function () {
+                    showResultError('Unable to upload image right now. Please try again.');
+                });
+        });
+    }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modal = $('#newChatAssignedModal');
+    var listEl = document.getElementById('newChatAssignedList');
+    var employeeId = '{{ employee.employee_id|default:"" }}';
+    if (!employeeId || !listEl || !modal.length) {
+        return;
+    }
+
+    var storageKey = 'employeeChatAssignmentLastSeen_' + employeeId;
+    var lastSeen = localStorage.getItem(storageKey) || '';
+    var isPolling = false;
+
+    function renderAssignments(assignments) {
+        listEl.innerHTML = '';
+        assignments.forEach(function (item) {
+            var li = document.createElement('li');
+            li.textContent = 'Token ' + (item.token_no || '-') + ' | ' + (item.customer_name || '-') + ' | ' + (item.created_at || '-');
+            listEl.appendChild(li);
+        });
+        modal.modal('show');
+    }
+
+    function pollAssignments() {
+        if (isPolling) {
+            return;
+        }
+        isPolling = true;
+
+        var url = '{% url "employee_chat_assignment_check" %}';
+        if (lastSeen) {
+            url += '?since=' + encodeURIComponent(lastSeen);
+        }
+
+        fetch(url)
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    return { ok: response.ok, payload: payload };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    return;
+                }
+
+                var payload = result.payload || {};
+                var assignments = payload.new_assignments || [];
+                if (assignments.length > 0) {
+                    renderAssignments(assignments);
+                }
+
+                if (payload.latest_assigned_at) {
+                    lastSeen = payload.latest_assigned_at;
+                    localStorage.setItem(storageKey, lastSeen);
+                }
+            })
+            .catch(function () {
+                // Silent retry via timer.
+            })
+            .finally(function () {
+                isPolling = false;
+            });
+    }
+
+    pollAssignments();
+    setInterval(pollAssignments, 15000);
 });
 </script>
 

@@ -198,6 +198,66 @@ from .forms import EmployeeAdminForm
 from datetime import datetime, date
 from django.urls import reverse
 
+
+class LockedEmployeesVisibilityFilter(admin.SimpleListFilter):
+    title = 'Locked Employees'
+    parameter_name = 'show_locked'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('no', 'No'),
+            ('yes', 'Yes'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'yes':
+            return queryset
+        return queryset.filter(locked=False)
+
+    def choices(self, changelist):
+        current_value = self.value() or 'no'
+        yield {
+            'selected': current_value == 'no',
+            'query_string': changelist.get_query_string({self.parameter_name: 'no'}, []),
+            'display': 'No',
+        }
+        yield {
+            'selected': current_value == 'yes',
+            'query_string': changelist.get_query_string({self.parameter_name: 'yes'}, []),
+            'display': 'Yes',
+        }
+
+
+class ActiveEmployeesVisibilityFilter(admin.SimpleListFilter):
+    title = 'Employee Status'
+    parameter_name = 'employee_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('active', 'Active'),
+            ('inactive', 'Inactive'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'inactive':
+            return queryset.exclude(attendance_sessions__logout_time__isnull=True).distinct()
+        return queryset.filter(attendance_sessions__logout_time__isnull=True).distinct()
+
+    def choices(self, changelist):
+        current_value = self.value() or 'active'
+        yield {
+            'selected': current_value == 'active',
+            'query_string': changelist.get_query_string({self.parameter_name: 'active'}, []),
+            'display': 'Active',
+        }
+        yield {
+            'selected': current_value == 'inactive',
+            'query_string': changelist.get_query_string({self.parameter_name: 'inactive'}, []),
+            'display': 'Inactive',
+        }
+
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
@@ -205,7 +265,7 @@ class EmployeeAdmin(admin.ModelAdmin):
     inlines = [SalaryPaymentInline, MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
     list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
-    list_filter = ['department']
+    list_filter = ['department', LockedEmployeesVisibilityFilter, ActiveEmployeesVisibilityFilter]
     change_list_template = "admin/employee_changelist.html"
     change_form_template = "admin/employee_change_form.html"
     
