@@ -16,7 +16,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = True
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
+ALLOWED_HOSTS = ['3.6.37.113', '65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in', 'sitarisolutions.in', 'www.sitarisolutions.in']
 
 # Application definition
 INSTALLED_APPS = [
