@@ -733,15 +733,28 @@ def employee_token_naming(request):
     from .forms import TokenNamingForm
 
     def _build_employee_token_form(data=None):
-        form = TokenNamingForm(data=data, initial={'operator_name': employee.employee_id})
-        form.fields['operator_name'].queryset = Employee.objects.filter(employee_id=employee.employee_id)
-        form.fields['operator_name'].initial = employee.employee_id
+        token_data = data.copy() if data is not None else None
+        initial_data = {}
+
+        if employee.department_id:
+            initial_data['department'] = employee.department_id
+            if token_data is not None:
+                token_data['department'] = str(employee.department_id)
+
+        form = TokenNamingForm(data=token_data, initial=initial_data)
+
+        if employee.department_id and not (token_data and token_data.get('department')):
+            form.fields['department'].initial = employee.department_id
+
+        if (
+            not (token_data and token_data.get('operator_name'))
+            and form.fields['operator_name'].queryset.filter(employee_id=employee.employee_id).exists()
+        ):
+            form.fields['operator_name'].initial = employee.employee_id
         return form
 
     if request.method == 'POST':
-        token_payload = request.POST.copy()
-        token_payload['operator_name'] = str(employee.employee_id)
-        form = _build_employee_token_form(data=token_payload)
+        form = _build_employee_token_form(data=request.POST)
         if form.is_valid():
             token = form.save()
             if request.POST.get('print_token') == '1':
