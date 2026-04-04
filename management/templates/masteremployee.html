@@ -604,8 +604,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div id="employeeWorksheetDynamicFields" class="border rounded p-2" style="background:#fafbfc;"></div>
                     <div class="d-flex flex-wrap align-items-center mt-2" style="gap:8px;">
                         <a id="employeeWorksheetQrBtn" href="#" class="btn btn-sm btn-outline-info disabled" target="_blank" rel="noopener">QR</a>
-                        <input type="file" id="employeeWorksheetImageInput" accept="image/*" class="form-control form-control-sm" style="max-width:220px;">
-                        <button type="button" id="employeeWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload Image</button>
+                        <input type="file" id="employeeWorksheetImageInput" accept="image/*,.pdf,application/pdf" class="form-control form-control-sm" style="max-width:220px;">
+                        <input type="text" id="employeeWorksheetUploadDescription" class="form-control form-control-sm" placeholder="Description (required for PDF)" style="max-width:250px;">
+                        <input type="date" id="employeeWorksheetUploadRenewalDate" class="form-control form-control-sm" style="max-width:170px;" title="Renewal Date">
+                        <button type="button" id="employeeWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload File</button>
                         <a id="employeeWorksheetImageViewBtn" href="#" class="btn btn-sm btn-outline-secondary d-none" target="_blank" rel="noopener">View Image</a>
                     </div>
                 </div>
@@ -869,6 +871,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var worksheetContainer = document.getElementById('employeeWorksheetDynamicFields');
     var worksheetQrBtn = document.getElementById('employeeWorksheetQrBtn');
     var worksheetImageInput = document.getElementById('employeeWorksheetImageInput');
+    var worksheetUploadDescriptionInput = document.getElementById('employeeWorksheetUploadDescription');
+    var worksheetUploadRenewalDateInput = document.getElementById('employeeWorksheetUploadRenewalDate');
     var worksheetImageUploadBtn = document.getElementById('employeeWorksheetImageUploadBtn');
     var worksheetImageViewBtn = document.getElementById('employeeWorksheetImageViewBtn');
     var employeeQrUrlTemplate = '{% url "employee_upi_qr_single" 0 %}';
@@ -1285,13 +1289,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             if (!worksheetImageInput || !worksheetImageInput.files || !worksheetImageInput.files.length) {
-                showResultError('Please choose an image file first.');
+                showResultError('Please choose a file first.');
                 return;
             }
 
             var formData = new FormData();
             formData.append('worksheet_entry_id', worksheetData.entry_id);
             formData.append('particulars_image', worksheetImageInput.files[0]);
+            formData.append('description', worksheetUploadDescriptionInput ? worksheetUploadDescriptionInput.value : '');
+            formData.append('renewal_date', worksheetUploadRenewalDateInput ? worksheetUploadRenewalDateInput.value : '');
 
             fetch('{% url "employee_token_search_upload_image" %}', {
                 method: 'POST',
@@ -1307,16 +1313,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(function (result) {
                     if (!result.ok) {
-                        showResultError(result.payload.error || 'Unable to upload image.');
+                        showResultError(result.payload.error || 'Unable to upload file.');
                         return;
                     }
                     if (result.payload.token) {
                         setResult(result.payload.token);
                     }
-                    showResultError(result.payload.message || 'Image uploaded successfully.', true);
+                    showResultError(result.payload.message || 'File uploaded successfully.', true);
                 })
                 .catch(function () {
-                    showResultError('Unable to upload image right now. Please try again.');
+                    showResultError('Unable to upload file right now. Please try again.');
                 });
         });
     }

@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Sum, Prefetch
 from .models import Department, DepartmentTopUp, DepartmentStock, Employee, ServiceType, Worksheet, Token
 # --- Department Head: Top Up Page ---
 @login_required
@@ -161,7 +161,7 @@ def admin_leave_management(request):
 
         return redirect('admin_leave_management')
 
-    employees = Employee.objects.all().order_by('name')
+    employees = Employee.objects.filter(locked=False).order_by('name')
     records = []
     for emp in employees:
         record = EmployeeNextDayAvailability.objects.filter(employee=emp, target_date=tomorrow).order_by('-responded_at').first()
@@ -186,7 +186,7 @@ def admin_leave_management(request):
 
 # --- Admin Dashboard ---
 def _build_admin_dashboard_context():
-    employees = Employee.objects.select_related('department').order_by('name')
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('name')
     employee_data = [
         {
             'employee': emp,
@@ -223,6 +223,7 @@ def admin_dashboard(request):
         return redirect('/admin/login/?next=/admin-dashboard/')
     from django.contrib import messages
     from django.urls import reverse
+    from urllib.parse import quote
     from .models import Token, TokenChatMessage
 
     if request.method == 'POST':
@@ -230,6 +231,8 @@ def admin_dashboard(request):
         if action == 'send_admin_message':
             token_id = request.POST.get('chat_token_id')
             message_text = (request.POST.get('admin_message') or '').strip()
+            employee_filter = (request.POST.get('chat_employee') or '').strip()
+            query_filter = (request.POST.get('chat_query') or '').strip()
             chat_token = Token.objects.filter(pk=token_id).first()
 
             if not chat_token:
@@ -245,12 +248,20 @@ def admin_dashboard(request):
                     message=message_text,
                 )
 
-            return redirect(f"{reverse('admin_dashboard')}?token={chat_token.token_no}")
+            redirect_params = [f"token={chat_token.token_no}"]
+            if query_filter:
+                redirect_params.append(f"q={quote(query_filter)}")
+            if employee_filter:
+                redirect_params.append(f"employee={quote(employee_filter)}")
+            return redirect(f"{reverse('admin_dashboard')}?{'&'.join(redirect_params)}")
 
     query = (request.GET.get('q') or '').strip()
     selected_token_no = (request.GET.get('token') or '').strip()
+    selected_employee_id = (request.GET.get('employee') or '').strip()
 
-    tokens_qs = Token.objects.all().order_by('-created_at')
+    tokens_qs = Token.objects.select_related('operator_name').all().order_by('-created_at')
+    if selected_employee_id.isdigit():
+        tokens_qs = tokens_qs.filter(operator_name_id=int(selected_employee_id))
     if query:
         tokens_qs = tokens_qs.filter(
             Q(token_no__icontains=query)
@@ -260,7 +271,7 @@ def admin_dashboard(request):
 
     selected_chat_token = None
     if selected_token_no:
-        selected_chat_token = Token.objects.filter(token_no=selected_token_no).first()
+        selected_chat_token = tokens_qs.filter(token_no=selected_token_no).first()
     if not selected_chat_token:
         selected_chat_token = tokens_qs.first()
 
@@ -272,6 +283,8 @@ def admin_dashboard(request):
     base_context.update({
         'sitari_chat_tokens': tokens_qs[:200],
         'sitari_chat_query': query,
+        'sitari_chat_employees': Employee.objects.filter(locked=False).order_by('name'),
+        'selected_chat_employee_id': selected_employee_id,
         'selected_chat_token': selected_chat_token,
         'selected_chat_messages': selected_chat_messages,
     })
@@ -565,7 +578,9 @@ def employee_token_update(request):
 def employee_token_search_upload_image(request):
     import os
     import uuid
+    from datetime import datetime as dt
     from django.conf import settings as _settings
+    from .models import EmployeeUpload, UploadService
 
     employee_id = request.session.get('employee_id')
     if not employee_id:
@@ -578,18 +593,60 @@ def employee_token_search_upload_image(request):
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
     worksheet_entry_id = (request.POST.get('worksheet_entry_id') or '').strip()
+    upload_description = (request.POST.get('description') or '').strip()
+    upload_renewal_date = (request.POST.get('renewal_date') or '').strip()
     particulars_image = request.FILES.get('particulars_image')
 
     if not worksheet_entry_id:
         return JsonResponse({'error': 'Worksheet entry is required.'}, status=400)
     if not particulars_image:
-        return JsonResponse({'error': 'Please choose an image to upload.'}, status=400)
+        return JsonResponse({'error': 'Please choose a file to upload.'}, status=400)
 
     worksheet_entry = Worksheet.objects.filter(pk=worksheet_entry_id, employee=employee).first()
     if not worksheet_entry:
         return JsonResponse({'error': 'Worksheet entry not found.'}, status=404)
 
     ext = os.path.splitext(particulars_image.name)[1].lower()
+    is_pdf_upload = ext == '.pdf'
+
+    if is_pdf_upload:
+        if not upload_description:
+            return JsonResponse({'error': 'Description is required for PDF upload.'}, status=400)
+
+        renewal_date_obj = None
+        if upload_renewal_date:
+            try:
+                renewal_date_obj = dt.strptime(upload_renewal_date, '%Y-%m-%d').date()
+            except ValueError:
+                return JsonResponse({'error': 'Invalid renewal date format.'}, status=400)
+
+        token = Token.objects.select_related('service_type').filter(token_no=worksheet_entry.token_no).first()
+        service_name = ''
+        if token and token.service_type and token.service_type.name:
+            service_name = token.service_type.name.strip()
+        elif worksheet_entry.service:
+            service_name = str(worksheet_entry.service).strip()
+
+        upload_service = None
+        if service_name:
+            upload_service, _ = UploadService.objects.get_or_create(name=service_name)
+
+        EmployeeUpload.objects.create(
+            employee=employee,
+            service=upload_service,
+            description=upload_description,
+            file=particulars_image,
+            renewal_date=renewal_date_obj,
+            mobile_number=worksheet_entry.customer_mobile,
+        )
+
+        if not token:
+            return JsonResponse({'status': 'ok', 'message': 'PDF uploaded to Employee Uploads successfully.'})
+
+        payload = _build_token_search_payload(token, '%d-%m-%Y %I:%M %p')
+        payload['department_scope'] = 'Matched'
+        return JsonResponse({'status': 'ok', 'message': 'PDF uploaded to Employee Uploads successfully.', 'token': payload})
+
     uid = uuid.uuid4().hex[:8]
     entry_date = worksheet_entry.date or timezone.localdate()
     rel_path = f"worksheet_data/{entry_date}/{employee.employee_id}/particulars_{uid}{ext}"
@@ -617,24 +674,67 @@ def employee_token_search_upload_image(request):
 def admin_token_search_upload_image(request):
     import os
     import uuid
+    from datetime import datetime as dt
     from django.conf import settings as _settings
+    from .models import EmployeeUpload, UploadService
 
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed.'}, status=405)
 
     worksheet_entry_id = (request.POST.get('worksheet_entry_id') or '').strip()
+    upload_description = (request.POST.get('description') or '').strip()
+    upload_renewal_date = (request.POST.get('renewal_date') or '').strip()
     particulars_image = request.FILES.get('particulars_image')
 
     if not worksheet_entry_id:
         return JsonResponse({'error': 'Worksheet entry is required.'}, status=400)
     if not particulars_image:
-        return JsonResponse({'error': 'Please choose an image to upload.'}, status=400)
+        return JsonResponse({'error': 'Please choose a file to upload.'}, status=400)
 
     worksheet_entry = Worksheet.objects.select_related('employee').filter(pk=worksheet_entry_id).first()
     if not worksheet_entry:
         return JsonResponse({'error': 'Worksheet entry not found.'}, status=404)
 
     ext = os.path.splitext(particulars_image.name)[1].lower()
+    is_pdf_upload = ext == '.pdf'
+
+    if is_pdf_upload and worksheet_entry.employee_id:
+        if not upload_description:
+            return JsonResponse({'error': 'Description is required for PDF upload.'}, status=400)
+
+        renewal_date_obj = None
+        if upload_renewal_date:
+            try:
+                renewal_date_obj = dt.strptime(upload_renewal_date, '%Y-%m-%d').date()
+            except ValueError:
+                return JsonResponse({'error': 'Invalid renewal date format.'}, status=400)
+
+        token = Token.objects.select_related('service_type').filter(token_no=worksheet_entry.token_no).first()
+        service_name = ''
+        if token and token.service_type and token.service_type.name:
+            service_name = token.service_type.name.strip()
+        elif worksheet_entry.service:
+            service_name = str(worksheet_entry.service).strip()
+
+        upload_service = None
+        if service_name:
+            upload_service, _ = UploadService.objects.get_or_create(name=service_name)
+
+        EmployeeUpload.objects.create(
+            employee=worksheet_entry.employee,
+            service=upload_service,
+            description=upload_description,
+            file=particulars_image,
+            renewal_date=renewal_date_obj,
+            mobile_number=worksheet_entry.customer_mobile,
+        )
+
+        if not token:
+            return JsonResponse({'status': 'ok', 'message': 'PDF uploaded to Employee Uploads successfully.'})
+
+        payload = _build_token_search_payload(token, '%d-%m-%Y %H:%M')
+        return JsonResponse({'status': 'ok', 'message': 'PDF uploaded to Employee Uploads successfully.', 'token': payload})
+
     uid = uuid.uuid4().hex[:8]
     employee_id = worksheet_entry.employee_id or 'admin'
     entry_date = worksheet_entry.date or timezone.localdate()
@@ -738,8 +838,6 @@ def employee_token_naming(request):
 
         if employee.department_id:
             initial_data['department'] = employee.department_id
-            if token_data is not None:
-                token_data['department'] = str(employee.department_id)
 
         form = TokenNamingForm(data=token_data, initial=initial_data)
 
@@ -757,6 +855,7 @@ def employee_token_naming(request):
         form = _build_employee_token_form(data=request.POST)
         if form.is_valid():
             token = form.save()
+            request.session['last_generated_token_id'] = token.id
             if request.POST.get('print_token') == '1':
                 _save_token_to_worksheet(token)
                 return redirect('token_print_view', token_id=token.id)
@@ -802,8 +901,10 @@ def token_print_view(request, token_id):
     )
 
     if not is_staff_user and token.operator_name_id != session_employee.employee_id:
-        messages.error(request, 'You can only view tokens created by you.')
-        return redirect('employee_dashboard')
+        last_generated_token_id = request.session.get('last_generated_token_id')
+        if int(last_generated_token_id or 0) != token.id:
+            messages.error(request, 'You can only view tokens created by you.')
+            return redirect('employee_dashboard')
 
     assistant_access_token = signing.dumps(
         {'token_id': token.id},
@@ -924,7 +1025,13 @@ def admin_ttd_print_all(request):
 @staff_member_required
 def admin_departments(request):
     base_context = _build_admin_dashboard_context()
-    base_context['departments'] = Department.objects.select_related('department_head').prefetch_related('employees').order_by('name')
+    base_context['departments'] = Department.objects.select_related('department_head').prefetch_related(
+        Prefetch(
+            'employees',
+            queryset=Employee.objects.filter(locked=False).order_by('name'),
+            to_attr='unlocked_employees',
+        )
+    ).order_by('name')
 
     selected_department = None
     filtered_employee = None
@@ -1120,7 +1227,7 @@ def admin_departments(request):
 @staff_member_required
 def admin_employees(request):
     base_context = _build_admin_dashboard_context()
-    employees = Employee.objects.select_related('department').order_by('name')
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('name')
     active_employee_ids = set(
         AttendanceSession.objects.filter(logout_time__isnull=True, session_closed=False)
         .values_list('employee_id', flat=True)
@@ -2736,7 +2843,7 @@ def admin_dashboard_worksheet_management(request):
     base_context = _build_admin_dashboard_context()
     base_context.update(_build_worksheet_management_context(now_local))
 
-    employees = Employee.objects.select_related('department').order_by('name')
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('name')
     active_employee_ids = set(
         AttendanceSession.objects.filter(logout_time__isnull=True, session_closed=False)
         .values_list('employee_id', flat=True)
@@ -2752,6 +2859,135 @@ def admin_dashboard_worksheet_management(request):
     })
 
     return render(request, 'admin_dashboard.html', base_context)
+
+
+@staff_member_required
+def admin_dashboard_worksheet_tomorrow_responses_pdf(request):
+    from datetime import datetime as dt, timedelta
+    from django.http import HttpResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    today = timezone.localdate()
+    default_date = next_working_day(today)
+    start_date_raw = (request.GET.get('start_date') or '').strip()
+    end_date_raw = (request.GET.get('end_date') or '').strip()
+
+    start_date = default_date
+    end_date = default_date
+    try:
+        if start_date_raw and end_date_raw:
+            start_date = dt.strptime(start_date_raw, '%Y-%m-%d').date()
+            end_date = dt.strptime(end_date_raw, '%Y-%m-%d').date()
+    except ValueError:
+        start_date = default_date
+        end_date = default_date
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('name')
+
+    employee_ids = list(employees.values_list('employee_id', flat=True))
+    availability_map = {}
+    if employee_ids:
+        availability_qs = EmployeeNextDayAvailability.objects.select_related('employee').filter(
+            employee_id__in=employee_ids,
+            target_date__range=[start_date, end_date],
+        ).order_by('target_date', 'employee_id', '-responded_at')
+        for availability in availability_qs:
+            key = (availability.target_date, availability.employee_id)
+            if key not in availability_map:
+                availability_map[key] = availability
+
+    table_data = [[
+        'Sl.No',
+        'Date',
+        'Employee ID',
+        'Employee Name',
+        'Department',
+        'Will Come',
+        'Response Source',
+        'Responded At',
+    ]]
+
+    serial_no = 1
+    current_date = start_date
+    while current_date <= end_date:
+        for employee in employees:
+            availability = availability_map.get((current_date, employee.employee_id))
+
+            if availability:
+                will_come_value = 'Yes' if availability.will_come else 'No'
+                source_value = availability.get_response_source_display()
+                responded_at_value = (
+                    timezone.localtime(availability.responded_at).strftime('%d-%m-%Y %I:%M %p')
+                    if availability.responded_at else '-'
+                )
+            else:
+                will_come_value = 'No Response'
+                source_value = '-'
+                responded_at_value = '-'
+
+            table_data.append([
+                str(serial_no),
+                current_date.strftime('%d-%m-%Y'),
+                str(employee.employee_id),
+                employee.name or '-',
+                employee.department.name if employee.department else '-',
+                will_come_value,
+                source_value,
+                responded_at_value,
+            ])
+            serial_no += 1
+
+        current_date = current_date + timedelta(days=1)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="employee_responses_{start_date.isoformat()}_{end_date.isoformat()}.pdf"'
+
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=landscape(A4),
+        leftMargin=16,
+        rightMargin=16,
+        topMargin=16,
+        bottomMargin=16,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = [
+        Paragraph('Unlocked Employees - Availability Responses Report', styles['Heading2']),
+        Paragraph(f'Date Range: {start_date.strftime("%d-%m-%Y")} to {end_date.strftime("%d-%m-%Y")}', styles['Normal']),
+        Paragraph(f'Total Employees: {employees.count()}', styles['Normal']),
+        Paragraph(f'Total Rows: {max(0, len(table_data) - 1)}', styles['Normal']),
+        Spacer(1, 10),
+    ]
+
+    table = Table(
+        table_data,
+        repeatRows=1,
+        colWidths=[40, 72, 56, 130, 108, 82, 95, 114],
+    )
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eceff4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1f2937')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#c7ced9')),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 8.5),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 1), (1, -1), 'CENTER'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+    ]))
+
+    elements.append(table)
+    doc.build(elements)
+    return response
 
 
 @staff_member_required
@@ -2805,7 +3041,7 @@ def admin_dashboard_leave_management(request):
 
         return redirect('admin_dashboard_leave_management')
 
-    employees = Employee.objects.all().order_by('name')
+    employees = Employee.objects.filter(locked=False).order_by('name')
     records = []
     for emp in employees:
         record = EmployeeNextDayAvailability.objects.filter(employee=emp, target_date=tomorrow).order_by('-responded_at').first()
@@ -2834,7 +3070,7 @@ def admin_dashboard_targets(request):
     today = now_local.date()
     yesterday = today - timedelta(days=1)
 
-    employees = Employee.objects.select_related('department').order_by('department__name', 'name')
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('department__name', 'name')
 
     if request.method == 'POST':
         for emp in employees:
@@ -2938,7 +3174,7 @@ def admin_dashboard_worksheet_data(request):
             reverse=True
         )
 
-        emp_map = {str(e.employee_id): e.name for e in Employee.objects.all()}
+        emp_map = {str(e.employee_id): e.name for e in Employee.objects.filter(locked=False)}
 
         for date_str in date_folders:
             date_path = os.path.join(worksheet_data_root, date_str)
@@ -3047,6 +3283,13 @@ def admin_dashboard_stocks_management(request):
     forms_department = Department.objects.filter(name='Forms').first()
     notary_bonds_department = Department.objects.filter(name='Notary and Bonds').first()
 
+    def _notify(level, text):
+        try:
+            getattr(messages, level)(request, text)
+        except Exception:
+            # Continue without flash messages when MessageMiddleware is unavailable.
+            pass
+
     stock_date_str = (request.GET.get('stock_date') or '').strip()
     try:
         stock_date = date_cls.fromisoformat(stock_date_str) if stock_date_str else timezone.localdate()
@@ -3058,7 +3301,7 @@ def admin_dashboard_stocks_management(request):
 
         if action == 'update_forms_stock':
             if not forms_department:
-                messages.error(request, 'Forms department not found.')
+                _notify('error', 'Forms department not found.')
                 return redirect('admin_dashboard_stocks_management')
 
             forms_services = ServiceType.objects.filter(departments=forms_department).order_by('name')
@@ -3092,9 +3335,9 @@ def admin_dashboard_stocks_management(request):
 
             if errors:
                 for error in errors:
-                    messages.error(request, error)
+                    _notify('error', error)
             else:
-                messages.success(request, 'Forms stock updated successfully.')
+                _notify('success', 'Forms stock updated successfully.')
 
             selected_stock_date = (request.POST.get('stock_date') or '').strip()
             if selected_stock_date:
@@ -3103,7 +3346,7 @@ def admin_dashboard_stocks_management(request):
 
         if action == 'add_notary_inventory':
             if not notary_bonds_department:
-                messages.error(request, 'Notary and Bonds department not found.')
+                _notify('error', 'Notary and Bonds department not found.')
                 return redirect('admin_dashboard_stocks_management')
 
             bond_type = (request.POST.get('bond_type') or '').strip()
@@ -3117,19 +3360,19 @@ def admin_dashboard_stocks_management(request):
             )
 
             if not valid_types:
-                messages.error(request, 'Please add service types to Notary and Bonds before adding inventory.')
+                _notify('error', 'Please add service types to Notary and Bonds before adding inventory.')
                 return redirect('admin_dashboard_stocks_management')
 
             if bond_type not in set(valid_types):
-                messages.error(request, 'Please select a valid bond type.')
+                _notify('error', 'Please select a valid bond type.')
                 return redirect('admin_dashboard_stocks_management')
 
             try:
                 quantity = int(raw_qty)
-                if quantity <= 0:
+                if quantity == 0:
                     raise ValueError
             except ValueError:
-                messages.error(request, 'Please enter a valid inventory quantity greater than 0.')
+                _notify('error', 'Please enter a valid inventory quantity (positive or negative, not 0).')
                 return redirect('admin_dashboard_stocks_management')
 
             DepartmentInventoryEntry.objects.create(
@@ -3138,7 +3381,7 @@ def admin_dashboard_stocks_management(request):
                 quantity=quantity,
                 note=note or None,
             )
-            messages.success(request, 'Notary inventory added successfully.')
+            _notify('success', 'Notary inventory entry saved successfully.')
             return redirect('admin_dashboard_stocks_management')
 
     forms_stock_rows = []
@@ -3184,6 +3427,8 @@ def admin_dashboard_stocks_management(request):
     notary_inventory_balance_rows = []
     notary_bond_type_options = []
     notary_inventory_history = []
+    notary_admin_entries = []
+    notary_employee_usage_entries = []
     if notary_bonds_department:
         notary_bond_type_options = list(
             ServiceType.objects.filter(departments=notary_bonds_department)
@@ -3197,24 +3442,22 @@ def admin_dashboard_stocks_management(request):
             .annotate(total=Sum('quantity'))
         }
 
-        seen_types = set()
         for bond_type_name in notary_bond_type_options:
             notary_inventory_balance_rows.append({
                 'name': bond_type_name,
                 'total': totals_by_type.get(bond_type_name, 0),
             })
-            seen_types.add(bond_type_name)
-
-        for legacy_type in sorted(totals_by_type.keys()):
-            if legacy_type not in seen_types:
-                notary_inventory_balance_rows.append({
-                    'name': legacy_type,
-                    'total': totals_by_type.get(legacy_type, 0),
-                })
 
         notary_inventory_history = DepartmentInventoryEntry.objects.filter(
             department=notary_bonds_department
         ).order_by('-created_at')[:30]
+
+        for entry in notary_inventory_history:
+            entry_note = (entry.note or '').strip().lower()
+            if 'auto-deducted: worksheet entry' in entry_note:
+                notary_employee_usage_entries.append(entry)
+            else:
+                notary_admin_entries.append(entry)
 
     base_context = _build_admin_dashboard_context()
     base_context.update({
@@ -3226,6 +3469,8 @@ def admin_dashboard_stocks_management(request):
         'notary_inventory_balance_rows': notary_inventory_balance_rows,
         'notary_bond_type_options': notary_bond_type_options,
         'notary_inventory_history': notary_inventory_history,
+        'notary_admin_entries': notary_admin_entries,
+        'notary_employee_usage_entries': notary_employee_usage_entries,
     })
     return render(request, 'admin_dashboard.html', base_context)
 
@@ -3450,12 +3695,15 @@ def admin_dashboard_chatbot(request):
 def admin_dashboard_sitari_chat(request):
     from .models import Token, TokenChatMessage
     from django.urls import reverse
+    from urllib.parse import quote
 
     if request.method == 'POST':
         action = (request.POST.get('action') or '').strip()
         if action == 'send_admin_message':
             token_id = request.POST.get('chat_token_id')
             message_text = (request.POST.get('admin_message') or '').strip()
+            employee_filter = (request.POST.get('chat_employee') or '').strip()
+            query_filter = (request.POST.get('chat_query') or '').strip()
             chat_token = Token.objects.filter(pk=token_id).first()
 
             if not chat_token:
@@ -3471,12 +3719,20 @@ def admin_dashboard_sitari_chat(request):
                     message=message_text,
                 )
 
-            return redirect(f"{reverse('admin_dashboard_sitari_chat')}?token={chat_token.token_no}")
+            redirect_params = [f"token={chat_token.token_no}"]
+            if query_filter:
+                redirect_params.append(f"q={quote(query_filter)}")
+            if employee_filter:
+                redirect_params.append(f"employee={quote(employee_filter)}")
+            return redirect(f"{reverse('admin_dashboard_sitari_chat')}?{'&'.join(redirect_params)}")
 
     query = (request.GET.get('q') or '').strip()
     selected_token_no = (request.GET.get('token') or '').strip()
+    selected_employee_id = (request.GET.get('employee') or '').strip()
 
-    tokens_qs = Token.objects.all().order_by('-created_at')
+    tokens_qs = Token.objects.select_related('operator_name').all().order_by('-created_at')
+    if selected_employee_id.isdigit():
+        tokens_qs = tokens_qs.filter(operator_name_id=int(selected_employee_id))
     if query:
         tokens_qs = tokens_qs.filter(
             Q(token_no__icontains=query)
@@ -3486,7 +3742,7 @@ def admin_dashboard_sitari_chat(request):
 
     selected_chat_token = None
     if selected_token_no:
-        selected_chat_token = Token.objects.filter(token_no=selected_token_no).first()
+        selected_chat_token = tokens_qs.filter(token_no=selected_token_no).first()
     if not selected_chat_token:
         selected_chat_token = tokens_qs.first()
 
@@ -3498,6 +3754,8 @@ def admin_dashboard_sitari_chat(request):
     base_context.update({
         'sitari_chat_tokens': tokens_qs[:200],
         'sitari_chat_query': query,
+        'sitari_chat_employees': Employee.objects.filter(locked=False).order_by('name'),
+        'selected_chat_employee_id': selected_employee_id,
         'selected_chat_token': selected_chat_token,
         'selected_chat_messages': selected_chat_messages,
     })
@@ -4033,7 +4291,7 @@ def admin_employee_targets(request):
     today = now_local.date()
     yesterday = today - timedelta(days=1)
 
-    employees = Employee.objects.select_related('department').order_by('department__name', 'name')
+    employees = Employee.objects.select_related('department').filter(locked=False).order_by('department__name', 'name')
 
     if request.method == 'POST':
         for emp in employees:
@@ -4359,7 +4617,7 @@ def admin_worksheet_data(request):
         )
 
         # Prefetch employees for name lookup
-        emp_map = {str(e.employee_id): e.name for e in Employee.objects.all()}
+        emp_map = {str(e.employee_id): e.name for e in Employee.objects.filter(locked=False)}
 
         for date_str in date_folders:
             date_path = os.path.join(worksheet_data_root, date_str)

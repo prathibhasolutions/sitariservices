@@ -60,6 +60,7 @@ urlpatterns = [
     # Admin Dashboard
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/worksheet-management/', views.admin_dashboard_worksheet_management, name='admin_dashboard_worksheet_management'),
+    path('admin-dashboard/worksheet-management/tomorrow-responses-pdf/', views.admin_dashboard_worksheet_tomorrow_responses_pdf, name='admin_dashboard_worksheet_tomorrow_responses_pdf'),
     path('admin-dashboard/leave-management/', views.admin_dashboard_leave_management, name='admin_dashboard_leave_management'),
     path('admin-dashboard/targets/', views.admin_dashboard_targets, name='admin_dashboard_targets'),
     path('admin-dashboard/worksheet-data/', views.admin_dashboard_worksheet_data, name='admin_dashboard_worksheet_data'),

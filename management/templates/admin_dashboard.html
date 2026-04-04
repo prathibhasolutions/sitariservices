@@ -405,11 +405,11 @@
                             </div>
 
                             <details class="mt-3 department-employee-details">
-                                <summary class="btn btn-sm btn-outline-secondary">Employees ({{ dept.employees.count }})</summary>
+                                <summary class="btn btn-sm btn-outline-secondary">Employees ({{ dept.unlocked_employees|length }})</summary>
                                 <div class="mt-2 border rounded p-2" style="max-height: 220px; overflow-y: auto; background:#fff;">
-                                    {% if dept.employees.all %}
+                                    {% if dept.unlocked_employees %}
                                     <ul class="list-unstyled mb-0">
-                                        {% for emp in dept.employees.all %}
+                                        {% for emp in dept.unlocked_employees %}
                                         <li class="py-1 border-bottom">
                                             <a href="/admin/management/employee/{{ emp.employee_id }}/change/" class="font-weight-bold text-danger text-decoration-none">
                                                 {{ emp.name }}
@@ -737,7 +737,7 @@
                                     </div>
                                     <div class="form-group col-md-2 mb-2">
                                         <label class="small mb-1">Quantity</label>
-                                        <input type="number" name="inventory_quantity" min="1" step="1" class="form-control" required>
+                                        <input type="number" name="inventory_quantity" step="1" class="form-control" required>
                                     </div>
                                     <div class="form-group col-md-4 mb-2">
                                         <label class="small mb-1">Note (Optional)</label>
@@ -750,31 +750,69 @@
                             </form>
 
                             <h6 class="font-weight-bold mb-2">Recent Inventory Entries</h6>
-                            <div class="table-responsive">
-                                <table class="table table-sm table-bordered mb-0">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th>Created</th>
-                                            <th>Bond Type</th>
-                                            <th>Quantity</th>
-                                            <th>Note</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for item in notary_inventory_history %}
-                                        <tr>
-                                            <td>{{ item.created_at|date:"d-m-Y H:i" }}</td>
-                                            <td>{{ item.bond_type }}</td>
-                                            <td>{{ item.quantity }}</td>
-                                            <td>{{ item.note|default:'-' }}</td>
-                                        </tr>
-                                        {% empty %}
-                                        <tr>
-                                            <td colspan="4" class="text-center text-muted">No inventory entries found.</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                            <div class="row">
+                                <div class="col-md-6 mb-3 mb-md-0">
+                                    <div class="border rounded h-100 p-2">
+                                        <h6 class="font-weight-bold mb-2 text-danger">Admin Stock Entries</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        <th>Created</th>
+                                                        <th>Bond Type</th>
+                                                        <th>Quantity</th>
+                                                        <th>Note</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for item in notary_admin_entries %}
+                                                    <tr>
+                                                        <td>{{ item.created_at|date:"d-m-Y H:i" }}</td>
+                                                        <td>{{ item.bond_type }}</td>
+                                                        <td>{{ item.quantity }}</td>
+                                                        <td>{{ item.note|default:'-' }}</td>
+                                                    </tr>
+                                                    {% empty %}
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted">No admin entries found.</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="border rounded h-100 p-2">
+                                        <h6 class="font-weight-bold mb-2 text-primary">Employee Stock Usage</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead class="thead-light">
+                                                    <tr>
+                                                        <th>Created</th>
+                                                        <th>Bond Type</th>
+                                                        <th>Quantity</th>
+                                                        <th>Note</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for item in notary_employee_usage_entries %}
+                                                    <tr>
+                                                        <td>{{ item.created_at|date:"d-m-Y H:i" }}</td>
+                                                        <td>{{ item.bond_type }}</td>
+                                                        <td>{{ item.quantity }}</td>
+                                                        <td>{{ item.note|default:'-' }}</td>
+                                                    </tr>
+                                                    {% empty %}
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted">No employee usage entries found.</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             {% else %}
                             <div class="alert alert-warning mb-0">Notary and Bonds department not found.</div>
@@ -790,7 +828,50 @@
                 <div class="card-body">
                     <h5 class="mb-2 font-weight-bold">Worksheet Management</h5>
                     <p class="mb-1"><strong>Server time:</strong> {{ now_local|date:"d M Y h:i:s A" }}</p>
-                    <p class="ws-meta-note">Daily lock starts at {{ cutoff_time_label }}. If an employee shows locked, click Approve Access to allow entry immediately.</p>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap:10px;">
+                        <p class="ws-meta-note mb-0 flex-grow-1">Daily lock starts at {{ cutoff_time_label }}. If an employee shows locked, click Approve Access to allow entry immediately.</p>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-danger ml-auto"
+                            data-toggle="modal"
+                            data-target="#worksheetResponsesRangeModal"
+                            style="white-space: nowrap;"
+                        >
+                            <i class="fas fa-file-pdf mr-1"></i> Print Responses
+                        </button>
+                    </div>
+
+                    <div class="modal fade" id="worksheetResponsesRangeModal" tabindex="-1" role="dialog" aria-labelledby="worksheetResponsesRangeLabel" aria-hidden="true">
+                        <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="worksheetResponsesRangeLabel">Print Employee Responses</h5>
+                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                </div>
+                                <form method="get" target="_blank" action="{% url 'admin_dashboard_worksheet_tomorrow_responses_pdf' %}">
+                                    <div class="modal-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label for="responsesStartDate">From Date</label>
+                                                <input type="date" id="responsesStartDate" name="start_date" class="form-control" required>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label for="responsesEndDate">To Date</label>
+                                                <input type="date" id="responsesEndDate" name="end_date" class="form-control" required>
+                                            </div>
+                                        </div>
+                                        <p class="text-muted small mb-0">PDF will include all unlocked employees and their response status for each day in this range.</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                        <button type="submit" class="btn btn-danger">Print PDF</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
 
                     <h6 class="font-weight-bold mb-3">Employees Entry Status</h6>
                     <div class="ws-table-wrap">
@@ -1507,7 +1588,16 @@
                     </div>
 
                     <form method="get" class="form-row align-items-end mb-3">
-                        <div class="col-md-10">
+                        <div class="col-md-4">
+                            <label for="sitari-chat-employee" class="mb-1">Filter by Employee</label>
+                            <select id="sitari-chat-employee" name="employee" class="form-control">
+                                <option value="">All Employees</option>
+                                {% for emp in sitari_chat_employees %}
+                                <option value="{{ emp.employee_id }}" {% if selected_chat_employee_id == emp.employee_id|stringformat:"s" %}selected{% endif %}>{{ emp.name }} ({{ emp.employee_id }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
                             <label for="sitari-chat-search" class="mb-1">Search Token / Customer / Mobile</label>
                             <input type="text" id="sitari-chat-search" name="q" value="{{ sitari_chat_query }}" class="form-control" placeholder="Example: 250402001 or customer name">
                             {% if selected_chat_token %}
@@ -1525,9 +1615,9 @@
                                 <div class="list-group list-group-flush">
                                     {% for tk in sitari_chat_tokens %}
                                     {% if request.resolver_match.url_name == 'admin_dashboard' %}
-                                    <a href="{% url 'admin_dashboard' %}?token={{ tk.token_no }}{% if sitari_chat_query %}&q={{ sitari_chat_query|urlencode }}{% endif %}" class="list-group-item list-group-item-action {% if selected_chat_token and tk.id == selected_chat_token.id %}active{% endif %}">
+                                    <a href="{% url 'admin_dashboard' %}?token={{ tk.token_no }}{% if sitari_chat_query %}&q={{ sitari_chat_query|urlencode }}{% endif %}{% if selected_chat_employee_id %}&employee={{ selected_chat_employee_id|urlencode }}{% endif %}" class="list-group-item list-group-item-action {% if selected_chat_token and tk.id == selected_chat_token.id %}active{% endif %}">
                                     {% else %}
-                                    <a href="{% url 'admin_dashboard_sitari_chat' %}?token={{ tk.token_no }}{% if sitari_chat_query %}&q={{ sitari_chat_query|urlencode }}{% endif %}" class="list-group-item list-group-item-action {% if selected_chat_token and tk.id == selected_chat_token.id %}active{% endif %}">
+                                    <a href="{% url 'admin_dashboard_sitari_chat' %}?token={{ tk.token_no }}{% if sitari_chat_query %}&q={{ sitari_chat_query|urlencode }}{% endif %}{% if selected_chat_employee_id %}&employee={{ selected_chat_employee_id|urlencode }}{% endif %}" class="list-group-item list-group-item-action {% if selected_chat_token and tk.id == selected_chat_token.id %}active{% endif %}">
                                     {% endif %}
                                         <div class="font-weight-bold">{{ tk.token_no }}</div>
                                         <div class="small">{{ tk.customer_name }} | {{ tk.cell_no }}</div>
@@ -1567,6 +1657,8 @@
                                         {% csrf_token %}
                                         <input type="hidden" name="action" value="send_admin_message">
                                         <input type="hidden" name="chat_token_id" value="{{ selected_chat_token.id }}">
+                                        <input type="hidden" name="chat_query" value="{{ sitari_chat_query }}">
+                                        <input type="hidden" name="chat_employee" value="{{ selected_chat_employee_id }}">
                                         <input type="text" name="admin_message" class="form-control mr-2" placeholder="Type an admin message..." maxlength="1000" required>
                                         <button type="submit" class="btn btn-success">Send</button>
                                     </form>
@@ -1817,8 +1909,10 @@
                     <div id="resultWorksheetDynamicFields" class="border rounded p-2" style="background:#fafbfc;"></div>
                     <div class="d-flex flex-wrap align-items-center mt-2" style="gap:8px;">
                         <a id="resultWorksheetQrBtn" href="#" class="btn btn-sm btn-outline-info disabled" target="_blank" rel="noopener">QR</a>
-                        <input type="file" id="resultWorksheetImageInput" accept="image/*" class="form-control form-control-sm" style="max-width:220px;">
-                        <button type="button" id="resultWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload Image</button>
+                        <input type="file" id="resultWorksheetImageInput" accept="image/*,.pdf,application/pdf" class="form-control form-control-sm" style="max-width:220px;">
+                        <input type="text" id="resultWorksheetUploadDescription" class="form-control form-control-sm" placeholder="Description (required for PDF)" style="max-width:250px;">
+                        <input type="date" id="resultWorksheetUploadRenewalDate" class="form-control form-control-sm" style="max-width:170px;" title="Renewal Date">
+                        <button type="button" id="resultWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload File</button>
                         <a id="resultWorksheetImageViewBtn" href="#" class="btn btn-sm btn-outline-secondary d-none" target="_blank" rel="noopener">View Image</a>
                     </div>
                 </div>
@@ -1896,6 +1990,8 @@
     var worksheetContainer = document.getElementById('resultWorksheetDynamicFields');
     var worksheetQrBtn = document.getElementById('resultWorksheetQrBtn');
     var worksheetImageInput = document.getElementById('resultWorksheetImageInput');
+    var worksheetUploadDescriptionInput = document.getElementById('resultWorksheetUploadDescription');
+    var worksheetUploadRenewalDateInput = document.getElementById('resultWorksheetUploadRenewalDate');
     var worksheetImageUploadBtn = document.getElementById('resultWorksheetImageUploadBtn');
     var worksheetImageViewBtn = document.getElementById('resultWorksheetImageViewBtn');
     var adminQrUrlTemplate = '{% url "admin_upi_qr_single" 0 %}';
@@ -2328,13 +2424,15 @@
                 return;
             }
             if (!worksheetImageInput || !worksheetImageInput.files || !worksheetImageInput.files.length) {
-                showTokenResultError('Please choose an image file first.');
+                showTokenResultError('Please choose a file first.');
                 return;
             }
 
             var formData = new FormData();
             formData.append('worksheet_entry_id', worksheetData.entry_id);
             formData.append('particulars_image', worksheetImageInput.files[0]);
+            formData.append('description', worksheetUploadDescriptionInput ? worksheetUploadDescriptionInput.value : '');
+            formData.append('renewal_date', worksheetUploadRenewalDateInput ? worksheetUploadRenewalDateInput.value : '');
 
             fetch('{% url "admin_token_search_upload_image" %}', {
                 method: 'POST',
@@ -2346,7 +2444,7 @@
                 .then(async function (response) {
                     var payload = await response.json();
                     if (!response.ok) {
-                        throw new Error(payload.error || 'Unable to upload image.');
+                        throw new Error(payload.error || 'Unable to upload file.');
                     }
                     return payload;
                 })
@@ -2354,10 +2452,10 @@
                     if (payload.token) {
                         setTokenResult(payload.token);
                     }
-                    showTokenResultError(payload.message || 'Image uploaded successfully.', true);
+                    showTokenResultError(payload.message || 'File uploaded successfully.', true);
                 })
                 .catch(function (error) {
-                    showTokenResultError(error.message || 'Unable to upload image.');
+                    showTokenResultError(error.message || 'Unable to upload file.');
                 });
         });
     }
