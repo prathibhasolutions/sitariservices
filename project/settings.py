@@ -49,7 +49,7 @@ MIDDLEWARE = [
     'auditlog.middleware.AuditlogMiddleware',
     'management.middleware.AuditlogIPMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    #'management.ip_restriction.RestrictIPMiddleware',
+    'management.ip_restriction.RestrictIPMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
