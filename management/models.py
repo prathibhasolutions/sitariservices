@@ -937,7 +937,8 @@ class ChatMessage(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Message by {self.employee.name} on {self.application.application_name} at {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+        service_type = self.application.service_type.name if self.application.service_type else "[No Service Type]"
+        return f"Message by {self.employee.name} on {service_type} at {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
 
 
 class Commission(models.Model):
