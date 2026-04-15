@@ -3,7 +3,295 @@
 
 
 {% block content %}
-<div class="container mt-4">
+<style>
+    .worksheet-crystal {
+        --spot-1: rgba(34, 211, 238, 0.18);
+        --spot-2: rgba(96, 165, 250, 0.2);
+        --bg-top: #0f172a;
+        --bg-mid: #111827;
+        --accent: #22d3ee;
+        --accent-2: #60a5fa;
+        --text-main: #e5e7eb;
+        --text-soft: #9ca3af;
+        --glass: rgba(255, 255, 255, 0.08);
+        --glass-border: rgba(255, 255, 255, 0.16);
+        --primary-text: #67e8f9;
+        --header-bg: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(96, 165, 250, 0.22));
+        --input-bg: rgba(15, 23, 42, 0.46);
+        --input-border: rgba(148, 163, 184, 0.4);
+        --table-bg: rgba(2, 6, 23, 0.22);
+        --thead-dark-bg: linear-gradient(120deg, rgba(14, 116, 144, 0.9), rgba(30, 64, 175, 0.9));
+        --thead-light-bg: rgba(30, 41, 59, 0.86);
+        --thead-light-text: #e2e8f0;
+        --btn-success-bg: linear-gradient(135deg, #06b6d4, #2563eb);
+        --btn-primary-bg: linear-gradient(135deg, #0ea5e9, #4f46e5);
+        --btn-secondary-bg: rgba(148, 163, 184, 0.25);
+        background:
+            radial-gradient(circle at 8% 10%, var(--spot-1) 0%, transparent 35%),
+            radial-gradient(circle at 92% 2%, var(--spot-2) 0%, transparent 33%),
+            linear-gradient(160deg, var(--bg-top), var(--bg-mid));
+        color: var(--text-main);
+        border-radius: 22px;
+        padding: 18px;
+        box-shadow: 0 18px 35px rgba(2, 6, 23, 0.35);
+    }
+
+    .worksheet-crystal[data-theme='dark'] {
+        --spot-1: rgba(56, 189, 248, 0.12);
+        --spot-2: rgba(99, 102, 241, 0.14);
+        --bg-top: #0b1020;
+        --bg-mid: #0f172a;
+        --accent: #38bdf8;
+        --accent-2: #818cf8;
+        --text-main: #dbeafe;
+        --glass: rgba(255, 255, 255, 0.06);
+        --glass-border: rgba(148, 163, 184, 0.2);
+        --primary-text: #7dd3fc;
+    }
+
+    .worksheet-crystal[data-theme='light'] {
+        --spot-1: rgba(14, 165, 233, 0.08);
+        --spot-2: rgba(59, 130, 246, 0.1);
+        --bg-top: #f8fbff;
+        --bg-mid: #eef6ff;
+        --accent: #0284c7;
+        --accent-2: #2563eb;
+        --text-main: #0f172a;
+        --text-soft: #475569;
+        --glass: rgba(255, 255, 255, 0.78);
+        --glass-border: rgba(2, 132, 199, 0.18);
+        --primary-text: #0c4a6e;
+        --header-bg: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(59, 130, 246, 0.14));
+        --input-bg: rgba(255, 255, 255, 0.94);
+        --input-border: rgba(14, 116, 144, 0.24);
+        --table-bg: rgba(255, 255, 255, 0.86);
+        --thead-dark-bg: linear-gradient(120deg, rgba(14, 116, 144, 0.85), rgba(29, 78, 216, 0.85));
+        --thead-light-bg: rgba(226, 232, 240, 0.95);
+        --thead-light-text: #0f172a;
+        --btn-success-bg: linear-gradient(135deg, #0891b2, #2563eb);
+        --btn-primary-bg: linear-gradient(135deg, #0284c7, #1d4ed8);
+        --btn-secondary-bg: rgba(148, 163, 184, 0.3);
+    }
+
+    .worksheet-crystal h1,
+    .worksheet-crystal h3,
+    .worksheet-crystal h4,
+    .worksheet-crystal h5,
+    .worksheet-crystal label,
+    .worksheet-crystal strong,
+    .worksheet-crystal p,
+    .worksheet-crystal th,
+    .worksheet-crystal td {
+        color: var(--text-main);
+    }
+
+    .worksheet-crystal .text-primary {
+        color: var(--primary-text) !important;
+    }
+
+    .worksheet-crystal .card {
+        background: var(--glass);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.28);
+    }
+
+    .worksheet-crystal .card-header {
+        background: var(--header-bg);
+        border-bottom: 1px solid var(--glass-border);
+        border-top-left-radius: 16px !important;
+        border-top-right-radius: 16px !important;
+    }
+
+    .worksheet-crystal .form-control,
+    .worksheet-crystal .service-dropdown {
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        color: var(--text-main);
+        border-radius: 12px;
+    }
+
+    .worksheet-crystal .form-control:focus,
+    .worksheet-crystal .service-dropdown:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 0.18rem rgba(34, 211, 238, 0.22);
+    }
+
+    .worksheet-crystal .btn {
+        border-radius: 12px;
+        border: none;
+    }
+
+    .worksheet-crystal .btn-success {
+        background: var(--btn-success-bg);
+    }
+
+    .worksheet-crystal .btn-secondary {
+        background: var(--btn-secondary-bg);
+        color: #e5e7eb;
+    }
+
+    .worksheet-crystal .btn-primary {
+        background: var(--btn-primary-bg);
+    }
+
+    .worksheet-crystal .table {
+        background: var(--table-bg);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .worksheet-crystal .table-bordered td,
+    .worksheet-crystal .table-bordered th {
+        border-color: rgba(148, 163, 184, 0.28);
+    }
+
+    .worksheet-crystal .thead-dark th {
+        background: var(--thead-dark-bg);
+        border-color: rgba(148, 163, 184, 0.2);
+    }
+
+    .worksheet-crystal .thead-light th {
+        background: var(--thead-light-bg);
+        color: var(--thead-light-text);
+    }
+
+    .worksheet-crystal .theme-switcher {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-border);
+        background: var(--glass);
+    }
+
+    .worksheet-crystal .theme-btn {
+        border: 1px solid var(--glass-border);
+        background: rgba(15, 23, 42, 0.2);
+        color: var(--text-main);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+    }
+
+    .worksheet-crystal .theme-btn.active {
+        background: var(--btn-primary-bg);
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 0 0 0.12rem rgba(34, 211, 238, 0.22);
+    }
+
+    .worksheet-crystal[data-theme='light'] .btn-secondary,
+    .worksheet-crystal[data-theme='light'] .theme-btn.active {
+        color: #fff;
+    }
+
+    .worksheet-crystal .table-hover tbody tr:hover,
+    .worksheet-crystal .table-striped tbody tr:nth-of-type(odd) {
+        background: rgba(148, 163, 184, 0.08);
+    }
+
+    .worksheet-crystal table tfoot tr,
+    .worksheet-crystal table tfoot td,
+    .worksheet-crystal table tfoot th,
+    .worksheet-crystal tr.bg-light td,
+    .worksheet-crystal tr.bg-light th {
+        background: rgba(15, 23, 42, 0.78) !important;
+        color: #eaf2ff !important;
+        border-color: rgba(148, 163, 184, 0.28) !important;
+    }
+
+    .worksheet-crystal table tfoot .text-right,
+    .worksheet-crystal table tfoot .font-weight-bold {
+        color: #eaf2ff !important;
+    }
+
+    .worksheet-crystal[data-theme='dark'] table tfoot tr,
+    .worksheet-crystal[data-theme='dark'] table tfoot td,
+    .worksheet-crystal[data-theme='dark'] table tfoot th,
+    .worksheet-crystal[data-theme='dark'] tr.bg-light td,
+    .worksheet-crystal[data-theme='dark'] tr.bg-light th {
+        background: rgba(2, 6, 23, 0.88) !important;
+        color: #dbeafe !important;
+    }
+
+    .worksheet-crystal[data-theme='light'] table tfoot tr,
+    .worksheet-crystal[data-theme='light'] table tfoot td,
+    .worksheet-crystal[data-theme='light'] table tfoot th,
+    .worksheet-crystal[data-theme='light'] tr.bg-light td,
+    .worksheet-crystal[data-theme='light'] tr.bg-light th {
+        background: rgba(226, 232, 240, 0.95) !important;
+        color: #0f172a !important;
+    }
+
+    .worksheet-crystal .badge-success {
+        background: #10b981;
+    }
+
+    .worksheet-crystal .badge-warning {
+        background: #f59e0b;
+        color: #111827;
+    }
+
+    @media (max-width: 768px) {
+        .worksheet-crystal {
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .worksheet-crystal h1 {
+            font-size: 1.7rem;
+        }
+    }
+
+    .worksheet-panels {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .worksheet-panel-left,
+    .worksheet-panel-right {
+        min-width: 0;
+    }
+
+    .worksheet-panel-left .card,
+    .worksheet-panel-right .card {
+        margin-bottom: 18px;
+    }
+
+    @media print {
+        .worksheet-crystal {
+            background: #fff !important;
+            color: #000 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+
+<div class="container mt-4 worksheet-crystal">
+    <div class="theme-switcher">
+        <span><strong>Theme:</strong></span>
+        <button type="button" class="theme-btn" data-theme="light">Light</button>
+        <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+        <button type="button" class="theme-btn" data-theme="radiant">Radiant</button>
+        <div class="ml-auto">
+            {% if can_use_token_entry %}
+            <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#tokenEntryModal">Token +</button>
+            {% else %}
+            <button type="button" class="btn btn-secondary" disabled title="Token Entry Access is disabled by admin">Token +</button>
+            {% endif %}
+        </div>
+    </div>
+
     {% if messages %}
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -19,145 +307,154 @@
         <h3 class="mb-4 col-6">Employee: <span class="text-primary">{{ employee.name }}</span></h3>
         <h3 class="mb-4 col-6">Department: <span class="text-primary">{{ department.name }}</span></h3>
     </div>
+
+    <div class="worksheet-panels">
+        <div class="worksheet-panel-left">
     
-    <!-- Section to Add New Entry -->
-    <div class="card mb-4 shadow-sm">
-        <div class="card-header">
-            <h4>Add New Entry for {{ today|date:"d M Y" }}</h4>
-        </div>
-        <div class="card-body">
-                        <!-- Attendance and Breaks tables moved to print-only section below -->
-                <!-- Hidden print-only section for attendance and break sessions -->
-                <div class="d-none" id="attendance-breaks-for-print">
-                    <!-- Today's Attendance Sessions Table -->
-                    <div class="mb-4">
-                        <h5>Today's Attendance Sessions</h5>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Login Time</th>
-                                        <th>Logout Time</th>
-                                        <th>Duration</th>
-                                        <th>Reason</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for session in todays_sessions %}
-                                    <tr>
-                                        <td>{{ forloop.counter }}</td>
-                                        <td>{{ session.login_time|date:'h:i A' }}</td>
-                                        <td>
-                                            {% if session.logout_time %}
-                                                {{ session.logout_time|date:'h:i A' }}
-                                            {% else %}
-                                                <span class="text-warning">Active</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {{ session.duration_str|default:"-" }}
-                                        </td>
-                                        <td>{{ session.logout_reason|default:'-' }}</td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="5" class="text-center">No attendance sessions for today.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <!-- Today's Break Sessions Table -->
-                    <div class="mb-4">
-                        <h5>Today's Break Sessions</h5>
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Start Time</th>
-                                        <th>End Time</th>
-                                        <th>Duration</th>
-                                        <th>Reason</th>
-                                        <th>Approved</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for break in todays_breaks %}
-                                    <tr>
-                                        <td>{{ forloop.counter }}</td>
-                                        <td>{{ break.start_time|date:'h:i A' }}</td>
-                                        <td>
-                                            {% if break.end_time %}
-                                                {{ break.end_time|date:'h:i A' }}
-                                            {% else %}
-                                                <span class="text-warning">Active</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% with duration=break.duration %}
-                                                {% if duration %}
-                                                    {% with total_seconds=duration.total_seconds %}
-                                                        {% widthratio total_seconds 3600 1 as hours %}
-                                                        {% widthratio total_seconds|floatformat:0|add:'-1' 60 1 as minutes %}
-                                                        {{ hours }}h {{ minutes }}m
-                                                    {% endwith %}
-                                                {% else %}-{% endif %}
-                                            {% endwith %}
-                                        </td>
-                                        <td>{{ break.logout_reason|default:'-' }}</td>
-                                        <td>
-                                            {% if break.approved %}
-                                                <span class="badge badge-success">Yes</span>
-                                            {% else %}
-                                                <span class="badge badge-danger">No</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="6" class="text-center">No break sessions for today.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+    {% if can_use_token_entry %}
+    <div class="modal fade" id="tokenEntryModal" tabindex="-1" role="dialog" aria-labelledby="tokenEntryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 id="tokenEntryModalLabel" class="mb-0">Add New Entry for {{ today|date:"d M Y" }}</h4>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="form_type" value="worksheet_entry">
-                <div class="form-row align-items-end g-3">
-                    {% for field in form %}
-                        <div class="col mb-2">
-                            <div class="form-group mb-0">
-                                {{ field.label_tag }}
-                                {% if field.name == 'service' %}
-                                    <select name="service" class="form-control service-dropdown">
-                                        <option value="">-- Select a Service --</option>
-                                        {% for st in field.field.queryset %}
-                                            <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
+                <div class="card-body">
+                    <!-- Attendance and Breaks tables moved to print-only section below -->
+                    <!-- Hidden print-only section for attendance and break sessions -->
+                    <div class="d-none" id="attendance-breaks-for-print">
+                        <!-- Today's Attendance Sessions Table -->
+                        <div class="mb-4">
+                            <h5>Today's Attendance Sessions</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Login Time</th>
+                                            <th>Logout Time</th>
+                                            <th>Duration</th>
+                                            <th>Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for session in todays_sessions %}
+                                        <tr>
+                                            <td>{{ forloop.counter }}</td>
+                                            <td>{{ session.login_time|date:'h:i A' }}</td>
+                                            <td>
+                                                {% if session.logout_time %}
+                                                    {{ session.logout_time|date:'h:i A' }}
+                                                {% else %}
+                                                    <span class="text-warning">Active</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {{ session.duration_str|default:"-" }}
+                                            </td>
+                                            <td>{{ session.logout_reason|default:'-' }}</td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="5" class="text-center">No attendance sessions for today.</td></tr>
                                         {% endfor %}
-                                    </select>
-                                    <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
-                                {% else %}
-                                    {{ field }}
-                                {% endif %}
-                                {% if field.errors %}
-                                    <div class="text-danger small">{{ field.errors.as_text }}</div>
-                                {% endif %}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                    {% endfor %}
-                    <script src="{% static 'management/service_amount.js' %}"></script>
-                    <div class="col-auto mb-2 d-flex align-items-end">
-                        <div class="form-group mb-0 w-100">
-                            <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success w-100" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
+                        <!-- Today's Break Sessions Table -->
+                        <div class="mb-4">
+                            <h5>Today's Break Sessions</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Start Time</th>
+                                            <th>End Time</th>
+                                            <th>Duration</th>
+                                            <th>Reason</th>
+                                            <th>Approved</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for break in todays_breaks %}
+                                        <tr>
+                                            <td>{{ forloop.counter }}</td>
+                                            <td>{{ break.start_time|date:'h:i A' }}</td>
+                                            <td>
+                                                {% if break.end_time %}
+                                                    {{ break.end_time|date:'h:i A' }}
+                                                {% else %}
+                                                    <span class="text-warning">Active</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% with duration=break.duration %}
+                                                    {% if duration %}
+                                                        {% with total_seconds=duration.total_seconds %}
+                                                            {% widthratio total_seconds 3600 1 as hours %}
+                                                            {% widthratio total_seconds|floatformat:0|add:'-1' 60 1 as minutes %}
+                                                            {{ hours }}h {{ minutes }}m
+                                                        {% endwith %}
+                                                    {% else %}-{% endif %}
+                                                {% endwith %}
+                                            </td>
+                                            <td>{{ break.logout_reason|default:'-' }}</td>
+                                            <td>
+                                                {% if break.approved %}
+                                                    <span class="badge badge-success">Yes</span>
+                                                {% else %}
+                                                    <span class="badge badge-danger">No</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="6" class="text-center">No break sessions for today.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="worksheet_entry">
+                        <div>
+                            {% for field in form %}
+                                {% if field.name == 'particulars_image' %}{% else %}
+                                <div class="form-group mb-2">
+                                    {{ field.label_tag }}
+                                    {% if field.name == 'service' %}
+                                        <select name="service" class="form-control service-dropdown">
+                                            <option value="">-- Select a Service --</option>
+                                            {% for st in field.field.queryset %}
+                                                <option value="{{ st.pk }}" data-amount="{{ st.amount|floatformat:'2' }}">{{ st.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <span id="service-amount-display" class="ml-2 text-info font-weight-bold"></span>
+                                    {% else %}
+                                        {{ field }}
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        <div class="text-danger small">{{ field.errors.as_text }}</div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                            <script src="{% static 'management/service_amount.js' %}"></script>
+                            <div class="form-group mb-0 mt-3">
+                                <button id="worksheet-add-entry-btn" type="submit" class="btn btn-success" {% if is_worksheet_entry_locked %}disabled title="Daily worksheet entry is closed after {{ cutoff_time_label }}"{% endif %}>Add Entry</button>
+                            </div>
+                        </div>
+                    </form>
+                    <small id="worksheet-cutoff-message" class="text-danger d-block mt-2 {% if not is_worksheet_entry_locked %}d-none{% endif %}">Daily worksheet entry is closed after {{ cutoff_time_label }}.</small>
                 </div>
-            </form>
-            <small id="worksheet-cutoff-message" class="text-danger d-block mt-2 {% if not is_worksheet_entry_locked %}d-none{% endif %}">Daily worksheet entry is closed after {{ cutoff_time_label }}.</small>
+            </div>
         </div>
     </div>
+    {% endif %}
 
 
     <!-- This entire section will only appear if the report for today has not been submitted yet -->
@@ -199,6 +496,9 @@
 
 
  <!-- Section for Today's Entries -->
+        </div>
+
+        <div class="worksheet-panel-right">
     <div class="card mb-4 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>Today's Entries ({{ today|date:"d M Y" }})</h4>
@@ -235,6 +535,9 @@
                                 <th>Token No</th><th>Customer Name</th><th>Service</th><th>Particulars</th><th>Bonds Sl. No</th><th>Payment</th>
                             {% endif %}
                             <th>Amount (₹)</th>
+                            <th class="no-print">QR</th>
+                            <th class="no-print">Image</th>
+                            <th class="no-print">Edit</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -256,6 +559,29 @@
                                 <td>{{ entry.token_no|default:"-" }}</td><td>{{ entry.customer_name|default:"-" }}</td><td>{{ entry.service|default:"-" }}</td><td>{{ entry.particulars|default:"-" }}</td><td>{{ entry.bonds_sno|default:"-" }}</td><td>{{ entry.payment|floatformat:2 }}</td>
                             {% endif %}
                             <td>{{ entry.amount|floatformat:2 }}</td>
+                            <td style="text-align: center;">
+                                <a href="{% url 'employee_upi_qr_single' entry.id %}" class="btn btn-sm btn-outline-info" title="Generate QR for this entry" style="display:inline-flex; align-items:center; gap:4px; padding:4px 8px;">
+                                    <i class="bi bi-qr-code"></i>
+                                </a>
+                            </td>
+                            <td style="text-align: center;">
+                                <form method="post" enctype="multipart/form-data" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="entry_id" value="{{ entry.id }}">
+                                    <input type="hidden" name="upload_image" value="1">
+                                    <input type="file" name="particulars_image" accept="image/*" class="form-control form-control-sm" style="font-size:0.75rem; display:inline-block; width:80px; padding:2px 4px; margin-right:2px;">
+                                    <button type="submit" class="btn btn-sm btn-info" style="padding:4px 8px;"><i class="fas fa-upload"></i></button>
+                                </form>
+                            </td>
+                            <td class="no-print" style="text-align: center;">
+                                {% if not entry.approved %}
+                                    <a href="{% url 'worksheet-edit' entry.id %}" class="btn btn-primary btn-sm">
+                                        Edit
+                                    </a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No entries for today.</td></tr>
@@ -267,33 +593,36 @@
                             <td></td>
                             {# Insert empty cells for each data column before payment/amount #}
                             {% if department.name == 'Mee Seva' or department.name == 'Online Hub' %}
-                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Aadhaar' %}
-                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Bhu Bharathi' %}
-                                <td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Forms' %}
-                                <td class="text-right">Total</td>
+                                <td class="text-right">Total</td><td></td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Xerox' %}
-                                <td class="text-right">Total</td>
+                                <td class="text-right">Total</td><td></td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Notary and Bonds' %}
-                                <td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td>
+                                <td></td><td></td><td></td><td class="text-right">Total</td><td>₹{{ todays_total_payment|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% endif %}
                             <td>₹{{ todays_total_amount|floatformat:2 }}</td>
+                            <td class="no-print"></td>
+                            <td class="no-print"></td>
                         </tr>
                         <tr class="font-weight-bold bg-light">
                             {% if department.name == 'Mee Seva' or department.name == 'Online Hub' or department.name == 'Aadhaar' %}
-                                <td colspan="9" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="9" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Bhu Bharathi' %}
-                                <td colspan="7" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="7" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Notary and Bonds' %}
-                                <td colspan="6" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="6" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% elif department.name == 'Forms' or department.name == 'Xerox' %}
-                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% else %}
-                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td>
+                                <td colspan="2" class="text-right">Today's Worksheet Commission (5%):</td><td>₹{{ todays_commission|floatformat:2 }}</td><td class="no-print"></td><td class="no-print"></td>
                             {% endif %}
-                            <td>₹{{ todays_commission|floatformat:2 }}</td>
+                            <td></td>
+                            <td class="no-print"></td>
                         </tr>
                         </tr>
                     </tfoot>
@@ -347,9 +676,11 @@
     <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4>All Entries</h4>
+            {% if has_history_filters %}
             <button class="btn btn-secondary btn-sm" onclick="printHistoricalReport()">
                 <i class="fas fa-print"></i> Print Report
             </button>
+            {% endif %}
         </div>
         <div class="card-body" id="historical-report-printable">
             <div class="d-none" id="historical-print-header">
@@ -384,7 +715,8 @@
                     <a href="{% url 'worksheet' %}" class="btn btn-secondary ml-2">Clear</a>
                 </div>
             </form>
-            
+
+            {% if has_history_filters %}
             <div class="table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead class="thead-light">
@@ -406,7 +738,6 @@
                             {% endif %}
                             <th>Amount (₹)</th>
                             <th>Status</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -435,14 +766,6 @@
                                     <span class="badge badge-warning">Pending</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                {% if not entry.approved %}
-                                    <button type="button" class="btn btn-primary btn-sm edit-btn" 
-                                            data-url="{% url 'worksheet-edit' entry.id %}">
-                                        Edit
-                                    </button>
-                                {% endif %}
-                            </td>
                         </tr>
                         {% empty %}
                         <tr><td colspan="100%" class="text-center">No historical entries found for the selected filter.</td></tr>
@@ -450,32 +773,29 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                Select a date range or enter a mobile number to view historical entries.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
         </div>
     </div>
 </div>
 
 
 <!-- Modal and Scripts remain unchanged -->
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
 
 
-
-
-<!-- Bootstrap Modal for the Edit Form (Unchanged) -->
-<div class="modal fade" id="editEntryModal" tabindex="-1" role="dialog" aria-labelledby="editEntryModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="editEntryModalLabel">Edit Worksheet Entry</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body" id="edit-form-container">
-        <div class="text-center">Loading...</div>
-      </div>
-    </div>
-  </div>
-</div>
 
 
 <script>
@@ -520,36 +840,26 @@
     }
 
     function printHistoricalReport() {
-        var printHeader = document.getElementById('historical-print-header').innerHTML;
-        var printContent = document.getElementById('historical-report-printable').innerHTML;
-        var originalContent = document.body.innerHTML;
-        
-        document.body.innerHTML = '<html><head><title>Print Historical Report</title>' +
-            '<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">' +
-            '<style>body { padding: 20px; } .form-row, .btn, .edit-btn { display: none !important; }</style>' +
-            '</head><body>' + printHeader + printContent + '</body></html>';
-        
-        window.print();
-        
-        document.body.innerHTML = originalContent;
-        location.reload(); 
+        const headerEl = document.getElementById('historical-print-header');
+        const reportEl = document.getElementById('historical-report-printable');
+        const headerHTML = headerEl ? headerEl.innerHTML : '';
+        const reportHTML = reportEl ? reportEl.innerHTML : '';
+
+        const printWindow = window.open('', '', 'height=800,width=1000');
+        printWindow.document.write('<html><head><title>Print Historical Report</title>');
+        printWindow.document.write('<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">');
+        printWindow.document.write('<style>body { padding: 20px; } .form-row, .btn, .edit-btn, .no-print { display: none !important; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(headerHTML + reportHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+
+        setTimeout(function() {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
     }
-
-
-
-    document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('edit-btn')) {
-            const url = event.target.dataset.url;
-            
-            fetch(url)
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('edit-form-container').innerHTML = html;
-                    $('#editEntryModal').modal('show');
-                })
-                .catch(err => console.error('Failed to load edit form:', err));
-        }
-    });
 
     function lockWorksheetEntryUI() {
         const addBtn = document.getElementById('worksheet-add-entry-btn');
@@ -578,7 +888,58 @@
         window.setTimeout(lockWorksheetEntryUI, msUntilCutoff);
     }
 
-    document.addEventListener('DOMContentLoaded', scheduleWorksheetCutoff);
+    function initWorksheetTheme() {
+        const wrapper = document.querySelector('.worksheet-crystal');
+        if (!wrapper) {
+            return;
+        }
+
+        const buttons = Array.from(document.querySelectorAll('.theme-btn'));
+        const storedTheme = localStorage.getItem('worksheetTheme') || 'radiant';
+        const validThemes = ['light', 'dark', 'radiant'];
+        const initialTheme = validThemes.includes(storedTheme) ? storedTheme : 'radiant';
+
+        const applyTheme = (themeName) => {
+            const normalized = themeName === 'radiant' ? '' : themeName;
+            if (normalized) {
+                wrapper.setAttribute('data-theme', normalized);
+            } else {
+                wrapper.removeAttribute('data-theme');
+            }
+            localStorage.setItem('worksheetTheme', themeName);
+            buttons.forEach((btn) => {
+                btn.classList.toggle('active', btn.dataset.theme === themeName);
+            });
+        };
+
+        buttons.forEach((btn) => {
+            btn.addEventListener('click', function () {
+                applyTheme(this.dataset.theme);
+            });
+        });
+
+        applyTheme(initialTheme);
+    }
+
+    function initTokenEntryModal() {
+        const tokenEntryAllowed = '{{ can_use_token_entry|yesno:"true,false" }}' === 'true';
+        if (!tokenEntryAllowed) {
+            return;
+        }
+        const shouldOpenModal = {{ form.errors|yesno:"true,false" }};
+        if (!shouldOpenModal) {
+            return;
+        }
+        if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+            jQuery('#tokenEntryModal').modal('show');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        scheduleWorksheetCutoff();
+        initWorksheetTheme();
+        initTokenEntryModal();
+    });
 </script>
 
 

@@ -1,9 +1,19 @@
+# Add this import for models.Sum usage
+from django.db import models
 # Monkey-patch admin login view to use custom OTP login
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 from django.utils.deprecation import MiddlewareMixin
 from .admin_otp_login import admin_login_with_otp
 from django.contrib import admin as django_admin
+from django.contrib import admin as _adm
+from .models import Holiday
+
+@_adm.register(Holiday)
+class HolidayAdmin(_adm.ModelAdmin):
+    list_display = ('date', 'reason', 'created_at')
+    search_fields = ('reason',)
+    ordering = ('date',)
 
 def custom_admin_login(request, extra_context=None):
     return admin_login_with_otp(request)
@@ -89,6 +99,9 @@ class TodoTaskAdmin(admin.ModelAdmin):
         return (obj.description[:40] + '...') if len(obj.description) > 40 else obj.description
     short_description.short_description = 'Description'
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
     list_display = ('short_description', 'employee', 'due_time', 'created_at', 'completed')
     search_fields = ('description', 'employee__name')
     list_filter = ('employee', 'completed')
@@ -104,6 +117,7 @@ from .models import (
     Department,
     DepartmentInventoryEntry,
     DepartmentTopUp,
+    DepartmentStock,
     BreakSession,
     Application,
     ApplicationAssignment,
@@ -132,7 +146,20 @@ class ManagedLinkAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
 
 
-from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction
+from .models import TrainingBonus, PerformanceBonus, ExtraDaysBonus, MonthlyDeduction, SalaryPayment
+
+
+class ExcludeLockedEmployeesMixin:
+    """Hides records belonging to locked employees from list views,
+    and removes locked employees from FK dropdowns in all non-Employee admin pages."""
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'employee':
+            kwargs['queryset'] = Employee.objects.filter(locked=False).order_by('name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class TrainingBonusInline(admin.TabularInline):
@@ -154,7 +181,16 @@ class ExtraDaysBonusInline(admin.TabularInline):
 class MonthlyDeductionInline(admin.TabularInline):
     model = MonthlyDeduction
     extra = 0  # Show one empty row for adding a new deduction
-    fields = ('month', 'year', 'amount', 'notes')   
+    fields = ('month', 'year', 'amount', 'notes')
+
+
+class SalaryPaymentInline(admin.TabularInline):
+    model = SalaryPayment
+    extra = 0
+    fields = ('date', 'payment_type', 'amount', 'remarks')
+    verbose_name = 'Payment'
+    verbose_name_plural = 'Payments'
+
 # In your management/admin.py file
 
 from django.templatetags.static import static # Import the static tag function
@@ -162,20 +198,80 @@ from .forms import EmployeeAdminForm
 from datetime import datetime, date
 from django.urls import reverse
 
+
+class LockedEmployeesVisibilityFilter(admin.SimpleListFilter):
+    title = 'Locked Employees'
+    parameter_name = 'show_locked'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('no', 'No'),
+            ('yes', 'Yes'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'yes':
+            return queryset
+        return queryset.filter(locked=False)
+
+    def choices(self, changelist):
+        current_value = self.value() or 'no'
+        yield {
+            'selected': current_value == 'no',
+            'query_string': changelist.get_query_string({self.parameter_name: 'no'}, []),
+            'display': 'No',
+        }
+        yield {
+            'selected': current_value == 'yes',
+            'query_string': changelist.get_query_string({self.parameter_name: 'yes'}, []),
+            'display': 'Yes',
+        }
+
+
+class ActiveEmployeesVisibilityFilter(admin.SimpleListFilter):
+    title = 'Employee Status'
+    parameter_name = 'employee_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('active', 'Active'),
+            ('inactive', 'Inactive'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'inactive':
+            return queryset.exclude(attendance_sessions__logout_time__isnull=True).distinct()
+        return queryset.filter(attendance_sessions__logout_time__isnull=True).distinct()
+
+    def choices(self, changelist):
+        current_value = self.value() or 'active'
+        yield {
+            'selected': current_value == 'active',
+            'query_string': changelist.get_query_string({self.parameter_name: 'active'}, []),
+            'display': 'Active',
+        }
+        yield {
+            'selected': current_value == 'inactive',
+            'query_string': changelist.get_query_string({self.parameter_name: 'inactive'}, []),
+            'display': 'Inactive',
+        }
+
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
     form = EmployeeAdminForm
     # --- 1. Display and Search Settings ---
-    inlines = [MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
+    inlines = [SalaryPaymentInline, MonthlyDeductionInline, TrainingBonusInline, PerformanceBonusInline, ExtraDaysBonusInline]
     list_display = ['profile_pic_thumbnail', 'employee_id', 'name', 'mobile_number', 'department', 'display_status']
     search_fields = ['name', 'mobile_number']
-    list_filter = ['department']
+    list_filter = ['department', LockedEmployeesVisibilityFilter, ActiveEmployeesVisibilityFilter]
     change_list_template = "admin/employee_changelist.html"
     change_form_template = "admin/employee_change_form.html"
     
     # --- 2. THIS IS THE FIX: Fieldset and Readonly Field Configuration ---
     # We define a readonly field to show the image preview.
-    readonly_fields = ('profile_pic_preview',)
+    readonly_fields = ('profile_pic_preview', 'total_paid_month', 'salary_balance', 'total_commission_paid_month', 'commission_due')
 
     fieldsets = (
         ('Personal Information', {
@@ -190,7 +286,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             )
         }),
         ('Salary & Compensation', {
-            'fields': ('salary', 'pf', 'esi')
+            'fields': ('salary', 'pf', 'esi', 'total_paid_month', 'salary_balance', 'total_commission_paid_month', 'commission_due')
         }),
         ('Working Hours', {
             'fields': ('working_start_time', 'working_end_time')
@@ -237,6 +333,84 @@ class EmployeeAdmin(admin.ModelAdmin):
             )
         return "(No Image)"
 
+    @admin.display(description='Salary Paid (This Month)')
+    def total_paid_month(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='salary',
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        return format_html(
+            '<strong style="font-size:1.1em;">₹{}</strong>',
+            f'{total:,.2f}'
+        )
+
+    @admin.display(description='Salary Balance (This Month)')
+    def salary_balance(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total_paid = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='salary',
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        balance = (obj.salary or 0) - total_paid
+        color = 'green' if balance >= 0 else 'red'
+        return format_html(
+            '<strong style="font-size:1.1em; color:{};">₹{}</strong>',
+            color, f'{balance:,.2f}'
+        )
+
+    @admin.display(description='Commission Paid (This Month)')
+    def total_commission_paid_month(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        now = timezone.now()
+        total = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='commission',
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        return format_html(
+            '<strong style="font-size:1.1em;">₹{}</strong>',
+            f'{total:,.2f}'
+        )
+
+    @admin.display(description='Commission Due (This Month)')
+    def commission_due(self, obj):
+        if not obj.pk:
+            return '-'
+        from django.db.models import Sum
+        from django.utils import timezone
+        from decimal import Decimal
+        now = timezone.now()
+        earnings = obj.get_current_month_earnings(now.year, now.month)
+        total_earned = (
+            (earnings.get('worksheet_commissions') or Decimal('0')) +
+            (earnings.get('application_commissions') or Decimal('0'))
+        )
+        total_paid = obj.salary_payments.filter(
+            date__year=now.year,
+            date__month=now.month,
+            payment_type='commission',
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        due = total_earned - total_paid
+        color = 'green' if due > 0 else ('gray' if due == 0 else 'red')
+        return format_html(
+            '<strong style="font-size:1.1em; color:{};">₹{}</strong>',
+            color, f'{due:,.2f}'
+        )
+
     @admin.display(description='Picture')
     def profile_pic_thumbnail(self, obj):
         """Creates a small thumbnail for the list view."""
@@ -258,6 +432,13 @@ class EmployeeAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green;">&#128994; Active</span>')
         return format_html('<span style="color: red;">&#128308; Inactive</span>')
     display_status.short_description = 'Status'
+
+    def get_search_results(self, request, queryset, search_term):
+        """Exclude locked employees from autocomplete results used by FK dropdowns elsewhere."""
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if 'app_label' in request.GET and 'model_name' in request.GET:
+            queryset = queryset.filter(locked=False)
+        return queryset, use_distinct
 
     # --- 6. MODIFIED: Add the new Salary Report URL ---
     def get_urls(self):
@@ -313,7 +494,7 @@ class EmployeeAdmin(admin.ModelAdmin):
                         employee=employee,
                         date__year=year,
                         date__month=month,
-                    )
+                    ).exclude(employee__worksheet_hidden=True)
 
                     totals_by_date = {
                         entry['date']: entry['total_amount'] or Decimal('0.00')
@@ -364,6 +545,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             year, month = map(int, month_str.split('-'))
             worksheet_totals = (
                 Worksheet.objects.filter(date__year=year, date__month=month)
+                .exclude(employee__worksheet_hidden=True)
                 .values('employee_id')
                 .annotate(total_amount=Sum('amount'))
             )
@@ -372,7 +554,7 @@ class EmployeeAdmin(admin.ModelAdmin):
                 for entry in worksheet_totals
             }
 
-            for employee in Employee.objects.filter(locked=False).order_by('employee_id'):
+            for employee in Employee.objects.filter(locked=False, worksheet_hidden=False).order_by('employee_id'):
                 total_amount = totals_by_employee.get(employee.employee_id, Decimal('0.00'))
                 commission = total_amount * Decimal('0.05')
                 rows.append({
@@ -566,7 +748,7 @@ from .models import Worksheet, Employee
 
 
 @admin.register(Worksheet)
-class WorksheetAdmin(admin.ModelAdmin):
+class WorksheetAdmin(ExcludeLockedEmployeesMixin, admin.ModelAdmin):
     """
     Consolidated and corrected admin class for the Worksheet model.
     This version uses only native Django and Jazzmin features.
@@ -598,6 +780,9 @@ class WorksheetAdmin(admin.ModelAdmin):
     
     # Add custom actions
     actions = ['approve_worksheets']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).exclude(employee__worksheet_hidden=True)
     
     def approve_worksheets(self, request, queryset):
         """
@@ -720,7 +905,7 @@ class ResourceRepairReportAdmin(admin.ModelAdmin):
     date_hierarchy = 'date'
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
+        return super().get_queryset(request).select_related('employee').filter(employee__locked=False)
 
 
 # --- Your Other Custom Admins (Unchanged) ---
@@ -782,7 +967,7 @@ class UploadServiceAdmin(admin.ModelAdmin):
 
 
 @admin.register(EmployeeUpload)
-class EmployeeUploadAdmin(admin.ModelAdmin):
+class EmployeeUploadAdmin(ExcludeLockedEmployeesMixin, admin.ModelAdmin):
     list_display = ('employee', 'service', 'short_description', 'mobile_number', 'file_link', 'uploaded_at', 'colored_renewal_date')
     list_filter = ('service', 'employee', 'uploaded_at', 'renewal_date')
     search_fields = ('employee__name', 'service__name', 'description', 'mobile_number')
@@ -846,7 +1031,7 @@ class EmployeeUploadAdmin(admin.ModelAdmin):
         from django.shortcuts import render, redirect
 
         class EmployeeChoiceForm(forms.Form):
-            employee = forms.ModelChoiceField(queryset=Employee.objects.all(), label="Assign to employee")
+            employee = forms.ModelChoiceField(queryset=Employee.objects.filter(locked=False).order_by('name'), label="Assign to employee")
 
         if 'apply' in request.POST:
             form = EmployeeChoiceForm(request.POST)
@@ -895,6 +1080,9 @@ class ApplicationAssignmentInline(admin.TabularInline):
     extra = 1
     autocomplete_fields = ['employee']
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
 
 from django.contrib import admin
 from django.shortcuts import get_object_or_404, render
@@ -910,7 +1098,7 @@ class ServiceTypeAdmin(admin.ModelAdmin):
         return ", ".join([d.name for d in obj.departments.all()])
     get_departments.short_description = 'Departments'
     search_fields = ('name',)
-    
+    list_filter = ('departments',)
     change_list_template = "admin/service_type_changelist.html"
 
 
@@ -976,6 +1164,9 @@ class MeetingAttendanceInline(admin.TabularInline):
     extra = 1 # Shows one extra empty row for adding attendees
     autocomplete_fields = ['employee'] # Recommended for easier employee selection
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
 
 @admin.register(Meeting)
 class MeetingAdmin(admin.ModelAdmin):
@@ -1039,6 +1230,9 @@ class BreakSessionAdmin(admin.ModelAdmin):
         self.message_user(request, f'{rows_updated} break session(s) were successfully approved.')
 
     # --- 4. Helper methods for display (Unchanged) ---
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(employee__locked=False)
+
     @admin.display(description='Employee Name', ordering='employee__name')
     def get_employee_name(self, obj):
         return obj.employee.name
@@ -1051,7 +1245,32 @@ class BreakSessionAdmin(admin.ModelAdmin):
 # --- Register All Other Models with Default Admin ---
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'department_head_name', 'employee_count')
+    list_display = ('name', 'department_head_name', 'employee_count', 'current_topup_amount', 'department_balance', 'print_topup_history', 'print_employee_transactions')
+    @admin.display(description='Current Top Up')
+    def current_topup_amount(self, obj):
+        latest_topup = obj.topups.order_by('-created_at').first()
+        if latest_topup:
+            return f"₹ {latest_topup.amount}"
+        return '-'
+
+    @admin.display(description='Balance')
+    def department_balance(self, obj):
+        total_topup = obj.topups.aggregate(total=models.Sum('amount'))['total'] or 0
+        # Optionally, subtract total spent if you have a Worksheet or transaction model
+        # total_spent = Worksheet.objects.filter(department_name=obj.name).aggregate(total=models.Sum('amount'))['total'] or 0
+        # balance = total_topup - total_spent
+        balance = total_topup
+        return f"₹ {balance}"
+
+    @admin.display(description='Print Top Up History')
+    def print_topup_history(self, obj):
+        url = reverse('admin:department-print-topup', args=[obj.pk])
+        return format_html('<a class="button" href="{}" target="_blank">Print Top Up</a>', url)
+
+    @admin.display(description='Print Employee Transactions')
+    def print_employee_transactions(self, obj):
+        url = reverse('admin:department-print-transactions', args=[obj.pk])
+        return format_html('<a class="button" href="{}" target="_blank">Print Transactions</a>', url)
     search_fields = ('name', 'department_head__name')
     change_form_template = 'admin/department_change_form.html'
     save_on_top = True
@@ -1066,7 +1285,7 @@ class DepartmentAdmin(admin.ModelAdmin):
         if db_field.name == 'department_head':
             object_id = request.resolver_match.kwargs.get('object_id') if request.resolver_match else None
             if object_id:
-                kwargs['queryset'] = Employee.objects.filter(department_id=object_id).order_by('name')
+                kwargs['queryset'] = Employee.objects.filter(department_id=object_id, locked=False).order_by('name')
             else:
                 kwargs['queryset'] = Employee.objects.none()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -1082,56 +1301,200 @@ class DepartmentAdmin(admin.ModelAdmin):
 
         if obj.name == 'Notary and Bonds':
             inventory_entries = DepartmentInventoryEntry.objects.filter(department=obj)
-            total_100 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0
-            total_50 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0
-            total_20 = inventory_entries.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0
-            return f"100 RPS: {total_100} | 50 RPS: {total_50} | 20 RPS: {total_20}"
+            totals = inventory_entries.values('bond_type').annotate(total=Sum('quantity')).order_by('bond_type')
+            if not totals:
+                return 'No inventory records yet.'
+            return ' | '.join([f"{row['bond_type']}: {row['total'] or 0}" for row in totals])
 
         total = obj.topups.aggregate(total=Sum('amount'))['total'] or 0
         return f"Balance: ₹ {total}"
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('<int:department_id>/print-topup/', self.admin_site.admin_view(self.print_topup_history_view), name='department-print-topup'),
+            path('<int:department_id>/print-transactions/', self.admin_site.admin_view(self.print_employee_transactions_view), name='department-print-transactions'),
+        ]
+        return custom_urls + urls
+
+    def print_topup_history_view(self, request, department_id):
+        department = Department.objects.get(pk=department_id)
+        topup_history = department.topups.order_by('-created_at')
+        context = dict(
+            self.admin_site.each_context(request),
+            department=department,
+            topup_history=topup_history,
+        )
+        return render(request, 'admin/department_print_topup.html', context)
+
+    def print_employee_transactions_view(self, request, department_id):
+        department = Department.objects.get(pk=department_id)
+        from .models import Worksheet
+        transactions = Worksheet.objects.filter(department_name=department.name).order_by('-created_at')
+        context = dict(
+            self.admin_site.each_context(request),
+            department=department,
+            transactions=transactions,
+        )
+        return render(request, 'admin/department_print_transactions.html', context)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         department = self.get_object(request, object_id)
 
         if department:
+            from .models import ServiceType
             employees = Employee.objects.filter(department=department).order_by('name')
             topup_history = DepartmentTopUp.objects.filter(department=department).order_by('-created_at')
             inventory_history = DepartmentInventoryEntry.objects.filter(department=department).order_by('-created_at')
-
-            inventory_balance = {
-                '100': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_100).aggregate(total=Sum('quantity'))['total'] or 0,
-                '50': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_50).aggregate(total=Sum('quantity'))['total'] or 0,
-                '20': inventory_history.filter(bond_type=DepartmentInventoryEntry.BOND_TYPE_20).aggregate(total=Sum('quantity'))['total'] or 0,
-            }
             is_notary_bonds = department.name == 'Notary and Bonds'
+
+            inventory_balance_rows = []
+            bond_type_options = []
+            if is_notary_bonds:
+                service_names = list(
+                    ServiceType.objects.filter(departments=department)
+                    .order_by('name')
+                    .values_list('name', flat=True)
+                )
+                totals_by_type = {
+                    row['bond_type']: (row['total'] or 0)
+                    for row in inventory_history.values('bond_type').annotate(total=Sum('quantity'))
+                }
+
+                seen_types = set()
+                for service_name in service_names:
+                    inventory_balance_rows.append({
+                        'name': service_name,
+                        'total': totals_by_type.get(service_name, 0),
+                    })
+                    seen_types.add(service_name)
+
+                # Keep legacy/renamed types visible if they exist in history.
+                for bond_type_name in sorted(totals_by_type.keys()):
+                    if bond_type_name not in seen_types:
+                        inventory_balance_rows.append({
+                            'name': bond_type_name,
+                            'total': totals_by_type.get(bond_type_name, 0),
+                        })
+
+                bond_type_options = service_names
+
+            # Build stock rows for departments that have service types
+            dept_service_types = ServiceType.objects.filter(departments=department).order_by('name')
+            is_forms_dept = department.name == 'Forms'
+            stock_rows = []
+            stock_date_str = request.GET.get('stock_date', '')
+            from datetime import date as date_cls
+            try:
+                stock_date = date_cls.fromisoformat(stock_date_str) if stock_date_str else timezone.localtime(timezone.now()).date()
+            except ValueError:
+                stock_date = timezone.localtime(timezone.now()).date()
+            if is_forms_dept:
+                for st in dept_service_types:
+                    stock_obj, _ = DepartmentStock.objects.get_or_create(
+                        department=department,
+                        service_type=st,
+                        defaults={'quantity': 0, 'price': st.amount},
+                    )
+                    day_qs = Worksheet.objects.filter(
+                        department_name='Forms',
+                        service=st.name,
+                        date=stock_date,
+                    )
+                    used_count = day_qs.aggregate(total=Sum('stocks_used'))['total'] or 0
+                    total_amount = day_qs.aggregate(total=Sum('amount'))['total'] or 0
+                    remaining = max(0, stock_obj.quantity - used_count)
+                    price = stock_obj.price
+                    total_cost = Decimal(str(stock_obj.quantity)) * price
+                    stock_rows.append({
+                        'id': stock_obj.pk,
+                        'service_type_id': st.pk,
+                        'name': st.name,
+                        'quantity': stock_obj.quantity,
+                        'price': price,
+                        'total_cost': total_cost,
+                        'used': used_count,
+                        'total_amount': total_amount,
+                        'remaining': remaining,
+                    })
+
+            stock_totals = {
+                'quantity': sum(r['quantity'] for r in stock_rows),
+                'total_cost': sum(r['total_cost'] for r in stock_rows),
+                'total_amount': sum(r['total_amount'] for r in stock_rows),
+                'used': sum(r['used'] for r in stock_rows),
+                'remaining': sum(r['remaining'] for r in stock_rows),
+            } if stock_rows else None
 
             extra_context.update({
                 'department_employees': employees,
                 'department_head': department.department_head,
                 'topup_history': topup_history,
                 'inventory_history': inventory_history,
-                'inventory_balance': inventory_balance,
+                'inventory_balance_rows': inventory_balance_rows,
+                'bond_type_options': bond_type_options,
                 'is_notary_bonds': is_notary_bonds,
+                'is_forms_dept': is_forms_dept,
+                'stock_rows': stock_rows,
+                'stock_totals': stock_totals,
+                'stock_date': stock_date.isoformat(),
             })
 
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def response_change(self, request, obj):
+        if '_update_stock' in request.POST:
+            from .models import ServiceType
+            dept_service_types = ServiceType.objects.filter(departments=obj)
+            errors = []
+            for st in dept_service_types:
+                raw_qty = (request.POST.get(f'stock_qty_{st.pk}') or '').strip()
+                raw_price = (request.POST.get(f'stock_price_{st.pk}') or '').strip()
+                try:
+                    qty = int(raw_qty)
+                    if qty < 0:
+                        raise ValueError
+                except ValueError:
+                    errors.append(f"Invalid quantity for '{st.name}'.")
+                    continue
+                try:
+                    price = Decimal(raw_price) if raw_price else Decimal('0')
+                    if price < 0:
+                        raise ValueError
+                except Exception:
+                    errors.append(f"Invalid price for '{st.name}'.")
+                    continue
+                DepartmentStock.objects.update_or_create(
+                    department=obj,
+                    service_type=st,
+                    defaults={'quantity': qty, 'price': price},
+                )
+            if errors:
+                for e in errors:
+                    self.message_user(request, e, messages.ERROR)
+            else:
+                self.message_user(request, 'Stock updated successfully.', messages.SUCCESS)
+            return HttpResponseRedirect(request.get_full_path())
+
         if '_add_inventory' in request.POST:
             if obj.name != 'Notary and Bonds':
                 self.message_user(request, 'Inventory is available only for Notary and Bonds department.', messages.ERROR)
                 return HttpResponseRedirect(request.get_full_path())
 
+            from .models import ServiceType
+
             bond_type = (request.POST.get('bond_type') or '').strip()
             raw_qty = (request.POST.get('inventory_quantity') or '').strip()
             note = (request.POST.get('inventory_note') or '').strip()
 
-            valid_types = {
-                DepartmentInventoryEntry.BOND_TYPE_100,
-                DepartmentInventoryEntry.BOND_TYPE_50,
-                DepartmentInventoryEntry.BOND_TYPE_20,
-            }
+            valid_types = set(
+                ServiceType.objects.filter(departments=obj).values_list('name', flat=True)
+            )
+            if not valid_types:
+                self.message_user(request, 'Please add service types to this department before adding inventory.', messages.ERROR)
+                return HttpResponseRedirect(request.get_full_path())
             if bond_type not in valid_types:
                 self.message_user(request, 'Please select a valid bond type.', messages.ERROR)
                 return HttpResponseRedirect(request.get_full_path())
@@ -1234,3 +1597,103 @@ class NotificationAdmin(admin.ModelAdmin):
 
 
 # Remove the problematic override - we'll use template context instead
+
+
+# --- TTD Admin ---
+from .models import TTDGroupSeva, TTDGroupMember, TTDIndividualDarshan
+
+
+class TTDGroupMemberInline(admin.TabularInline):
+    model = TTDGroupMember
+    extra = 0
+    fields = ('order', 'name', 'mobile_number', 'aadhar_number')
+    ordering = ('order',)
+
+
+@admin.register(TTDGroupSeva)
+class TTDGroupSevaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'planned_date', 'num_members', 'members_filled', 'created_by', 'created_at', 'print_button')
+    list_filter = ('planned_date',)
+    search_fields = ('created_by__name',)
+    ordering = ('-created_at',)
+    inlines = [TTDGroupMemberInline]
+    readonly_fields = ('created_at',)
+
+    @admin.display(description='Members Registered')
+    def members_filled(self, obj):
+        return f"{obj.members.count()} / {obj.num_members}"
+
+    @admin.display(description='Print')
+    def print_button(self, obj):
+        url = reverse('admin:ttd-group-seva-print', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" target="_blank" '
+            'style="background:#8B1A1A;color:#fff;padding:4px 12px;border-radius:4px;'
+            'text-decoration:none;font-size:12px;">&#128438; Print</a>',
+            url
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:group_id>/print/',
+                self.admin_site.admin_view(self.admin_print_view),
+                name='ttd-group-seva-print',
+            ),
+        ]
+        return custom_urls + urls
+
+    def admin_print_view(self, request, group_id):
+        from django.http import Http404
+        try:
+            group_seva = TTDGroupSeva.objects.prefetch_related('members').get(pk=group_id)
+        except TTDGroupSeva.DoesNotExist:
+            raise Http404
+        return render(request, 'ttd_group_seva_print.html', {'group_seva': group_seva})
+
+
+@admin.register(TTDGroupMember)
+class TTDGroupMemberAdmin(admin.ModelAdmin):
+    list_display = ('name', 'mobile_number', 'aadhar_number', 'group', 'order')
+    search_fields = ('name', 'mobile_number', 'aadhar_number')
+    list_filter = ('group__planned_date',)
+    ordering = ('group', 'order')
+
+
+@admin.register(TTDIndividualDarshan)
+class TTDIndividualDarshanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'mobile_number', 'aadhar_number', 'planned_date', 'slot_time', 'created_by', 'created_at', 'print_button')
+    list_filter = ('planned_date', 'slot_time')
+    search_fields = ('name', 'mobile_number', 'aadhar_number')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at',)
+
+    @admin.display(description='Print')
+    def print_button(self, obj):
+        url = reverse('admin:ttd-individual-darshan-print', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" target="_blank" '
+            'style="background:#d4a017;color:#fff;padding:4px 12px;border-radius:4px;'
+            'text-decoration:none;font-size:12px;">&#128438; Print</a>',
+            url
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:darshan_id>/print/',
+                self.admin_site.admin_view(self.admin_print_view),
+                name='ttd-individual-darshan-print',
+            ),
+        ]
+        return custom_urls + urls
+
+    def admin_print_view(self, request, darshan_id):
+        from django.http import Http404
+        try:
+            darshan = TTDIndividualDarshan.objects.get(pk=darshan_id)
+        except TTDIndividualDarshan.DoesNotExist:
+            raise Http404
+        return render(request, 'ttd_individual_darshan_print.html', {'darshan': darshan})

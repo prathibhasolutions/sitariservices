@@ -1,0 +1,587 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sitari Assistant</title>
+  <link rel="manifest" href="{% url 'pwa_manifest' %}">
+  <meta name="theme-color" content="#0a4a8a">
+  <link rel="apple-touch-icon" href="{% static 'management/img/logo.jpg' %}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="{% static 'pwa/register-sw.js' %}" defer></script>
+  <style>
+    :root {
+      --brand-primary: #0b5fa6;
+      --brand-dark: #063a66;
+      --surface: #f3f8fe;
+      --ink: #10253c;
+      --bot-bg: #e7f2ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 10%, #d8ecff 0%, #eef6ff 40%, #f9fbff 100%);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .assistant-shell {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .assistant-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 2px;
+    }
+
+    .assistant-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--brand-dark);
+    }
+
+    .assistant-brand i {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(145deg, #0f8bcf, #094d92);
+      color: #fff;
+    }
+
+    .assistant-actions a {
+      text-decoration: none;
+    }
+
+    .assistant-panel {
+      flex: 1;
+      min-height: 0;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #d3e4f8;
+      box-shadow: 0 14px 35px rgba(6, 58, 102, 0.12);
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .assistant-header {
+      background: linear-gradient(145deg, #0f8bcf, #094d92);
+      color: #fff;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .assistant-header h1 {
+      margin: 0;
+      font-size: 1.08rem;
+      font-weight: 700;
+    }
+
+    .assistant-header p {
+      margin: 2px 0 0;
+      font-size: 0.85rem;
+      opacity: 0.95;
+    }
+
+    .assistant-chat-body {
+      flex: 1;
+      min-height: 0;
+      padding: 14px;
+      overflow-y: auto;
+      background: var(--surface);
+    }
+
+    .assistant-options {
+      padding: 10px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid #d9e8f7;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .assistant-option-chip {
+      border: 1px solid #9fc6ec;
+      color: #0b4f87;
+      background: #fff;
+      border-radius: 12px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      line-height: 1.25;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: normal;
+      text-align: left;
+      max-width: 100%;
+    }
+
+    .assistant-option-chip:hover {
+      background: #0f8bcf;
+      border-color: #0f8bcf;
+      color: #fff;
+    }
+
+    .assistant-msg {
+      max-width: min(85%, 600px);
+      width: fit-content;
+      padding: 10px 12px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      font-size: 0.94rem;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .assistant-msg.bot {
+      background: var(--bot-bg);
+      color: #0e3355;
+      border: 1px solid #c6dffb;
+    }
+
+    .assistant-msg.user {
+      background: var(--brand-primary);
+      color: #fff;
+      margin-left: auto;
+    }
+
+    .assistant-time {
+      font-size: 0.74rem;
+      opacity: 0.7;
+      margin-top: 4px;
+      text-align: right;
+      line-height: 1;
+    }
+
+    .assistant-msg.user .assistant-time {
+      color: rgba(255, 255, 255, 0.9);
+      opacity: 0.85;
+    }
+
+    .assistant-date-row {
+      text-align: center;
+    }
+
+    .assistant-date-chip {
+      display: inline-block;
+      margin: 8px auto 10px;
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      color: #4b5563;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+    }
+
+    .assistant-doc {
+      margin: 2px 0 10px;
+      font-size: 0.88rem;
+    }
+
+    .assistant-doc a {
+      color: #0a4b83;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .assistant-doc a:hover {
+      text-decoration: underline;
+    }
+
+    .assistant-input-wrap {
+      border-top: 1px solid #dbe7f4;
+      background: #fff;
+      padding: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .assistant-input-wrap input {
+      flex: 1;
+      border: 1px solid #cad9ea;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.94rem;
+      outline: none;
+    }
+
+    .assistant-input-wrap input:focus {
+      border-color: #0f8bcf;
+      box-shadow: 0 0 0 2px rgba(15, 139, 207, 0.15);
+    }
+
+    .assistant-input-wrap button {
+      border: none;
+      border-radius: 10px;
+      background: var(--brand-primary);
+      color: #fff;
+      padding: 10px 14px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .assistant-shell {
+        padding: 0;
+      }
+
+      .assistant-topbar {
+        padding: 10px 12px;
+      }
+
+      .assistant-panel {
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+      }
+
+      .assistant-chat-body {
+        padding: 12px;
+      }
+
+      .assistant-msg {
+        max-width: 92%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="assistant-shell">
+    <div class="assistant-topbar">
+      <div class="assistant-brand">
+        <i class="bi bi-robot"></i>
+        <span>Sitari Assistant</span>
+      </div>
+      <div class="assistant-actions">
+        <a href="{% url 'home' %}" class="btn btn-sm btn-outline-primary">Back To Home</a>
+      </div>
+    </div>
+
+    <div class="assistant-panel">
+      <div class="assistant-header">
+        <div>
+          <h1>Ask Anything About Our Services</h1>
+          <p>Type a question or enter a trigger number like 101.</p>
+        </div>
+      </div>
+
+      {% if assistant_template_options %}
+      <div class="assistant-options" id="assistantTemplateOptions">
+        {% for item in assistant_template_options %}
+        <button type="button" class="assistant-option-chip" data-message="{{ item }}">{{ item }}</button>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="assistant-chat-body" id="assistantChatBody" data-last-date="{{ assistant_last_chat_date_label|default:'' }}">
+        {% if assistant_chat_messages %}
+          {% for msg in assistant_chat_messages %}
+            {% ifchanged msg.created_at|date:"d/m/Y" %}
+            <div class="assistant-date-row"><span class="assistant-date-chip">{{ msg.created_at|date:"d/m/Y" }}</span></div>
+            {% endifchanged %}
+            <div class="assistant-msg {% if msg.sender == 'customer' %}user{% else %}bot{% endif %}">
+              {% if msg.message %}
+              <div>{{ msg.message }}</div>
+              {% endif %}
+              {% if msg.attachment %}
+              <div class="assistant-doc mt-1">
+                {% with attachment_name=msg.attachment.name|lower %}
+                {% if '.jpg' in attachment_name or '.jpeg' in attachment_name or '.png' in attachment_name or '.webp' in attachment_name or '.heic' in attachment_name or '.heif' in attachment_name %}
+                <div class="mt-1"><img src="{{ msg.attachment.url }}" alt="attachment" style="max-width:220px; border-radius:8px; border:1px solid #ced6e0;"></div>
+                {% else %}
+                <a href="{{ msg.attachment.url }}" target="_blank" rel="noopener">{{ msg.attachment.name|cut:'worksheet_data/token_chat/' }}</a>
+                {% endif %}
+                {% endwith %}
+              </div>
+              {% endif %}
+              <div class="assistant-time">{{ msg.created_at|date:"H:i" }}</div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="assistant-msg bot">
+            <div>Welcome {{ assistant_customer_name|default:"Customer" }}. I am Sitari Assistant. I can help with services, timings, location, and contact details.</div>
+          </div>
+        {% endif %}
+      </div>
+
+      <form class="assistant-input-wrap" id="assistantChatForm">
+        <input type="text" id="assistantChatInput" placeholder="Type your message..." maxlength="220" autocomplete="off">
+        <input type="file" id="assistantChatFile" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif" style="max-width: 220px;">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var form = document.getElementById('assistantChatForm');
+      var input = document.getElementById('assistantChatInput');
+      var fileInput = document.getElementById('assistantChatFile');
+      var body = document.getElementById('assistantChatBody');
+      var templateOptions = document.getElementById('assistantTemplateOptions');
+      var accessToken = '{{ assistant_access_token|default:""|escapejs }}';
+      var lastDateLabel = body.getAttribute('data-last-date') || '';
+
+      function currentDateLabel() {
+        var now = new Date();
+        var dd = String(now.getDate()).padStart(2, '0');
+        var mm = String(now.getMonth() + 1).padStart(2, '0');
+        var yyyy = now.getFullYear();
+        return dd + '/' + mm + '/' + yyyy;
+      }
+
+      function ensureDateSeparator(dateLabel) {
+        if (!dateLabel || dateLabel === lastDateLabel) {
+          return;
+        }
+        var row = document.createElement('div');
+        row.className = 'assistant-date-row';
+        var chip = document.createElement('span');
+        chip.className = 'assistant-date-chip';
+        chip.textContent = dateLabel;
+        row.appendChild(chip);
+        body.appendChild(row);
+        lastDateLabel = dateLabel;
+      }
+
+      function currentTimestamp() {
+        var now = new Date();
+        var hh = String(now.getHours()).padStart(2, '0');
+        var min = String(now.getMinutes()).padStart(2, '0');
+        return hh + ':' + min;
+      }
+
+      function isImageAttachmentName(name) {
+        var lower = String(name || '').toLowerCase();
+        return (
+          lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp') ||
+          lower.endsWith('.heic') ||
+          lower.endsWith('.heif')
+        );
+      }
+
+      function addMessage(type, text, timestamp, attachment) {
+        ensureDateSeparator(currentDateLabel());
+
+        var div = document.createElement('div');
+        div.className = 'assistant-msg ' + type;
+
+        if (text) {
+          var content = document.createElement('div');
+          content.textContent = text;
+          div.appendChild(content);
+        }
+
+        if (attachment && attachment.url) {
+          var doc = document.createElement('div');
+          doc.className = 'assistant-doc mt-1';
+
+          if (attachment.isImage) {
+            var image = document.createElement('img');
+            image.src = attachment.url;
+            image.alt = attachment.name || 'attachment';
+            image.style.maxWidth = '220px';
+            image.style.borderRadius = '8px';
+            image.style.border = '1px solid #ced6e0';
+            doc.appendChild(image);
+          } else {
+            var link = document.createElement('a');
+            link.href = attachment.url;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = attachment.name || 'Download';
+            doc.appendChild(link);
+          }
+
+          div.appendChild(doc);
+        }
+
+        var stamp = document.createElement('div');
+        stamp.className = 'assistant-time';
+        stamp.textContent = timestamp || currentTimestamp();
+        div.appendChild(stamp);
+
+        body.appendChild(div);
+        body.scrollTop = body.scrollHeight;
+      }
+
+      function addDocumentLinks(documents) {
+        if (!Array.isArray(documents) || documents.length === 0) {
+          return;
+        }
+
+        function isImageName(name) {
+          var lower = String(name || '').toLowerCase();
+          return (
+            lower.endsWith('.jpg') ||
+            lower.endsWith('.jpeg') ||
+            lower.endsWith('.png') ||
+            lower.endsWith('.webp') ||
+            lower.endsWith('.heic') ||
+            lower.endsWith('.heif')
+          );
+        }
+
+        documents.forEach(function (doc) {
+          var wrapper = document.createElement('div');
+          wrapper.className = 'assistant-doc';
+
+          if (isImageName(doc.name || '')) {
+            var image = document.createElement('img');
+            image.src = doc.url || '';
+            image.alt = doc.name || 'attachment';
+            image.style.maxWidth = '220px';
+            image.style.borderRadius = '8px';
+            image.style.border = '1px solid #ced6e0';
+            wrapper.appendChild(image);
+          } else {
+            var label = document.createElement('span');
+            label.textContent = 'File: ';
+            var link = document.createElement('a');
+            link.href = doc.url || '#';
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = doc.name || 'Download';
+            wrapper.appendChild(label);
+            wrapper.appendChild(link);
+          }
+
+          body.appendChild(wrapper);
+        });
+
+        body.scrollTop = body.scrollHeight;
+      }
+
+      function getBotReply(message) {
+        return fetch('{% url "public_chatbot_reply" %}?message=' + encodeURIComponent(message))
+          .then(function (response) {
+            return response.json().then(function (payload) {
+              if (!response.ok) {
+                throw new Error(payload.error || 'Unable to process your message right now.');
+              }
+              return payload;
+            });
+          })
+          .catch(function () {
+            return {
+              reply: 'I can help with services, timings, address, and contact details. Please try again.',
+              documents: [],
+            };
+          });
+      }
+
+      function logAssistantMessage(sender, text, fileObj) {
+        if (!accessToken || (!text && !fileObj)) {
+            return;
+        }
+        var payload = new FormData();
+        payload.append('access', accessToken);
+        payload.append('sender', sender);
+        payload.append('message', text || '');
+        if (fileObj) {
+          payload.append('chat_attachment', fileObj);
+        }
+        fetch('{% url "assistant_chat_log" %}', {
+          method: 'POST',
+          body: payload
+        }).catch(function () {
+          // Silent fail: chat UX should not be blocked by log errors.
+        });
+      }
+
+      function sendAndReply(message, fileObj) {
+        if (message) {
+          addMessage('user', message);
+        }
+        if (fileObj) {
+          var imageAttachment = isImageAttachmentName(fileObj.name || '');
+          addMessage(
+            'user',
+            imageAttachment ? '' : ('Attachment: ' + (fileObj.name || 'File shared')),
+            null,
+            {
+              name: fileObj.name || 'File shared',
+              url: URL.createObjectURL(fileObj),
+              isImage: imageAttachment
+            }
+          );
+        }
+        logAssistantMessage('customer', message, fileObj);
+        input.value = '';
+        if (fileInput) {
+          fileInput.value = '';
+        }
+
+        if (!message) {
+          return;
+        }
+
+        window.setTimeout(function () {
+          getBotReply(message).then(function (result) {
+            var replyText = result.reply || 'Done.';
+            addMessage('bot', replyText);
+            logAssistantMessage('bot', replyText);
+            addDocumentLinks(result.documents || []);
+          });
+        }, 220);
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var message = (input.value || '').trim();
+        var selectedFile = fileInput && fileInput.files && fileInput.files.length ? fileInput.files[0] : null;
+        if (!message && !selectedFile) {
+          return;
+        }
+
+        sendAndReply(message, selectedFile);
+      });
+
+      if (templateOptions) {
+        templateOptions.addEventListener('click', function (e) {
+          var target = e.target;
+          if (!target || !target.classList.contains('assistant-option-chip')) {
+            return;
+          }
+          var message = (target.getAttribute('data-message') || '').trim();
+          if (!message) {
+            return;
+          }
+          sendAndReply(message);
+        });
+      }
+
+      input.focus();
+    })();
+  </script>
+</body>
+</html>

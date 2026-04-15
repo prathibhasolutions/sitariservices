@@ -9,6 +9,15 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"Profile for {self.user.username} ({self.mobile_number or 'No mobile'})"
 
+
+# --- Single-device enforcement for admin/staff ---
+class AdminActiveSession(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='admin_active_session')
+    session_key = models.CharField(max_length=40)
+
+    def __str__(self):
+        return f"AdminActiveSession for {self.user.username}"
+
 # --- Audit Log Proxy Model for Centralized Logging ---
 
 # from django.utils.translation import gettext_lazy as _
@@ -119,17 +128,8 @@ class DepartmentTopUp(models.Model):
 
 
 class DepartmentInventoryEntry(models.Model):
-    BOND_TYPE_100 = '100'
-    BOND_TYPE_50 = '50'
-    BOND_TYPE_20 = '20'
-    BOND_TYPE_CHOICES = (
-        (BOND_TYPE_100, '100 RPS BONDS'),
-        (BOND_TYPE_50, '50 RPS BONDS'),
-        (BOND_TYPE_20, '20 RPS BONDS'),
-    )
-
     department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='inventory_entries')
-    bond_type = models.CharField(max_length=3, choices=BOND_TYPE_CHOICES)
+    bond_type = models.CharField(max_length=200)
     quantity = models.IntegerField()
     note = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -138,7 +138,68 @@ class DepartmentInventoryEntry(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.get_bond_type_display()} x {self.quantity} for {self.department.name}"
+        return f"{self.bond_type} x {self.quantity} for {self.department.name}"
+
+
+class DepartmentStock(models.Model):
+    """
+    Tracks the stock of each service (form) for a department.
+    One row per service per department. Updated in-place by the admin.
+    """
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='stocks')
+    service_type = models.ForeignKey('ServiceType', on_delete=models.CASCADE, related_name='stocks')
+    quantity = models.PositiveIntegerField(default=0)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('department', 'service_type')
+        ordering = ['service_type__name']
+
+    @property
+    def balance(self):
+        from decimal import Decimal
+        return Decimal(self.quantity) * self.price
+
+    def __str__(self):
+        return f"{self.service_type.name} stock for {self.department.name}"
+
+
+class EmployeeTarget(models.Model):
+    """
+    Stores a daily target (amount) assigned by admin to each employee.
+    One row per employee per date. Admin sets it fresh each day.
+    carry_forward: automatically populated with unmet balance carried over from the previous day.
+    """
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='targets')
+    date = models.DateField()
+    target_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    carry_forward = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+        help_text="Unmet balance carried forward from the previous day. Auto-calculated.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')
+        ordering = ['-date', 'employee__name']
+
+    def __str__(self):
+        return f"Target for {self.employee.name} on {self.date}: ₹{self.target_amount}"
+
+
+class Holiday(models.Model):
+    """Admin-declared holidays. next_working_day() skips these dates."""
+    date = models.DateField(unique=True)
+    reason = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date']
+        verbose_name = 'Holiday'
+        verbose_name_plural = 'Holidays'
+
+    def __str__(self):
+        return f"Holiday: {self.date} — {self.reason or 'No reason'}"
 
 
 class EmployeeNextDayAvailability(models.Model):
@@ -195,9 +256,22 @@ from calendar import monthrange
 
 class Employee(models.Model):
     locked = models.BooleanField(default=False, help_text="If checked, this employee is locked and cannot access the system.")
-    worksheet_entry_force_unlock = models.BooleanField(
+    worksheet_hidden = models.BooleanField(
         default=False,
-        help_text="If enabled, this employee can add worksheet entries even after the daily 4:00 PM lock.",
+        help_text="If enabled, this employee's worksheet entries are hidden from admin and employee worksheet screens.",
+    )
+    token_naming_access = models.BooleanField(
+        default=False,
+        help_text="If enabled, employee can use Token Naming section from employee dashboard.",
+    )
+    token_entry_access = models.BooleanField(
+        default=False,
+        help_text="If enabled, employee can use Token+ entry option on worksheet page.",
+    )
+    worksheet_entry_force_unlock_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="If set, this employee can add worksheet entries until this datetime. Null means no override active.",
     )
     employee_id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=150)
@@ -655,6 +729,117 @@ class ServiceType(models.Model):
         return self.name
 
 
+def generate_token_no():
+    """Generate token number in yymmddNNN format with a daily reset counter."""
+    date_prefix = timezone.localdate().strftime('%y%m%d')
+
+    last_today_token = (
+        Token.objects.filter(token_no__startswith=date_prefix)
+        .order_by('-token_no')
+        .values_list('token_no', flat=True)
+        .first()
+    )
+
+    sequence = 1
+    if last_today_token and len(last_today_token) == 9 and last_today_token[6:].isdigit():
+        sequence = int(last_today_token[6:]) + 1
+
+    while sequence <= 999:
+        token_no = f"{date_prefix}{sequence:03d}"
+        if not Token.objects.filter(token_no=token_no).exists():
+            return token_no
+        sequence += 1
+
+    raise ValueError('Daily token limit reached for today (999).')
+
+
+class Token(models.Model):
+    token_no = models.CharField(
+        max_length=9,
+        unique=True,
+        default=generate_token_no,
+        help_text='9-digit token number in yymmddNNN format',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text='Auto-generated date and time')
+    customer_name = models.CharField(max_length=255, help_text='Name of the customer')
+    cell_no = models.CharField(max_length=15, help_text='Contact number')
+    department = models.ForeignKey(
+        'Department',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select department',
+    )
+    service_type = models.ForeignKey(
+        'ServiceType',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select service type for the selected department',
+    )
+    operator_name = models.ForeignKey(
+        'Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='Select active operator/employee',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Token'
+        verbose_name_plural = 'Tokens'
+
+    def __str__(self):
+        return f"Token {self.token_no} - {self.customer_name}"
+
+
+def token_chat_attachment_upload_to(instance, filename):
+    token_no = instance.token.token_no if instance and instance.token_id else 'unknown_token'
+    safe_name = os.path.basename(filename or 'attachment')
+    stamp = timezone.now().strftime('%Y%m%d%H%M%S')
+    return f"worksheet_data/token_chat/{token_no}/{stamp}_{safe_name}"
+
+
+class TokenChatMessage(models.Model):
+    SENDER_CUSTOMER = 'customer'
+    SENDER_BOT = 'bot'
+    SENDER_ADMIN = 'admin'
+    SENDER_CHOICES = (
+        (SENDER_CUSTOMER, 'Customer'),
+        (SENDER_BOT, 'Bot'),
+        (SENDER_ADMIN, 'Admin'),
+    )
+
+    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='chat_messages')
+    sender = models.CharField(max_length=20, choices=SENDER_CHOICES)
+    message = models.TextField()
+    attachment = models.FileField(upload_to=token_chat_attachment_upload_to, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Token Chat Message'
+        verbose_name_plural = 'Token Chat Messages'
+
+    def __str__(self):
+        return f"{self.token.token_no} [{self.sender}] {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class TokenChatReadStatus(models.Model):
+    token = models.ForeignKey(Token, on_delete=models.CASCADE, related_name='read_statuses')
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='token_chat_read_statuses')
+    first_opened_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('token', 'employee'),)
+        ordering = ['-updated_at']
+        verbose_name = 'Token Chat Read Status'
+        verbose_name_plural = 'Token Chat Read Statuses'
+
+    def __str__(self):
+        return f"{self.token.token_no} / {self.employee.name}"
+
+
 # --- MODIFIED MODEL: Application ---
 class Application(models.Model):
     """
@@ -795,6 +980,12 @@ class Worksheet(models.Model):
     
     # NEW field for 'Notary and Bonds'
     bonds_sno = models.CharField("Bonds Sl. No", max_length=100, blank=True, null=True)
+
+    # Number of stocks deducted per entry (Forms department only)
+    stocks_used = models.PositiveIntegerField(default=1)
+
+    # Image attachments
+    particulars_image = models.ImageField(upload_to='worksheet_data/', blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -941,6 +1132,75 @@ class TodoTask(models.Model):
 
     def __str__(self):
         return self.description
+
+
+class ChatbotServiceTemplate(models.Model):
+    service_name = models.CharField(max_length=120, unique=True)
+    keywords = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Comma-separated keywords used to match user queries.',
+    )
+    template_text = models.TextField(help_text='Static response shown by chatbot for this service.')
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'service_name']
+
+    def __str__(self):
+        return self.service_name
+
+
+class ChatbotQuickOption(models.Model):
+    label = models.CharField(max_length=80, unique=True)
+    prompt_text = models.CharField(max_length=200, help_text='Text sent to chatbot when option is clicked.')
+    followup_answer = models.TextField(
+        blank=True,
+        help_text='Auto reply shown when this option is selected. If empty, chatbot reply API is used.',
+    )
+    followup_options = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Comma-separated option labels to show as next-step choices.',
+    )
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'label']
+
+    def __str__(self):
+        return self.label
+
+
+class ChatbotNumericTrigger(models.Model):
+    trigger_number = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text='Exact numeric trigger. Example: 101',
+    )
+    response_text = models.TextField(help_text='Response sent when trigger number is matched exactly.')
+    response_pdf = models.FileField(
+        upload_to='chatbot_trigger_pdfs/',
+        null=True,
+        blank=True,
+        help_text='Optional PDF returned along with the response text.',
+    )
+    sort_order = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'trigger_number']
+
+    def __str__(self):
+        return f"Trigger {self.trigger_number}"
     
 
 
@@ -1010,6 +1270,24 @@ class TrainingBonus(models.Model):
         return f"Training Bonus for {self.employee.name} on {self.date} - {self.reason}"
 
 
+class SalaryPayment(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ('salary', 'Salary'),
+        ('commission', 'Commission'),
+    ]
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='salary_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField(default=timezone.now)
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='salary')
+    remarks = models.CharField(max_length=500, blank=True, default='', help_text='Optional remarks for this payment.')
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.get_payment_type_display()} of \u20b9{self.amount} to {self.employee.name} on {self.date}"
+
+
 # --- NEW MODEL FOR RESOURCE REPAIR CHECKLIST ---
 class ResourceRepairReport(models.Model):
     """Stores the daily resource condition report submitted by an employee."""
@@ -1040,3 +1318,79 @@ class ResourceRepairReport(models.Model):
 
     def __str__(self):
         return f"Repair Report for {self.employee.name} on {self.date}"
+
+
+# --- TTD Section ---
+
+class TTDGroupSeva(models.Model):
+    """Stores a group seva booking at TTD."""
+    created_by = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ttd_group_sevas'
+    )
+    planned_date = models.DateField(help_text="Planned date for the group seva")
+    num_members = models.PositiveIntegerField(help_text="Number of members in the group")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'TTD Group Seva'
+        verbose_name_plural = 'TTD Group Sevas'
+
+    def __str__(self):
+        return f"Group Seva ({self.num_members} members) on {self.planned_date}"
+
+
+class TTDGroupMember(models.Model):
+    """Individual member details for a TTD group seva."""
+    group = models.ForeignKey(TTDGroupSeva, on_delete=models.CASCADE, related_name='members')
+    name = models.CharField(max_length=150)
+    mobile_number = models.CharField(max_length=15)
+    aadhar_number = models.CharField(max_length=12, help_text="12-digit Aadhaar number")
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ['order']
+        verbose_name = 'TTD Group Member'
+        verbose_name_plural = 'TTD Group Members'
+
+    def __str__(self):
+        return f"{self.name} (Group: {self.group_id})"
+
+
+class TTDIndividualDarshan(models.Model):
+    """Stores an individual darshan booking at TTD."""
+    SLOT_CHOICES = [
+        ('06:00', '06:00 AM'),
+        ('07:00', '07:00 AM'),
+        ('08:00', '08:00 AM'),
+        ('09:00', '09:00 AM'),
+        ('10:00', '10:00 AM'),
+        ('11:00', '11:00 AM'),
+        ('12:00', '12:00 PM'),
+        ('13:00', '01:00 PM'),
+        ('14:00', '02:00 PM'),
+        ('15:00', '03:00 PM'),
+        ('16:00', '04:00 PM'),
+        ('17:00', '05:00 PM'),
+        ('18:00', '06:00 PM'),
+    ]
+
+    created_by = models.ForeignKey(
+        'Employee', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ttd_individual_darshans'
+    )
+    name = models.CharField(max_length=150)
+    mobile_number = models.CharField(max_length=15)
+    aadhar_number = models.CharField(max_length=12, help_text="12-digit Aadhaar number")
+    planned_date = models.DateField(help_text="Planned date for darshan")
+    slot_time = models.CharField(max_length=5, choices=SLOT_CHOICES, help_text="Preferred slot time")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'TTD Individual Darshan'
+        verbose_name_plural = 'TTD Individual Darshans'
+
+    def __str__(self):
+        return f"{self.name} – Darshan on {self.planned_date} at {self.slot_time}"

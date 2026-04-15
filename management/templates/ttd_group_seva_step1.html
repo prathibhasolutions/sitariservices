@@ -1,0 +1,53 @@
+{% extends "masteremployee.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4" style="max-width:540px;">
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex align-items-center mb-3">
+        <a href="{% url 'ttd_main' %}" class="btn btn-sm btn-outline-secondary mr-3">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h4 class="mb-0" style="color:#8B1A1A; font-weight:700;">
+            <i class="fas fa-users mr-2" style="color:#d4a017;"></i>Group Seva – Step 1 of 2
+        </h4>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header" style="background:#8B1A1A; color:#fff;">
+            <strong>Group Details</strong>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Enter the total number of members and the planned date for the group seva. You will add member details in the next step.</p>
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="{{ form.num_members.id_for_label }}">{{ form.num_members.label }}</label>
+                    {{ form.num_members }}
+                    {% if form.num_members.errors %}
+                    <div class="text-danger small">{{ form.num_members.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.planned_date.id_for_label }}">{{ form.planned_date.label }}</label>
+                    {{ form.planned_date }}
+                    {% if form.planned_date.errors %}
+                    <div class="text-danger small">{{ form.planned_date.errors }}</div>
+                    {% endif %}
+                </div>
+                <button type="submit" class="btn btn-block mt-3" style="background:#8B1A1A; color:#fff; font-weight:600;">
+                    Next – Add Member Details <i class="fas fa-arrow-right ml-1"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

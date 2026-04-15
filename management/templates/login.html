@@ -4,157 +4,520 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Login - Sitari Solutions</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
-    <style>
-    body {
-        /* Vibrant "Meta" style blue gradient */
-        background: linear-gradient(135deg, #0062E0 0%, #19AFFF 100%);
-        min-height: 100vh;
-        font-family: 'Poppins', sans-serif;
-    }
-    
-    .admin-btn, .home-btn {
-        position: absolute;
-        top: 20px;
-        /* A slightly brighter transparency for the new background */
-        background: rgba(255, 255, 255, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        color: white;
-        padding: 8px 15px;
-        border-radius: 25px;
-        text-decoration: none;
-        transition: background 0.3s ease;
-    }
-    .admin-btn { right: 20px; }
-    .home-btn { left: 20px; }
-    
-    .admin-btn:hover, .home-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
-        color: white;
-    }
-    
-    .card {
-        border: none;
-        border-radius: 15px;
-        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-        background: #ffffff; /* Solid white for a very clean look */
-    }
-    
-    .card-header {
-        /* Matching the vibrant body gradient */
-        background: linear-gradient(135deg, #0062E0 0%, #19AFFF 100%) !important;
-        border-radius: 15px 15px 0 0 !important;
-        border-bottom: none;
-        padding-top: 2rem;
-        padding-bottom: 1.5rem;
-    }
-    
-    .btn-primary {
-        /* Button gradient matches the theme */
-        background: linear-gradient(135deg, #0062E0 0%, #19AFFF 100%);
-        border: none;
-        border-radius: 10px;
-        padding: 12px 0;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
+    <title>Employee Login | Sitari Solutions</title>
+    <link rel="manifest" href="{% url 'pwa_manifest' %}">
+    <meta name="theme-color" content="#0a4a8a">
+    <link rel="apple-touch-icon" href="{% static 'management/img/logo.jpg' %}">
 
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 20px rgba(0, 98, 224, 0.3); /* Blue shadow for a glow effect */
-    }
-
-    .login-logo {
-        width: 120px;
-        height: 120px;
-        object-fit: cover;
-        border: 4px solid white;
-    }
-
-    .form-label {
-        font-weight: 600;
-        color: #444; /* Dark gray for soft contrast */
-    }
-
-    .btn-link {
-        color: #0062E0; /* Using the primary blue from the gradient */
-        text-decoration: none;
-        font-weight: 500;
-    }
-
-    .btn-link:hover {
-        text-decoration: underline;
-    }
-</style>
-
-    <!-- Google Fonts for a nicer look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="{% static 'pwa/register-sw.js' %}" defer></script>
+
+    <style>
+        :root {
+            --bg-1: #071330;
+            --bg-2: #10234d;
+            --bg-3: #1f2f73;
+            --ink-100: #f5f8ff;
+            --ink-70: rgba(245, 248, 255, 0.72);
+            --ink-50: rgba(245, 248, 255, 0.5);
+            --line: rgba(255, 255, 255, 0.14);
+            --card: rgba(8, 17, 44, 0.72);
+            --accent: #56a9ff;
+            --accent-2: #6e7bff;
+            --success: #20c07a;
+            --danger-bg: rgba(255, 77, 109, 0.18);
+            --danger-line: rgba(255, 121, 145, 0.42);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: Outfit, sans-serif;
+            color: var(--ink-100);
+            background: radial-gradient(circle at 12% 22%, #334fae 0%, transparent 35%),
+                        radial-gradient(circle at 88% 8%, #2d87ca 0%, transparent 30%),
+                        radial-gradient(circle at 76% 82%, #1f2f73 0%, transparent 40%),
+                        linear-gradient(140deg, var(--bg-1) 0%, var(--bg-2) 52%, var(--bg-3) 100%);
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.22;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+            background-size: 38px 38px;
+            mask-image: radial-gradient(circle at center, black 15%, transparent 78%);
+        }
+
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--ink-100);
+            font-family: "Space Grotesk", sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .brand img {
+            width: 36px;
+            height: 36px;
+            object-fit: cover;
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: var(--ink-100);
+            font-size: 0.82rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            padding: 9px 16px;
+            transition: 0.2s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .chip:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.46);
+        }
+
+        .page {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: grid;
+            place-items: center;
+            padding: 78px 18px 26px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .auth-shell {
+            width: min(1020px, 100%);
+            display: grid;
+            grid-template-columns: 1fr 0.95fr;
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            overflow: hidden;
+            background: linear-gradient(170deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+            box-shadow: 0 26px 68px rgba(0, 0, 0, 0.48);
+            backdrop-filter: blur(18px);
+        }
+
+        .hero {
+            padding: 40px 36px;
+            background: linear-gradient(160deg, rgba(62, 116, 255, 0.22), rgba(86, 169, 255, 0.07));
+            border-right: 1px solid var(--line);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 0;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            pointer-events: none;
+        }
+
+        .hero-photo {
+            width: 260px;
+            max-width: 100%;
+            height: 300px;
+            border-radius: 14px;
+            object-fit: contain;
+            background: rgba(8, 17, 44, 0.45);
+            border: 2px solid rgba(255, 255, 255, 0.62);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.38);
+        }
+
+        .hero-caption {
+            margin-top: 10px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: rgba(245, 248, 255, 0.9);
+            letter-spacing: 0.01em;
+            text-align: center;
+        }
+
+
+        .panel {
+            padding: 42px 34px;
+            background: var(--card);
+        }
+
+        .panel-head {
+            margin-bottom: 22px;
+        }
+
+        .panel-head h2 {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            font-size: 1.55rem;
+            letter-spacing: -0.02em;
+        }
+
+        .panel-head p {
+            margin: 6px 0 0;
+            color: var(--ink-50);
+            font-size: 0.9rem;
+        }
+
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: 7px;
+            color: var(--ink-70);
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-wrap i.left {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7ebdff;
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .input-wrap input {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 13px;
+            color: var(--ink-100);
+            padding: 12px 40px 12px 40px;
+            font-size: 0.94rem;
+            font-family: Outfit, sans-serif;
+            outline: none;
+            transition: 0.2s ease;
+        }
+
+        .input-wrap input::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .input-wrap input:focus {
+            border-color: rgba(86, 169, 255, 0.9);
+            box-shadow: 0 0 0 3px rgba(86, 169, 255, 0.2);
+            background: rgba(86, 169, 255, 0.12);
+        }
+
+        .submit {
+            width: 100%;
+            margin-top: 8px;
+            border: none;
+            border-radius: 13px;
+            padding: 13px 14px;
+            font-size: 0.95rem;
+            font-family: "Space Grotesk", sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #fff;
+            background: linear-gradient(135deg, var(--accent-2), var(--accent));
+            box-shadow: 0 12px 30px rgba(86, 169, 255, 0.36);
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 34px rgba(86, 169, 255, 0.42);
+        }
+
+        .submit.secondary {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .submit.secondary:hover {
+            box-shadow: none;
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        .otp-meta {
+            margin: 0 0 14px;
+            color: var(--ink-70);
+            font-size: 0.82rem;
+        }
+
+        .feedback {
+            margin-top: 14px;
+            padding: 11px 13px;
+            border-radius: 11px;
+            border: 1px solid var(--danger-line);
+            background: var(--danger-bg);
+            color: #ffd6de;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .feedback i {
+            margin-top: 2px;
+        }
+
+        .footer-note {
+            margin-top: 14px;
+            color: rgba(255, 255, 255, 0.42);
+            text-align: center;
+            font-size: 0.74rem;
+        }
+
+        .footer-note a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: underline;
+        }
+
+        @media (max-width: 920px) {
+            html,
+            body {
+                overflow: auto;
+            }
+
+            .topbar {
+                position: static;
+                padding: 14px 16px 10px;
+            }
+
+            .page {
+                min-height: auto;
+                display: block;
+                padding: 10px 14px 18px;
+            }
+
+            .auth-shell {
+                grid-template-columns: 1fr;
+                border-radius: 22px;
+            }
+
+            .hero {
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+                padding: 28px 24px;
+            }
+
+            .hero-photo {
+                width: min(240px, 58vw);
+                height: auto;
+                max-height: 280px;
+            }
+
+            .panel {
+                padding: 28px 24px;
+            }
+
+        }
+
+        @media (max-width: 560px) {
+            .topbar {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch;
+            }
+
+            .brand {
+                font-size: 0.94rem;
+                justify-content: center;
+            }
+
+            .top-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                width: 100%;
+            }
+
+            .chip {
+                justify-content: center;
+                padding: 10px 12px;
+                font-size: 0.78rem;
+            }
+
+            .hero {
+                padding: 20px 14px;
+            }
+
+            .hero-photo {
+                width: min(210px, 62vw);
+                max-height: 220px;
+            }
+
+            .hero-caption {
+                font-size: 0.84rem;
+            }
+
+            .panel {
+                padding: 20px 14px;
+            }
+
+            .panel-head {
+                margin-bottom: 16px;
+            }
+
+            .panel-head h2 {
+                font-size: 1.3rem;
+            }
+
+            .panel-head p {
+                font-size: 0.84rem;
+            }
+
+            .field {
+                margin-bottom: 12px;
+            }
+
+            .input-wrap input {
+                font-size: 0.9rem;
+                padding: 11px 38px 11px 38px;
+            }
+
+            .submit {
+                margin-top: 4px;
+                padding: 12px 12px;
+                font-size: 0.9rem;
+            }
+
+            .feedback {
+                margin-top: 12px;
+                padding: 10px 11px;
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .top-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
-    <!-- Back to Home Button -->
-    <a href="https://www.sitarisolutions.in" class="home-btn">
-        <i class="fas fa-home me-2"></i>
-        Back to Home
-    </a>
+    <header class="topbar">
+        <a href="https://www.sitarisolutions.in" class="brand">
+            <img src="{% static 'management/img/logo.jpg' %}" alt="Sitari Logo">
+            Sitari Solutions
+        </a>
 
-    <!-- Admin Login Button -->
-    <a href="/admin/" class="admin-btn">
-        <i class="fas fa-user-shield me-2"></i>
-        Admin Login
-    </a>
-
-    <div class="container">
-        <div class="row justify-content-center align-items-center vh-100">
-            <div class="col-md-5 col-lg-4">
-                <div class="card shadow-lg">
-                    <div class="card-header text-white text-center">
-                        
-                        <!-- Circular Logo Added Here -->
-                        <img src="{% static 'management/img/logo.jpg' %}" alt="Company Logo" class="rounded-circle login-logo mb-3">
-                        
-                        <h4 class="mb-0">
-                            <i class="fas fa-sign-in-alt me-2"></i>
-                            Portal Login
-                        </h4>
-                    </div>
-                    <div class="card-body p-4">
-                        <form method="post" novalidate>
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Login As</label>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="user_type" id="employee" value="employee" checked>
-                                    <label class="form-check-label" for="employee">Employee</label>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="mobile" class="form-label fw-bold">Mobile Number</label>
-                                <input type="text" name="mobile" class="form-control" id="mobile" placeholder="Enter mobile no." required value="{{ mobile|default:'' }}">
-                            </div>
-                            <div class="mb-4">
-                                <label for="password" class="form-label fw-bold">Password</label>
-                                <input type="password" name="password" class="form-control" id="password" placeholder="Enter password" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">Login</button>
-                        </form>
-
-                        {% if messages %}
-                            {% for message in messages %}
-                            <div class="alert alert-danger mt-3">{{ message }}</div>
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+        <div class="top-actions">
+            <a href="{% url 'admin_dashboard' %}" class="chip"><i class="fas fa-chart-line"></i> Admin Dashboard</a>
+            <a href="/admin/" class="chip"><i class="fas fa-user-shield"></i> Admin Login</a>
         </div>
-    </div>
+    </header>
+
+    <main class="page">
+        <section class="auth-shell" aria-label="Employee sign in">
+            <aside class="hero">
+                <img class="hero-photo" src="{% static 'photo.jpeg' %}" alt="Sitari Kshavin">
+                <div class="hero-caption">Sitari Kshavin, Founder</div>
+            </aside>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Employee Sign In</h2>
+                    <p>Enter your registered mobile number to receive a WhatsApp OTP.</p>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <div class="field">
+                        <label for="mobile">Mobile Number</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-mobile-screen-button left"></i>
+                            <input type="text" name="mobile" id="mobile" placeholder="Enter mobile number" required value="{{ mobile|default:'' }}" autocomplete="username" {% if otp_sent %}readonly{% endif %}>
+                        </div>
+                    </div>
+
+                    {% if otp_sent %}
+                        <p class="otp-meta">An OTP was sent to {{ mobile }}. Enter it below to continue.</p>
+                        <div class="field">
+                            <label for="otp">One-Time Password</label>
+                            <div class="input-wrap">
+                                <i class="fas fa-key left"></i>
+                                <input type="text" name="otp" id="otp" placeholder="Enter 6-digit OTP" required inputmode="numeric" autocomplete="one-time-code">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="submit"><i class="fas fa-shield-halved"></i> Verify OTP</button>
+                        <button type="submit" class="submit secondary" name="resend" value="1"><i class="fas fa-rotate-right"></i> Resend OTP</button>
+                    {% else %}
+                        <button type="submit" class="submit"><i class="fas fa-paper-plane"></i> Send OTP</button>
+                    {% endif %}
+                </form>
+
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="feedback">
+                            <i class="fas fa-circle-exclamation"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <p class="footer-note">Secured employee portal powered by <a href="https://www.prathibhasolutions.com" target="_blank" rel="noopener noreferrer">Prathibha Solutions</a></p>
+            </section>
+        </section>
+    </main>
 </body>
 </html>

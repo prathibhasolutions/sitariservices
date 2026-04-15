@@ -1,15 +1,31 @@
-
-
 from django.urls import path
 
 from . import views
+from . import pwa_views
 
 urlpatterns = [
+    path('manifest.webmanifest', pwa_views.manifest, name='pwa_manifest'),
+    path('service-worker.js', pwa_views.service_worker, name='pwa_service_worker'),
+    path('.well-known/assetlinks.json', pwa_views.assetlinks, name='pwa_assetlinks'),
     path('assigned-tasks/', views.assigned_tasks_view, name='assigned_tasks'),
+        # Admin: Leave Management Report
+        path('admin/leave-management/', views.admin_leave_management, name='admin_leave_management'),
     path('assigned-tasks/self/', views.assign_task_to_self, name='assign_task_to_self'),
-    path('', views.employee_login, name='login'),
+    path('', views.home_view, name='home'),
+    path('access-denied/', views.access_denied_view, name='access_denied'),
+    path('assistant/', views.assistant_view, name='assistant'),
+    path('contact/', views.contact_view, name='contact'),
+    path('privacy-policy/', views.privacy_policy_view, name='privacy_policy'),
+    path('login/', views.employee_login, name='login'),
     path('employee/dashboard/', views.employee_dashboard, name='employee_dashboard'),
+    path('employee/token-naming/', views.employee_token_naming, name='employee_token_naming'),
+    path('employee/token-search/', views.employee_token_search, name='employee_token_search'),
+    path('employee/token-search/update/', views.employee_token_update, name='employee_token_update'),
+    path('employee/token-search/upload-image/', views.employee_token_search_upload_image, name='employee_token_search_upload_image'),
     path('employee/attendance/', views.attendance_view, name='attendance'),
+    path('employee/sitari-chat/', views.employee_sitari_chat, name='employee_sitari_chat'),
+    path('employee/sitari-chat/assignment-check/', views.employee_chat_assignment_check, name='employee_chat_assignment_check'),
+    path('employee/sitari-chat/message-check/', views.employee_chat_message_check, name='employee_chat_message_check'),
     path('logout/', views.logout_view, name='logout'),
     path('create-invoice/', views.create_invoice, name='create_invoice'),
     path('invoice/<int:pk>/', views.invoice_detail, name='invoice_detail'),
@@ -19,22 +35,91 @@ urlpatterns = [
     path('employee/attendance_ping/', views.attendance_ping, name='attendance_ping'),
     path('employee/refresh_session/', views.refresh_session, name='refresh_session'),
     path('employee/next-day-availability/', views.submit_next_day_availability, name='submit_next_day_availability'),
+    path('employee/todays-absentees/', views.todays_absentees_view, name='todays_absentees'),
+    path('employee/upi-qr/', views.employee_upi_qr_view, name='employee_upi_qr'),
+    path('employee/upi-qr/<int:entry_id>/', views.employee_upi_qr_single_view, name='employee_upi_qr_single'),
+    path('admin/upi-qr/<int:entry_id>/', views.admin_upi_qr_single_view, name='admin_upi_qr_single'),
     path('worksheet/', views.worksheet_view, name='worksheet'),
     path('worksheet/edit/<int:entry_id>/', views.worksheet_entry_edit_view, name='worksheet-edit'),
     path('admin/worksheet-management/', views.admin_worksheet_management, name='admin_worksheet_management'),
-    path('admin/worksheet-management/print/<int:employee_id>/', views.admin_employee_daily_worksheet_pdf, name='admin_employee_daily_worksheet_pdf'),
+    path('admin/worksheet-management/print/<int:employee_id>/<str:time_range>/', views.admin_employee_daily_worksheet_pdf, name='admin_employee_daily_worksheet_pdf'),
+    path('admin/worksheet-management/commission/<int:employee_id>/<str:period>/', views.admin_employee_commission_print, name='admin_employee_commission_print'),
+    path('admin/targets/', views.admin_employee_targets, name='admin_employee_targets'),
+    path('admin/worksheet-data/', views.admin_worksheet_data, name='admin_worksheet_data'),
     path('notifications/', views.notification_list_view, name='notification_list'),
     path('notifications/mark-as-read/<int:pk>/', views.mark_notification_as_read, name='mark_notification_as_read'),
     path('change-password/', views.change_password_request, name='change_password_request'),
     path('change-password/verify/', views.change_password_verify, name='change_password_verify'),
+    path('uploads/', views.employee_uploads_view, name='employee_uploads'),
     path('upload-file/', views.upload_file_view, name='upload_file'),
     path('todos/', views.todo_page_view, name='todo_page'),
     path('api/todos/get/', views.get_employee_todos, name='todos_get'),
     path('api/todos/add/', views.add_employee_todo, name='todos_add'),
     path('api/todos/delete/<int:task_id>/', views.delete_employee_todo, name='todos_delete'),
     path('api/geofence_check/', views.geofence_check, name='geofence_check'),
+    path('api/chatbot/reply/', views.public_chatbot_reply, name='public_chatbot_reply'),
+    path('api/assistant/chat-log/', views.assistant_chat_log, name='assistant_chat_log'),
+
+
+    # Department Head: Top Up Page (renamed)
+    path('employee/topup/', views.department_topup_view, name='department_topup'),
+
+    # Admin Dashboard
+    path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('admin-dashboard/worksheet-management/', views.admin_dashboard_worksheet_management, name='admin_dashboard_worksheet_management'),
+    path('admin-dashboard/worksheet-management/tomorrow-responses-pdf/', views.admin_dashboard_worksheet_tomorrow_responses_pdf, name='admin_dashboard_worksheet_tomorrow_responses_pdf'),
+    path('admin-dashboard/leave-management/', views.admin_dashboard_leave_management, name='admin_dashboard_leave_management'),
+    path('admin-dashboard/targets/', views.admin_dashboard_targets, name='admin_dashboard_targets'),
+    path('admin-dashboard/worksheet-data/', views.admin_dashboard_worksheet_data, name='admin_dashboard_worksheet_data'),
+    path('admin-dashboard/hidden-worksheets/', views.admin_dashboard_hidden_worksheets, name='admin_dashboard_hidden_worksheets'),
+    path('admin-dashboard/stocks-management/', views.admin_dashboard_stocks_management, name='admin_dashboard_stocks_management'),
+    path('admin-dashboard/managed-links/', views.admin_dashboard_managed_links, name='admin_dashboard_managed_links'),
+    path('admin-dashboard/meetings/', views.admin_dashboard_meetings, name='admin_dashboard_meetings'),
+    path('admin-dashboard/notifications/', views.admin_dashboard_notifications, name='admin_dashboard_notifications'),
+    path('admin-dashboard/resource-repair-reports/', views.admin_dashboard_resource_repair_reports, name='admin_dashboard_resource_repair_reports'),
+    path('admin-dashboard/announcements/', views.admin_dashboard_announcements, name='admin_dashboard_announcements'),
+    path('admin-dashboard/assign-tasks/', views.admin_dashboard_assign_tasks, name='admin_dashboard_assign_tasks'),
+    path('admin-dashboard/break-sessions/', views.admin_dashboard_break_sessions, name='admin_dashboard_break_sessions'),
+    path('admin-dashboard/log-entries/', views.admin_dashboard_log_entries, name='admin_dashboard_log_entries'),
+    path('admin-dashboard/users/', views.admin_dashboard_users, name='admin_dashboard_users'),
+    path('admin-dashboard/access-areas/', views.admin_dashboard_access_areas, name='admin_dashboard_access_areas'),
+    path('admin-dashboard/allowed-ips/', views.admin_dashboard_allowed_ips, name='admin_dashboard_allowed_ips'),
+    path('admin-dashboard/employee-uploads/', views.admin_dashboard_employee_uploads, name='admin_dashboard_employee_uploads'),
+    path('admin-dashboard/service-types/', views.admin_dashboard_service_types, name='admin_dashboard_service_types'),
+    path('admin-dashboard/chatbot/', views.admin_dashboard_chatbot, name='admin_dashboard_chatbot'),
+    path('admin-dashboard/sitari-chat/', views.admin_dashboard_sitari_chat, name='admin_dashboard_sitari_chat'),
+    path('admin-dashboard/token-search/', views.admin_token_search, name='admin_token_search'),
+    path('admin-dashboard/token-search/update/', views.admin_token_update, name='admin_token_update'),
+    path('admin-dashboard/token-search/upload-image/', views.admin_token_search_upload_image, name='admin_token_search_upload_image'),
+    path('admin-dashboard/ttd/', views.admin_ttd_view, name='admin_ttd_view'),
+    path('admin-dashboard/ttd/group/<int:group_id>/print/', views.admin_ttd_group_print, name='admin_ttd_group_print'),
+    path('admin-dashboard/ttd/individual/<int:darshan_id>/print/', views.admin_ttd_individual_print, name='admin_ttd_individual_print'),
+    path('admin-dashboard/ttd/print-all/', views.admin_ttd_print_all, name='admin_ttd_print_all'),
+
+    # API: Department Services
+    path('api/department-services/', views.get_department_services, name='get_department_services'),
+
+    # Token Naming
+    path('admin/token-naming/', views.token_naming_form, name='token_naming_form'),
+    path('admin/token-naming/print/<int:token_id>/', views.token_print_view, name='token_print_view'),
 
     # Admin print event logging endpoint
     path('admin/auditlog/print-event/', views.admin_print_event, name='admin_print_event'),
-]
 
+    # TTD Section
+    path('ttd/', views.ttd_main_view, name='ttd_main'),
+    path('ttd/group-seva/new/', views.ttd_group_seva_step1, name='ttd_group_seva_step1'),
+    path('ttd/group-seva/<int:group_id>/members/', views.ttd_group_seva_step2, name='ttd_group_seva_step2'),
+    path('ttd/individual-darshan/new/', views.ttd_individual_darshan_create, name='ttd_individual_darshan_create'),
+    path('ttd/group-seva/<int:group_id>/delete/', views.ttd_group_seva_delete, name='ttd_group_seva_delete'),
+    path('ttd/individual-darshan/<int:darshan_id>/delete/', views.ttd_individual_darshan_delete, name='ttd_individual_darshan_delete'),
+    path('ttd/group-seva/<int:group_id>/print/', views.ttd_group_seva_print, name='ttd_group_seva_print'),
+    path('ttd/individual-darshan/<int:darshan_id>/print/', views.ttd_individual_darshan_print, name='ttd_individual_darshan_print'),
+    path('ttd/print-all/', views.ttd_print_all, name='ttd_print_all'),
+
+    path('admin-dashboard/employees/<int:employee_id>/edit/', views.admin_employee_edit, name='admin_employee_edit'),
+    path('admin-dashboard/departments/payments-report/', views.admin_departments_payments_report, name='admin_departments_payments_report'),
+
+    # Admin: Departments Section
+    path('admin-dashboard/departments/', views.admin_departments, name='admin_departments'),
+]

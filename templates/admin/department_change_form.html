@@ -68,27 +68,76 @@
         min-width: 220px;
         padding: 6px 8px;
     }
+    /* stock table */
+    .stock-table { width:100%; border-collapse:separate; border-spacing:0; }
+    .stock-table th, .stock-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid #edf2f7;
+        vertical-align: middle;
+    }
+    .stock-table thead th {
+        background:#f8fafc; font-size:12px;
+        text-transform:uppercase; letter-spacing:.03em; color:#4b5563;
+    }
+    .stock-table tbody tr:nth-child(even) { background:#fcfdff; }
+    .stock-table input[type=number] { width:100px; padding:4px 6px; }
+    .stock-balance { font-weight:600; color:#16a34a; }
+    .inv-balance-table {
+        width: 320px;
+        max-width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+    .inv-balance-table th,
+    .inv-balance-table td {
+        border: 1px solid #e5e7eb;
+        padding: 6px 10px;
+        text-align: left;
+    }
+    .inv-balance-table th {
+        background: #f8fafc;
+        font-weight: 600;
+        color: #374151;
+        width: 70%;
+    }
+    .inv-balance-table td {
+        font-weight: 700;
+        color: #111827;
+        width: 30%;
+    }
 </style>
 {% endblock %}
 
 {% block after_field_sets %}
 {{ block.super }}
 <div class="dept-panel">
-    <h2>{% if is_notary_bonds %}Inventory Balance{% else %}Department Top Up{% endif %}</h2>
+    <h2>{% if is_notary_bonds %}Inventory Balance{% elif is_forms_dept %}Stock{% else %}Department Top Up{% endif %}</h2>
     <div class="panel-body">
         {% if is_notary_bonds %}
-            <div class="topup-row" style="margin-bottom:10px;">
-                <div class="topup-field"><strong>100 RPS BONDS:</strong> {{ inventory_balance.100 }}</div>
-                <div class="topup-field"><strong>50 RPS BONDS:</strong> {{ inventory_balance.50 }}</div>
-                <div class="topup-field"><strong>20 RPS BONDS:</strong> {{ inventory_balance.20 }}</div>
-            </div>
+            <table class="inv-balance-table">
+                <tbody>
+                    {% for row in inventory_balance_rows %}
+                    <tr>
+                        <th>{{ row.name }}</th>
+                        <td>{{ row.total }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <th colspan="2">No inventory types available. Assign service types to this department first.</th>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             <div class="topup-row">
                 <div class="topup-field">
                     <label for="id_bond_type">Bond Type</label>
                     <select id="id_bond_type" name="bond_type">
-                        <option value="100">100 RPS BONDS</option>
-                        <option value="50">50 RPS BONDS</option>
-                        <option value="20">20 RPS BONDS</option>
+                        {% for option in bond_type_options %}
+                        <option value="{{ option }}">{{ option }}</option>
+                        {% empty %}
+                        <option value="">No service types available</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="topup-field">
@@ -103,6 +152,161 @@
                     <button type="submit" name="_add_inventory" value="1" class="button default">Add Inventory</button>
                 </div>
             </div>
+        {% elif is_forms_dept %}
+            {# ── Date filter (GET-based, outside the POST form) ── #}
+            <div style="margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <strong>Date:</strong>
+                <input type="date" id="stock-date-input" value="{{ stock_date }}"
+                       style="padding:4px 8px; border:1px solid #ccc; border-radius:4px;">
+                <button type="button" onclick="applyStockDate()" class="button default">Apply</button>
+                <button type="button" onclick="goToday()" class="button default" style="background:#6b7280;">Today</button>
+                <button type="button" onclick="printStockTable()" class="button default" style="background:#374151;">&#128438; Print</button>
+            </div>
+            <style>
+            @media print {
+                body * { visibility: hidden !important; }
+                #stock-print-area, #stock-print-area * { visibility: visible !important; }
+                #stock-print-area { position: fixed; top: 0; left: 0; width: 100%; }
+                #stock-print-header { display: block !important; }
+                input[type="number"] { border: none; }
+            }
+            </style>
+            <script>
+            function applyStockDate() {
+                var d = document.getElementById('stock-date-input').value;
+                if (!d) return;
+                var url = new URL(window.location.href);
+                url.searchParams.set('stock_date', d);
+                window.location.href = url.toString();
+            }
+            function goToday() {
+                var url = new URL(window.location.href);
+                url.searchParams.delete('stock_date');
+                window.location.href = url.toString();
+            }
+            document.getElementById('stock-date-input').addEventListener('keydown', function(e){
+                if (e.key === 'Enter') applyStockDate();
+            });
+            function printStockTable() {
+                window.print();
+            }
+            </script>
+            <div id="stock-print-area">
+            <div style="display:none;" id="stock-print-header" class="stock-print-only">
+                <h2 style="margin:0 0 4px;">{{ original.name }} — Stock Report</h2>
+                <p style="margin:0 0 12px; color:#555;">Date: {{ stock_date }}</p>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Quantity</th>
+                            <th>Price (₹)</th>
+                            <th>Total Cost (₹)</th>
+                            <th>Total Amount (₹)</th>
+                            <th>Used</th>
+                            <th>Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-tbody">
+                        {% for row in stock_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>
+                                <input type="number" name="stock_qty_{{ row.service_type_id }}"
+                                       value="{{ row.quantity }}" min="0" step="1"
+                                       class="stock-qty-input" data-row="{{ forloop.counter0 }}"
+                                       data-used="{{ row.used }}"
+                                       data-price="{{ row.price }}">
+                            </td>
+                            <td>
+                                <input type="number" name="stock_price_{{ row.service_type_id }}"
+                                       value="{{ row.price }}" min="0" step="0.01"
+                                       class="stock-price-input" data-row="{{ forloop.counter0 }}">
+                            </td>
+                            <td class="stock-totalcost" id="stock-totalcost-{{ forloop.counter0 }}">
+                                {{ row.total_cost|floatformat:2 }}
+                            </td>
+                            <td>{{ row.total_amount|floatformat:2 }}</td>
+                            <td>{{ row.used }}</td>
+                            <td class="stock-balance" id="stock-balance-{{ forloop.counter0 }}">
+                                {{ row.remaining }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" style="color:#6b7280;">No services assigned to this department yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if stock_rows %}
+                    <tfoot>
+                        <tr style="background:#f8fafc; font-weight:700; border-top:2px solid #d1d5db;">
+                            <td colspan="2" style="text-align:right; color:#4b5563; font-size:12px; text-transform:uppercase; letter-spacing:.03em;">Total</td>
+                            <td id="foot-qty">{{ stock_totals.quantity }}</td>
+                            <td style="color:#9ca3af;">—</td>
+                            <td id="foot-totalcost">{{ stock_totals.total_cost|floatformat:2 }}</td>
+                            <td>{{ stock_totals.total_amount|floatformat:2 }}</td>
+                            <td id="foot-used">{{ stock_totals.used }}</td>
+                            <td id="foot-remaining">{{ stock_totals.remaining }}</td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+            </div>{# /stock-print-area #}
+            {% if stock_rows %}
+            <div style="margin-top:12px;">
+                <button type="submit" name="_update_stock" value="1" class="button default">Save Stock</button>
+            </div>
+            {% endif %}
+            <script>
+            (function(){
+                function updateRow(row) {
+                    var qtyEl = document.querySelector('.stock-qty-input[data-row="' + row + '"]');
+                    var priceEl = document.querySelector('.stock-price-input[data-row="' + row + '"]');
+                    if (!qtyEl) return;
+                    var qty = parseInt(qtyEl.value) || 0;
+                    var price = parseFloat(priceEl ? priceEl.value : 0) || 0;
+                    var used = parseInt(qtyEl.dataset.used) || 0;
+                    var rem = Math.max(0, qty - used);
+                    document.getElementById('stock-balance-' + row).textContent = rem;
+                    var tc = document.getElementById('stock-totalcost-' + row);
+                    if (tc) tc.textContent = (qty * price).toFixed(2);
+                    updateFootTotals();
+                }
+                function updateFootTotals() {
+                    var totalQty = 0, totalCost = 0, totalUsed = 0, totalRem = 0;
+                    document.querySelectorAll('.stock-qty-input').forEach(function(el) {
+                        totalQty += parseInt(el.value) || 0;
+                    });
+                    document.querySelectorAll('[id^="stock-totalcost-"]').forEach(function(el) {
+                        totalCost += parseFloat(el.textContent) || 0;
+                    });
+                    document.querySelectorAll('[id^="stock-balance-"]').forEach(function(el) {
+                        totalRem += parseInt(el.textContent) || 0;
+                    });
+                    document.querySelectorAll('.stock-qty-input').forEach(function(el) {
+                        totalUsed += parseInt(el.dataset.used) || 0;
+                    });
+                    var fq = document.getElementById('foot-qty');
+                    var fc = document.getElementById('foot-totalcost');
+                    var fu = document.getElementById('foot-used');
+                    var fr = document.getElementById('foot-remaining');
+                    if (fq) fq.textContent = totalQty;
+                    if (fc) fc.textContent = totalCost.toFixed(2);
+                    if (fu) fu.textContent = totalUsed;
+                    if (fr) fr.textContent = totalRem;
+                }
+                document.querySelectorAll('.stock-qty-input').forEach(function(el){
+                    el.addEventListener('input', function(){ updateRow(this.dataset.row); });
+                });
+                document.querySelectorAll('.stock-price-input').forEach(function(el){
+                    el.addEventListener('input', function(){ updateRow(this.dataset.row); });
+                });
+            })();
+            </script>
         {% else %}
             <div class="topup-row">
                 <div class="topup-field">
@@ -149,7 +353,7 @@
                     {% for item in inventory_history %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ item.get_bond_type_display }}</td>
+                        <td>{{ item.bond_type }}</td>
                         <td>
                             {% if item.quantity < 0 %}
                                 <span style="color:#c0392b;font-weight:600;">Deduction</span>

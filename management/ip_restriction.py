@@ -1,5 +1,6 @@
 from django.http import HttpResponseForbidden
 from django.core.cache import cache
+from django.shortcuts import render
 import logging
 
 logger = logging.getLogger(__name__)
@@ -7,14 +8,33 @@ logger = logging.getLogger(__name__)
 class RestrictIPMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
+        self.ip_bypass_prefixes = (
+            '/assistant/',
+            '/api/chatbot/reply/',
+            '/api/assistant/chat-log/',
+        )
 
     def __call__(self, request):
+        if any(request.path.startswith(prefix) for prefix in self.ip_bypass_prefixes):
+            return self.get_response(request)
+
         ip = get_client_ip(request)
         
         # Check if IP is allowed
         if not self.is_ip_allowed(ip):
             logger.warning(f"Access denied for IP: {ip}")
-            return HttpResponseForbidden("Access denied.")
+            return render(
+                request,
+                'access_denied.html',
+                {
+                    'blocked_ip': ip,
+                    'requested_path': request.path,
+                    'reason_source': 'ip',
+                    'reason_title': 'Your network is not allowed for this portal',
+                    'reason_message': 'Access is currently restricted by IP policy. If you believe this is an error, contact your administrator and share the details below.',
+                },
+                status=403,
+            )
 
         response = self.get_response(request)
         return response

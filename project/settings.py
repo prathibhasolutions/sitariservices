@@ -16,7 +16,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = True
 
 # Allowed hosts include your instance IP and domain
-ALLOWED_HOSTS = ['65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in']
+ALLOWED_HOSTS = ['3.6.37.113', '65.0.89.209', 'localhost', '127.0.0.1', 'work.sitarisolutions.in', 'www.work.sitarisolutions.in', 'sitarisolutions.in', 'www.sitarisolutions.in']
 
 # Application definition
 INSTALLED_APPS = [
@@ -39,6 +39,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'management.middleware.AdminSingleDeviceMiddleware',
     'management.middleware.SingleDeviceSessionMiddleware',
     'management.middleware.EmployeeNextDayAvailabilityMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -46,7 +48,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'auditlog.middleware.AuditlogMiddleware',
     'management.middleware.AuditlogIPMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'management.ip_restriction.RestrictIPMiddleware',
 ]
@@ -65,6 +66,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'management.context_processors.notifications_context',
                 'management.context_processors.employee_next_day_alert_context',
+                'management.context_processors.employee_daily_stats_context',
                 'management.context_processors_renewal.renewal_alerts_processor',
             ],
         },
@@ -93,8 +95,8 @@ TIME_ZONE = 'Asia/Kolkata'
 
 # Worksheet entry cutoff in 24-hour format. 17 means 5:00 PM.
 WORKSHEET_ENTRY_CUTOFF_HOUR = 17
-EMPLOYEE_NEXT_DAY_ALERT_START_HOUR = 18
-EMPLOYEE_NEXT_DAY_ALERT_END_HOUR = 19
+EMPLOYEE_NEXT_DAY_ALERT_START_HOUR = 16
+EMPLOYEE_NEXT_DAY_ALERT_END_HOUR = 17
 
 USE_I18N = True
 
@@ -129,6 +131,15 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
+# Android Trusted Web Activity (TWA) settings
+# Set these in .env before Play Store release.
+TWA_ANDROID_PACKAGE_NAME = env('TWA_ANDROID_PACKAGE_NAME', default='com.sitarisolutions.work')
+TWA_SHA256_CERT_FINGERPRINTS = env.list(
+    'TWA_SHA256_CERT_FINGERPRINTS',
+    default=['F3:6D:27:B7:BF:07:46:97:C9:C8:98:6A:E6:88:5C:F0:09:EB:46:7E:89:4D:6D:E9:A7:2C:1E:AF:FE:3B:C9:5A'],
+)
+
+
 JAZZMIN_SETTINGS = {
     # Title on the brand, and login screen (19 chars max)
     "site_header": "Sitari Solutions",
@@ -156,7 +167,25 @@ JAZZMIN_SETTINGS = {
                 "url": "admin_worksheet_management",
                 "icon": "fas fa-table",
                 "permissions": ["auth.view_user"],
-            }
+            },
+            {
+                "name": "Leave Management",
+                "url": "admin_leave_management",
+                "icon": "fas fa-calendar-check",
+                "permissions": ["auth.view_user"],
+            },
+            {
+                "name": "Daily Targets",
+                "url": "admin_employee_targets",
+                "icon": "fas fa-bullseye",
+                "permissions": ["auth.view_user"],
+            },
+            {
+                "name": "Worksheet Data",
+                "url": "admin_worksheet_data",
+                "icon": "fas fa-folder-open",
+                "permissions": ["auth.view_user"],
+            },
         ]
     },
 

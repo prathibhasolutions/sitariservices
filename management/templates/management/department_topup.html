@@ -1,0 +1,254 @@
+{% extends 'masteremployee.html' %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .topup-page-title {
+        margin-bottom: 16px;
+        font-weight: 700;
+    }
+    .topup-card {
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 18px;
+    }
+    .topup-card-header {
+        padding: 12px 14px;
+        border-bottom: 1px solid #e9ecef;
+        background: #f8f9fa;
+        border-radius: 8px 8px 0 0;
+    }
+    .topup-card-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+    .topup-card-body {
+        padding: 14px;
+    }
+    .topup-filter-form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .topup-filter-form label {
+        margin: 0;
+        font-weight: 600;
+    }
+    .topup-filter-form input[type="date"] {
+        min-width: 180px;
+    }
+    .topup-table {
+        margin-bottom: 0;
+    }
+    .topup-table thead th {
+        white-space: nowrap;
+        background: #f8f9fa;
+    }
+    /* stock table — matches admin exactly */
+    .stock-table { width:100%; border-collapse:separate; border-spacing:0; }
+    .stock-table th, .stock-table td {
+        padding: 9px 12px;
+        border-bottom: 1px solid #edf2f7;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    .stock-table thead th {
+        background: #f8fafc;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #4b5563;
+        font-weight: 600;
+    }
+    .stock-table tbody tr:nth-child(even) { background: #fcfdff; }
+    .stock-table tbody tr:hover { background: #f0f7ff; }
+    .stock-table tfoot tr {
+        background: #f8fafc;
+        font-weight: 700;
+        border-top: 2px solid #d1d5db;
+    }
+    .stock-balance, .stock-cell-remaining { font-weight: 600; color: #16a34a; }
+    .stock-cell-remaining.low { color: #dc2626; }
+    .stock-cell-amount { color: #6b7280; }
+    .stock-cell-name { font-weight: 500; }
+    @media print {
+        body * { visibility: hidden !important; }
+        #stock-print-area, #stock-print-area * { visibility: visible !important; }
+        #stock-print-area { position: fixed; top: 0; left: 0; width: 100%; }
+        .stock-print-only { display: block !important; }
+    }
+</style>
+<script>
+function applyStockDate() {
+    var d = document.getElementById('stock-date-input');
+    if (!d || !d.value) return;
+    var url = new URL(window.location.href);
+    url.searchParams.set('stock_date', d.value);
+    window.location.href = url.toString();
+}
+function goStockToday() {
+    var url = new URL(window.location.href);
+    url.searchParams.delete('stock_date');
+    window.location.href = url.toString();
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<h1 class="topup-page-title">
+    {% if is_forms_dept %}Stock & Transactions{% else %}Top Up & Transactions{% endif %}
+    — {{ department.name }}
+</h1>
+
+{% if is_forms_dept %}
+{# ── Forms: stock table (read-only) ── #}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap py-2" style="gap:8px; background:#f8f9fa;">
+        <h5 class="mb-0 font-weight-bold">Stock — {{ stock_date }}</h5>
+        <div class="d-flex align-items-center flex-wrap" style="gap:6px;">
+            <label for="stock-date-input" class="mb-0 font-weight-bold small">Date:</label>
+            <input type="date" id="stock-date-input" class="form-control form-control-sm" style="width:auto;"
+                   value="{{ stock_date }}" onkeydown="if(event.key==='Enter') applyStockDate()">
+            <button type="button" class="btn btn-sm btn-primary" onclick="applyStockDate()">Apply</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="goStockToday()">Today</button>
+            <button type="button" class="btn btn-sm btn-dark" onclick="window.print()">
+                <i class="bi bi-printer"></i> Print
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0" id="stock-print-area">
+        <div style="display:none;" class="stock-print-only p-3">
+            <h5 class="mb-1">{{ department.name }} — Stock Report</h5>
+            <p class="text-muted small mb-3">Date: {{ stock_date }}</p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover table-sm mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th class="text-center" style="width:40px;">#</th>
+                        <th>Name</th>
+                        <th>Quantity</th>
+                        <th>Price (₹)</th>
+                        <th>Total Cost (₹)</th>
+                        <th>Total Amount (₹)</th>
+                        <th>Used</th>
+                        <th>Remaining</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in stock_rows %}
+                    <tr>
+                        <td class="text-center text-muted small">{{ forloop.counter }}</td>
+                        <td class="font-weight-500">{{ row.name }}</td>
+                        <td>{{ row.quantity }}</td>
+                        <td class="text-muted">{{ row.price|floatformat:2 }}</td>
+                        <td>{{ row.total_cost|floatformat:2 }}</td>
+                        <td class="text-muted">{{ row.total_amount|floatformat:2 }}</td>
+                        <td>{{ row.used }}</td>
+                        <td {% if row.remaining == 0 %}style="color:#dc2626; font-weight:700;"{% else %}style="color:#16a34a; font-weight:700;"{% endif %}>
+                            {{ row.remaining }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4 font-italic">No services assigned to this department yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if stock_totals %}
+                <tfoot class="font-weight-bold" style="background:#f8f9fa; border-top:2px solid #dee2e6;">
+                    <tr>
+                        <td colspan="2" class="text-right text-uppercase text-muted small">Total</td>
+                        <td>{{ stock_totals.quantity }}</td>
+                        <td class="text-muted">—</td>
+                        <td>{{ stock_totals.total_cost|floatformat:2 }}</td>
+                        <td>{{ stock_totals.total_amount|floatformat:2 }}</td>
+                        <td>{{ stock_totals.used }}</td>
+                        <td style="color:#16a34a;">{{ stock_totals.remaining }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+{# ── Other departments: top-up history ── #}
+<div class="topup-card">
+    <div class="topup-card-header">
+        <h2>Department Top-Up History</h2>
+    </div>
+    <div class="topup-card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover topup-table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Amount</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in topups %}
+                    <tr>
+                        <td>{{ t.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>{{ t.amount }}</td>
+                        <td>{{ t.note|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="muted-empty">No top-up history.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="topup-card">
+    <div class="topup-card-header">
+        <h2>Department Transactions for {{ selected_date }}</h2>
+    </div>
+    <div class="topup-card-body">
+        <form method="get" class="topup-filter-form">
+            <label for="date">Select date:</label>
+            <input type="date" id="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}">
+            <button type="submit" class="btn btn-primary">Go</button>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover topup-table">
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Employee</th>
+                        <th>Amount</th>
+                        <th>Payment</th>
+                        <th>Service</th>
+                        <th>Customer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in all_transactions %}
+                    <tr>
+                        <td>{{ tx.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>{{ tx.employee.name }}</td>
+                        <td>{{ tx.amount }}</td>
+                        <td>{{ tx.payment }}</td>
+                        <td>{{ tx.service|default:'-' }}</td>
+                        <td>{{ tx.customer_name|default:'-' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="muted-empty">No transactions for {{ selected_date }}.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

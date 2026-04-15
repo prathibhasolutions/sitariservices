@@ -1,0 +1,601 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MeeSeva & Public Online Services Center in Nizamabad | Sitari Solutions</title>
+  <link rel="manifest" href="{% url 'pwa_manifest' %}">
+  <meta name="theme-color" content="#0a4a8a">
+  <link rel="apple-touch-icon" href="{% static 'management/img/logo.jpg' %}">
+  <meta name="description" content="Sitari Solutions offers MeeSeva services, internet services, bill payment, government certificates and other online public services in Nizamabad. Fast, reliable and trustworthy assistance for all your civic needs.">
+  <meta name="keywords" content="MeeSeva services Nizamabad, online public services, internet services provider, bill payment center Nizamabad, government certificates online, online services portal, public service assistance, citizen services Nizamabad, Sitari Solutions">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="{% static 'pwa/register-sw.js' %}" defer></script>
+
+  <style>
+    :root{
+      --person-w-desktop: 80px;
+      --person-h-desktop: 100px;
+      --logo-size-desktop: 120px;
+      --carousel-h-desktop: 50vh;
+      --nav-font-desktop: 1rem;
+      --disclaimer-font-desktop: 1rem;
+    }
+
+    .header-section{
+      background: url('{% static "management/img/forest1.jpg" %}') no-repeat center center;
+      background-size: cover;
+      color: white;
+      padding: 10px 0;
+      min-height: 110px;
+      z-index: 1;
+    }
+    .header-content{
+      display:flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+
+    .person-box{ flex: 0 0 auto; display:flex; align-items:center; justify-content:center; }
+    .person-box img{
+      width: var(--person-w-desktop);
+      height: var(--person-h-desktop);
+      border: 2px solid #ccc;
+      background: #fff;
+      object-fit: cover;
+      display:block;
+    }
+
+    .logo-circle{
+      width: var(--logo-size-desktop);
+      height: var(--logo-size-desktop);
+      border-radius: 50%;
+      border: 3px solid #fff;
+      background: #ddd;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom: 6px;
+    }
+    .logo-circle img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .nav-bar{
+      background-color: #b5e2fa;
+      padding: 8px 16px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      color: #000;
+      overflow: hidden;
+    }
+    .nav-links{ display:flex; gap: 10px; align-items:center; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+    .nav-links a{
+      color: #000;
+      text-decoration: none;
+      font-weight:500;
+      white-space: nowrap;
+      font-size: clamp(0.9rem, 1.6vw, var(--nav-font-desktop));
+      margin-right: 6px;
+      display:inline-block;
+    }
+    .nav-links a:hover{ text-decoration: underline; }
+
+    .right-block{
+      flex: 0 0 auto;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-left: 12px;
+      white-space: nowrap;
+      font-size: clamp(0.85rem, 1.5vw, 0.95rem);
+    }
+
+    .disclaimer-bar{
+      background-color: #094D92;
+      color: white;
+      font-weight: bold;
+      padding: 6px 12px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .disclaimer-text{ color:#ffcc00; flex:0 0 auto; font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop)); }
+    .marquee{ flex: 1 1 auto; overflow: hidden; white-space: nowrap; }
+    .marquee span{
+      display:inline-block;
+      padding-left: 100%;
+      animation: marquee 12s linear infinite;
+      font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop));
+    }
+    @keyframes marquee{
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .custom-carousel .carousel-item img{
+      width: 100%;
+      height: var(--carousel-h-desktop);
+      object-fit: cover;
+      display:block;
+    }
+
+    .custom-footer {
+      background: #094D92;
+      color: #fff;
+      font-size: clamp(0.8rem, 1.8vw, 1rem);
+    }
+    .footer-heading { font-weight: 600; font-size: 1.1rem; color: #fff; }
+    .footer-logo { max-width: 150px; border-radius: 50%; margin-bottom: 10px; }
+    .social-icons a { font-size: 1.3rem; margin-right: 10px; color: #000; }
+    .social-icons a:hover { color: #fff; }
+
+    .responsive-title {
+      font-size: 5rem;
+      margin-bottom: 5px;
+      color: white;
+      font-weight: bold;
+    }
+
+    .responsive-subtitle { font-size: 1.5rem; color: #fff; }
+
+    @media screen and (max-width: 992px) {
+      .responsive-title { font-size: 3.5rem; }
+      .responsive-subtitle { font-size: 1.3rem; }
+    }
+    @media screen and (max-width: 768px) {
+      .responsive-title { font-size: 2.5rem; }
+      .responsive-subtitle { font-size: 1.1rem; }
+    }
+    @media screen and (max-width: 480px) {
+      .responsive-title { font-size: 1.8rem; }
+      .responsive-subtitle { font-size: 1rem; }
+    }
+
+    .assistant-chat-btn {
+      position: fixed;
+      left: 25px;
+      bottom: 50px;
+      z-index: 1200;
+      width: 70px;
+      height: 70px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #0f8bcf, #0a5c9e);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(9, 77, 146, 0.38);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+    }
+
+    .assistant-chat-panel {
+      position: fixed;
+      left: 25px;
+      bottom: 132px;
+      width: 320px;
+      max-width: calc(100vw - 50px);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.22);
+      overflow: hidden;
+      z-index: 1201;
+      display: none;
+    }
+
+    .assistant-chat-panel.open {
+      display: block;
+    }
+
+    .assistant-chat-header {
+      background: linear-gradient(145deg, #0f8bcf, #094d92);
+      color: #fff;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+
+    .assistant-chat-body {
+      max-height: 280px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #f4f8fc;
+    }
+
+    .assistant-chat-options {
+      padding: 10px 12px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      background: #f4f8fc;
+    }
+
+    .assistant-option-chip {
+      border: 1px solid #a8cbf2;
+      color: #0d4f87;
+      background: #fff;
+      border-radius: 12px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      line-height: 1.25;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: normal;
+      text-align: left;
+      max-width: 100%;
+    }
+
+    .assistant-option-chip:hover {
+      background: #0f8bcf;
+      color: #fff;
+      border-color: #0f8bcf;
+    }
+
+    .assistant-msg {
+      max-width: 86%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 0.92rem;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+
+    .assistant-msg.bot {
+      background: #e8f3ff;
+      color: #0d3052;
+      border: 1px solid #cfe7ff;
+    }
+
+    .assistant-msg.user {
+      background: #094d92;
+      color: #fff;
+      margin-left: auto;
+    }
+
+    .assistant-chat-input-wrap {
+      border-top: 1px solid #dbe7f4;
+      padding: 10px;
+      display: flex;
+      gap: 8px;
+      background: #fff;
+    }
+
+    .assistant-chat-input-wrap input,
+    .assistant-chat-input-wrap textarea {
+      flex: 1;
+      border: 1px solid #cfdbe8;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+    }
+
+    .assistant-chat-input-wrap button {
+      border: none;
+      border-radius: 8px;
+      background: #0f8bcf;
+      color: #fff;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .assistant-chat-btn {
+        left: 16px;
+        bottom: 28px;
+        width: 62px;
+        height: 62px;
+      }
+      .assistant-chat-panel {
+        left: 16px;
+        bottom: 100px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header-section">
+  <div class="container">
+    <div class="header-content">
+      <div class="d-flex justify-content-center align-items-center">
+        <div class="logo-circle">
+          <a href="{% url 'home' %}"><img src="{% static 'management/img/logo.jpg' %}" alt="Logo"></a>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <h1 class="responsive-title">SITARI SOLUTIONS</h1>
+        <div class="responsive-subtitle">
+          <a href="https://www.sitarisolutions.in" style="color: #fff; text-decoration: none;">www.sitarisolutions.in</a>
+        </div>
+      </div>
+
+      <div class="person-box">
+        <img src="{% static 'management/img/person.jpg' %}" alt="Person">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="nav-bar">
+  <div class="nav-links">
+    <a href="{% url 'home' %}">Home</a>
+    <a href="{% url 'contact' %}">Contact</a>
+  </div>
+
+  <div class="right-block">
+    <div class="nav-links"><i class="bi bi-person"></i><a href="{% url 'login' %}">Employee Login</a></div>
+  </div>
+</div>
+
+<div class="disclaimer-bar">
+  <span class="disclaimer-text"></span>
+  <div class="marquee">
+    <span>This is the official website of the Sitari Solutions</span>
+  </div>
+</div>
+
+<div id="demo" class="carousel slide custom-carousel" data-bs-ride="carousel" data-bs-interval="4000">
+  <div class="carousel-indicators">
+    <button type="button" data-bs-target="#demo" data-bs-slide-to="0" class="active" aria-label="Slide 1"></button>
+    <button type="button" data-bs-target="#demo" data-bs-slide-to="1" aria-label="Slide 2"></button>
+    <button type="button" data-bs-target="#demo" data-bs-slide-to="2" aria-label="Slide 3"></button>
+  </div>
+
+  <div class="carousel-inner">
+    <div class="carousel-item active">
+      <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide1">
+    </div>
+    <div class="carousel-item">
+      <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide2">
+    </div>
+    <div class="carousel-item">
+      <img src="{% static 'management/img/la.jpg' %}" class="d-block" alt="slide3">
+    </div>
+  </div>
+
+  <button class="carousel-control-prev" type="button" data-bs-target="#demo" data-bs-slide="prev">
+    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Previous</span>
+  </button>
+  <button class="carousel-control-next" type="button" data-bs-target="#demo" data-bs-slide="next">
+    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Next</span>
+  </button>
+</div>
+
+<div class="disclaimer-bar">
+  <span class="disclaimer-text">Latest Announcements and Updates :</span>
+  <div class="marquee">
+    <span>For Assistance or Inquiries, Please contact our number at +91 9701629320</span>
+  </div>
+</div>
+
+<br>
+
+<footer class="custom-footer">
+  <div class="container py-5">
+    <div class="row gy-4 text-center text-md-start align-items-start">
+      <div class="col-lg-3 col-md-3">
+        <img src="{% static 'management/img/logo.jpg' %}" alt="Logo" class="footer-logo mb-3">
+        <p class="small text-white">
+          Your one-stop platform for passport services, PAN card, Aadhaar, EPFO, RTA services, business registrations,
+          travel bookings, and essential government services. Access seamless, integrated solutions from anywhere.
+        </p>
+        <div class="social-icons mt-3">
+          <a href="https://instagram.com/saikrupaonlineservice" class="me-3"><i class="bi bi-instagram"></i></a>
+          <a href="https://youtube.com/@saikrupaservicenzb?si=nYjbRRvP3AKOSlwl" class="me-3"><i class="bi bi-youtube"></i></a>
+          <a href="https://wa.me/96063736616"><i class="bi bi-whatsapp"></i></a>
+        </div>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Useful Links</h5>
+        <a href="{% url 'home' %}" class="text-white" style="text-decoration: none;">Home</a><br>
+        <a href="{% url 'contact' %}" class="text-white" style="text-decoration: none;">Contact us</a>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Contact Us</h5>
+        <address class="small text-white mb-2">
+          H.No 6-12-55,<br>
+          opp Jain Mandir, Shivaji Chowk,<br>
+          Nizamabad District - 503002,<br>
+          Telangana, India
+        </address>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Phone</h5>
+        <p class="small text-white mb-0">
+          <b>+91 9701629320</b><br>
+          <b>+91 9032916616</b><br>
+          <b>+91 9581909826</b>
+        </p>
+      </div>
+    </div>
+
+    <hr class="my-4">
+
+    <div class="row">
+      <div class="col text-center">
+        <small class="text-white">&copy; 2025 Sitari Solutions. All rights reserved.</small><br>
+        <small class="text-white">Designed by <a href="https://www.prathibhasolutions.com/" style="color: lightgreen;">Prathibha Solutions</a></small>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<button type="button" class="assistant-chat-btn" id="assistantChatBtn" aria-label="Open assistant chat" title="Assistant Chat">
+  <i class="bi bi-robot"></i>
+</button>
+
+<div class="assistant-chat-panel" id="assistantChatPanel" aria-live="polite">
+  <div class="assistant-chat-header">
+    <span><i class="bi bi-robot me-1"></i> Sitari Assistant</span>
+    <button type="button" class="btn btn-sm btn-light py-0 px-2" id="assistantChatClose">x</button>
+  </div>
+  {% if assistant_template_options %}
+  <div class="assistant-chat-options" id="assistantChatOptions">
+    {% for item in assistant_template_options %}
+    <button type="button" class="assistant-option-chip" data-message="{{ item }}">{{ item }}</button>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="assistant-chat-body" id="assistantChatBody">
+    <div class="assistant-msg bot">Hi, I am Sitari Assistant. Ask me about services, timings, location, or contact details.</div>
+  </div>
+  <form class="assistant-chat-input-wrap" id="assistantChatForm">
+    <textarea id="assistantChatInput" placeholder="Type your question..." maxlength="1000" rows="2" style="resize: vertical;" autocomplete="off"></textarea>
+    <button type="submit">Send</button>
+  </form>
+</div>
+
+<a href="https://wa.me/96063736616" target="_blank" style="position: fixed; right: 25px; bottom: 50px;">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/WhatsApp_icon.png" alt="WhatsApp" width="70">
+</a>
+
+<script>
+  (function () {
+    var chatBtn = document.getElementById('assistantChatBtn');
+    var panel = document.getElementById('assistantChatPanel');
+    var closeBtn = document.getElementById('assistantChatClose');
+    var form = document.getElementById('assistantChatForm');
+    var input = document.getElementById('assistantChatInput');
+    var body = document.getElementById('assistantChatBody');
+    var optionsWrap = document.getElementById('assistantChatOptions');
+
+    function addMessage(type, text) {
+      var div = document.createElement('div');
+      div.className = 'assistant-msg ' + type;
+      div.textContent = text;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function getBotReply(message) {
+      return fetch('{% url "public_chatbot_reply" %}?message=' + encodeURIComponent(message))
+        .then(function (response) {
+          return response.json().then(function (payload) {
+            if (!response.ok) {
+              throw new Error(payload.error || 'Unable to process your message right now.');
+            }
+            return payload;
+          });
+        })
+        .catch(function () {
+          return {
+            reply: 'I can help with services, timings, address, and contact details. For quick support, use the WhatsApp icon on the right.',
+            documents: [],
+          };
+        });
+    }
+
+    function addDocumentLinks(documents) {
+      if (!Array.isArray(documents) || documents.length === 0) {
+        return;
+      }
+
+      function isImageName(name) {
+        var lower = String(name || '').toLowerCase();
+        return (
+          lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png') ||
+          lower.endsWith('.webp') ||
+          lower.endsWith('.heic') ||
+          lower.endsWith('.heif')
+        );
+      }
+
+      documents.forEach(function (doc) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'assistant-msg bot';
+
+        if (isImageName(doc.name || '')) {
+          var img = document.createElement('img');
+          img.src = doc.url || '';
+          img.alt = doc.name || 'attachment';
+          img.style.maxWidth = '220px';
+          img.style.borderRadius = '8px';
+          img.style.border = '1px solid #ced6e0';
+          wrapper.appendChild(img);
+        } else {
+          var label = document.createElement('span');
+          label.textContent = 'File: ';
+          var link = document.createElement('a');
+          link.href = doc.url || '#';
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = doc.name || 'Download';
+          wrapper.appendChild(label);
+          wrapper.appendChild(link);
+        }
+
+        body.appendChild(wrapper);
+        body.scrollTop = body.scrollHeight;
+      });
+    }
+
+    function sendAndReply(message) {
+      addMessage('user', message);
+      window.setTimeout(function () {
+        getBotReply(message).then(function (result) {
+          addMessage('bot', result.reply || 'Done.');
+          addDocumentLinks(result.documents || []);
+        });
+      }, 250);
+    }
+
+    chatBtn.addEventListener('click', function () {
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        input.focus();
+      }
+    });
+
+    closeBtn.addEventListener('click', function () {
+      panel.classList.remove('open');
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var message = (input.value || '').trim();
+      if (!message) return;
+      sendAndReply(message);
+      input.value = '';
+    });
+
+    if (optionsWrap) {
+      optionsWrap.addEventListener('click', function (e) {
+        var target = e.target;
+        if (!target || !target.classList.contains('assistant-option-chip')) {
+          return;
+        }
+        var message = (target.getAttribute('data-message') || '').trim();
+        if (!message) {
+          return;
+        }
+        sendAndReply(message);
+      });
+    }
+
+  })();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

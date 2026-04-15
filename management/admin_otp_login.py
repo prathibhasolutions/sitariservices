@@ -4,6 +4,22 @@ from django.contrib import messages
 from management.utils import generate_otp, send_otp_whatsapp
 from management.models import UserProfile
 
+
+def _enforce_admin_single_session(user, request):
+    """
+    Store the current session key as the only valid session for this admin.
+    The AdminSingleDeviceMiddleware will kick out any other device on their
+    next request by comparing session keys.
+    """
+    from management.models import AdminActiveSession
+    # Make sure the session is saved to DB so its key is finalised
+    request.session.save()
+    AdminActiveSession.objects.update_or_create(
+        user=user,
+        defaults={'session_key': request.session.session_key},
+    )
+
+
 def admin_login_with_otp(request):
     User = get_user_model()
     # Step 1: Username only
@@ -40,6 +56,7 @@ def admin_login_with_otp(request):
                 login(request, user)
                 request.session.pop('admin_otp', None)
                 request.session.pop('admin_otp_user', None)
+                _enforce_admin_single_session(user, request)
                 return redirect('/admin/')
             else:
                 messages.error(request, 'Invalid OTP. Please try again.')
@@ -56,6 +73,7 @@ def admin_login_with_otp(request):
         user = authenticate(request, username=username, password=password)
         if user is not None and (user.is_staff or user.is_superuser):
             login(request, user)
+            _enforce_admin_single_session(user, request)
             return redirect('/admin/')
         else:
             messages.error(request, 'Invalid username or password.')

@@ -7,6 +7,35 @@ from management.models import AttendanceSession, Employee
 from management.utils import get_employee_next_day_alert_state
 from django.utils import timezone
 
+
+class AdminSingleDeviceMiddleware(MiddlewareMixin):
+    """
+    On every request to /admin/ or /admin-dashboard/, checks whether the
+    logged-in admin's session key matches the one stored in AdminActiveSession.
+    If it doesn't (i.e. another device logged in after this one), the session
+    is flushed and the user is redirected to the login page.
+    """
+    EXEMPT_PATHS = ('/admin/login/', '/admin/logout/', '/access-denied/')
+
+    def process_request(self, request):
+        path = request.path
+        if not (path.startswith('/admin/') or path.startswith('/admin-dashboard/')):
+            return None
+        if any(path.startswith(p) for p in self.EXEMPT_PATHS):
+            return None
+        # request.user is not yet available this early in the middleware stack
+        # so we read it from the session directly
+        user_id = request.session.get('_auth_user_id')
+        if not user_id:
+            return None
+        from management.models import AdminActiveSession
+        record = AdminActiveSession.objects.filter(user_id=user_id).first()
+        if record and record.session_key != request.session.session_key:
+            request.session.flush()
+            return redirect('/admin/login/?next=' + path)
+        return None
+
+
 class EmployeeAttendanceSessionMiddleware(MiddlewareMixin):
     """
     Middleware to ensure employee has an active AttendanceSession for all employee-only pages.
@@ -17,7 +46,7 @@ class EmployeeAttendanceSessionMiddleware(MiddlewareMixin):
         # List of URL prefixes for employee-only pages
         employee_prefixes = [
             '/employee/dashboard/', '/employee/attendance/', '/employee/attendance_ping/', '/employee/refresh_session/',
-            '/worksheet/', '/notifications/', '/change-password/', '/upload-file/', '/todos/', '/applications/', '/links/',
+            '/worksheet/', '/notifications/', '/change-password/', '/upload-file/', '/uploads/', '/todos/', '/applications/', '/links/',
             '/assigned-tasks/', '/create-invoice/', '/invoice/'
         ]
         # Exclude admin, api, and logout URLs
@@ -114,6 +143,7 @@ class EmployeeNextDayAvailabilityMiddleware(MiddlewareMixin):
             '/static/',
             '/media/',
             '/admin/',
+            '/admin-dashboard/',
         ]
         if any(path.startswith(prefix) for prefix in exempt_prefixes):
             return None
@@ -130,7 +160,7 @@ class EmployeeNextDayAvailabilityMiddleware(MiddlewareMixin):
             message = 'Please answer the tomorrow availability alert before using other features.'
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'status': 'blocked', 'message': message}, status=403)
-            messages.error(request, message)
+            messages.error(request, message, fail_silently=True)
             return redirect(request.META.get('HTTP_REFERER') or reverse('employee_dashboard'))
 
         return None

@@ -1,0 +1,118 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto;">
+    <h1 style="margin-bottom: 12px;">Hidden Employees Worksheet Entries</h1>
+
+    <div style="margin-bottom: 16px;">
+        <a href="{% url 'admin_dashboard' %}" class="button">Back to Admin Dashboard</a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+        <form method="post" style="border: 1px solid #ddd; padding: 12px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="hide">
+            <label for="hide_employee_id"><strong>Hide Employee Worksheet</strong></label><br>
+            <select name="target_employee_id" id="hide_employee_id" style="min-width: 220px; margin-top: 6px;" required>
+                <option value="">Select employee</option>
+                {% for emp in visible_employees %}
+                    <option value="{{ emp.employee_id }}">{{ emp.employee_id }} - {{ emp.name }}</option>
+                {% endfor %}
+            </select>
+            <div style="margin-top: 10px;">
+                <button type="submit" class="button default">Hide</button>
+            </div>
+        </form>
+
+        <div style="border: 1px solid #ddd; padding: 12px;">
+            <label><strong>Hidden Employees</strong></label>
+            <div style="margin-top: 8px; max-height: 160px; overflow: auto;">
+                {% for emp in hidden_employees %}
+                    <form method="post" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="unhide">
+                        <input type="hidden" name="target_employee_id" value="{{ emp.employee_id }}">
+                        <span>{{ emp.employee_id }} - {{ emp.name }}</span>
+                        <button type="submit" class="button">Unhide</button>
+                    </form>
+                {% empty %}
+                    <div>No hidden employees.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <form method="get" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px;">
+        <div>
+            <label for="employee_id"><strong>Employee</strong></label><br>
+            <select name="employee_id" id="employee_id" style="min-width: 220px;">
+                <option value="">All hidden employees</option>
+                {% for emp in hidden_employees %}
+                    <option value="{{ emp.employee_id }}" {% if hidden_entries_selected_employee_id == emp.employee_id %}selected{% endif %}>
+                        {{ emp.employee_id }} - {{ emp.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="from_date"><strong>From</strong></label><br>
+            <input type="date" id="from_date" name="from_date" value="{{ hidden_entries_from_date }}">
+        </div>
+
+        <div>
+            <label for="to_date"><strong>To</strong></label><br>
+            <input type="date" id="to_date" name="to_date" value="{{ hidden_entries_to_date }}">
+        </div>
+
+        <div>
+            <button type="submit" class="button default">Filter</button>
+        </div>
+    </form>
+
+    <div style="margin-bottom: 12px; font-size: 14px;">
+        <strong>Total Amount:</strong> {{ hidden_entries_total_amount }}
+        &nbsp;|&nbsp;
+        <strong>Total Payment:</strong> {{ hidden_entries_total_payment }}
+    </div>
+
+    <div style="overflow-x: auto; border: 1px solid #ddd;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 1000px;">
+            <thead>
+                <tr style="background: #f7f7f7;">
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Date</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Employee</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Department</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Token</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Customer</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Service</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Particulars</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Payment</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: right;">Amount</th>
+                    <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in hidden_entries %}
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.date }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.employee.employee_id }} - {{ row.employee.name }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.department_name|default:"-" }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.token_no|default:"-" }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.customer_name|default:"-" }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.service|default:"-" }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.particulars|default:"-" }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{{ row.payment }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{{ row.amount }}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ row.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="10" style="padding: 12px; border: 1px solid #ddd; text-align: center;">No hidden worksheet entries found.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

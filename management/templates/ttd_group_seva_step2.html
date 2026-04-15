@@ -1,0 +1,82 @@
+{% extends "masteremployee.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert"><span>&times;</span></button>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex align-items-center mb-3">
+        <a href="{% url 'ttd_main' %}" class="btn btn-sm btn-outline-secondary mr-3">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h4 class="mb-0" style="color:#8B1A1A; font-weight:700;">
+            <i class="fas fa-users mr-2" style="color:#d4a017;"></i>Group Seva – Step 2 of 2: Member Details
+        </h4>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2 px-3 d-flex flex-wrap" style="gap:1rem;">
+            <div><span class="text-muted small">Planned Date:</span> <strong>{{ group_seva.planned_date|date:"d M Y" }}</strong></div>
+            <div><span class="text-muted small">Total Members:</span> <strong>{{ group_seva.num_members }}</strong></div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header" style="background:#8B1A1A; color:#fff;">
+            <strong>Member Details</strong>
+            <span class="badge badge-warning ml-2">{{ group_seva.num_members }} members</span>
+        </div>
+        <div class="card-body p-0">
+            <form method="post">
+                {% csrf_token %}
+                {{ formset.management_form }}
+
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th style="width:40px;">#</th>
+                                <th>Full Name</th>
+                                <th>Mobile Number</th>
+                                <th>Aadhaar Number</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member_form in formset %}
+                            <tr>
+                                <td class="align-middle text-center"><strong>{{ forloop.counter }}</strong></td>
+                                <td>
+                                    {{ member_form.name }}
+                                    {% if member_form.name.errors %}<div class="text-danger small">{{ member_form.name.errors }}</div>{% endif %}
+                                </td>
+                                <td>
+                                    {{ member_form.mobile_number }}
+                                    {% if member_form.mobile_number.errors %}<div class="text-danger small">{{ member_form.mobile_number.errors }}</div>{% endif %}
+                                </td>
+                                <td>
+                                    {{ member_form.aadhar_number }}
+                                    {% if member_form.aadhar_number.errors %}<div class="text-danger small">{{ member_form.aadhar_number.errors }}</div>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-3">
+                    <button type="submit" class="btn btn-block" style="background:#8B1A1A; color:#fff; font-weight:600; max-width:320px;">
+                        <i class="fas fa-save mr-2"></i>Save Group Seva Booking
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

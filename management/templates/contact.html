@@ -1,0 +1,337 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sitari Solutions</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+  <link href="https://fonts.googleapis.com" rel="preconnect">
+  <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --person-w-desktop: 80px;
+      --person-h-desktop: 100px;
+      --logo-size-desktop: 120px;
+      --carousel-h-desktop: 50vh;
+      --nav-font-desktop: 1rem;
+      --disclaimer-font-desktop: 1rem;
+    }
+
+    .header-section{
+      background: url('{% static "management/img/forest1.jpg" %}') no-repeat center center;
+      background-size: cover;
+      position: relative;
+      color: white;
+      padding: 10px 0;
+      min-height: 110px;
+      z-index: 1;
+    }
+    .header-section .container { position: relative; z-index: 2; }
+
+    .header-content{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: nowrap;
+    }
+
+    .logo-title{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-align:center;
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 4px 8px;
+    }
+
+    .person-box{ flex: 0 0 auto; display:flex; align-items:center; justify-content:center; }
+    .person-box img{
+      width: var(--person-w-desktop);
+      height: var(--person-h-desktop);
+      border: 2px solid #ccc;
+      background: #fff;
+      object-fit: cover;
+      display:block;
+    }
+
+    .logo-circle{
+      width: var(--logo-size-desktop);
+      height: var(--logo-size-desktop);
+      border-radius: 50%;
+      border: 3px solid #fff;
+      background: #ddd;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin-bottom: 6px;
+    }
+    .logo-circle img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .logo-title h2{
+      margin:0;
+      font-weight:700;
+      color:white;
+      line-height:1;
+      font-size: clamp(1rem, 2.2vw, 1.4rem);
+      white-space: nowrap;
+    }
+    .logo-title span{
+      font-size: clamp(0.85rem, 1.9vw, 1rem);
+      display:block;
+    }
+
+    .nav-bar{
+      background-color: #b5e2fa;
+      padding: 8px 16px;
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      color: rgb(0, 0, 0);
+      overflow: hidden;
+    }
+
+    .nav-links{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .nav-links a{
+      color: rgb(0, 0, 0);
+      text-decoration: none;
+      font-weight:500;
+      white-space: nowrap;
+      font-size: clamp(0.9rem, 1.6vw, var(--nav-font-desktop));
+      margin-right: 6px;
+      display:inline-block;
+    }
+
+    .nav-links a:hover{ text-decoration: underline; }
+
+    .nav-bar .right-block{
+      flex: 0 0 auto;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      margin-left: 12px;
+      white-space: nowrap;
+      font-size: clamp(0.85rem, 1.5vw, 0.95rem);
+    }
+
+    @media (max-width: 420px){
+      .nav-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .nav-bar::-webkit-scrollbar { height:6px; }
+    }
+
+    .disclaimer-bar{
+      background-color: #094D92;
+      color: white;
+      font-weight: bold;
+      padding: 6px 12px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .disclaimer-text{ color:#ffcc00; flex:0 0 auto; font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop)); }
+
+    .marquee{ flex: 1 1 auto; overflow: hidden; white-space: nowrap; }
+    .marquee span{
+      display:inline-block;
+      padding-left: 100%;
+      animation: marquee 12s linear infinite;
+      font-size: clamp(0.95rem, 1.6vw, var(--disclaimer-font-desktop));
+    }
+    @keyframes marquee{
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .info-item i {
+      font-size: 1.2rem;
+      background: #094D92;
+      color: #fff;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+    }
+    .map iframe {
+      border-radius: 12px;
+      width: 100%;
+      height: 450px;
+    }
+
+    .custom-footer {
+      background: #094D92;
+      color: #ffffff;
+      font-size: clamp(0.8rem, 1.8vw, 1rem);
+    }
+    .footer-heading {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #ffffff;
+    }
+    .footer-list a { color: #000; text-decoration: none; }
+    .footer-list a:hover { color: #0FA3B1; }
+    .footer-logo { max-width: 150px; border-radius: 50%; margin-bottom: 10px; }
+    .social-icons a {
+      font-size: 1.3rem;
+      margin-right: 10px;
+      color: #000000;
+    }
+    .social-icons a:hover { color: #ffffff; }
+
+    @media screen and (max-width: 992px) {
+      .site-title { font-size: 3.5rem !important; }
+      .site-subtitle { font-size: 1.3rem !important; }
+    }
+    @media screen and (max-width: 768px) {
+      .site-title { font-size: 2.5rem !important; }
+      .site-subtitle { font-size: 1.1rem !important; }
+    }
+    @media screen and (max-width: 480px) {
+      .site-title { font-size: 1.8rem !important; }
+      .site-subtitle { font-size: 1rem !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header-section">
+  <div class="container">
+    <div class="header-content">
+      <div class="d-flex justify-content-center align-items-center">
+        <div class="logo-circle">
+          <a href="{% url 'home' %}"><img src="{% static 'management/img/logo.jpg' %}" alt="Logo"></a>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <h1 class="site-title" style="font-size: 5rem; margin-bottom: 5px; color: #fff;">SITARI SOLUTIONS</h1>
+        <div class="site-subtitle" style="font-size: 1.5rem; color: #fff;">www.sitarisolutions.in</div>
+      </div>
+
+      <div class="person-box">
+        <img src="{% static 'management/img/person.jpg' %}" alt="Person 2">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="nav-bar">
+  <div class="nav-links">
+    <a href="{% url 'home' %}">Home</a>
+    <a href="{% url 'contact' %}">Contact</a>
+  </div>
+
+  <div class="right-block">
+    <span>
+      <div class="nav-links"><i class="bi bi-person"></i><a href="{% url 'login' %}">Employee Login</a></div>
+    </span>
+  </div>
+</div>
+
+<div class="disclaimer-bar">
+  <span class="disclaimer-text"></span>
+  <div class="marquee">
+    <span>This is the official website of the Sitari Solutions</span>
+  </div>
+</div>
+
+<section id="contact" class="contact section py-5">
+  <div class="container">
+    <h2 class="text-center mb-4">Contact Us</h2>
+    <div class="row gy-4">
+      <div class="col-lg-4">
+        <div class="info-item d-flex">
+          <i class="bi bi-geo-alt flex-shrink-0"></i>
+          <div><h3>Address</h3>
+          <p>H.No 6-12-55, opp Jain Mandir, Shivaji Chowk, Nizamabad - 503002, Telangana, India</p></div>
+        </div>
+        <div class="info-item d-flex mt-4">
+          <i class="bi bi-telephone"></i>
+          <div><h3>Contact</h3>
+          <p>+91 9701629320<br>+91 9032916616<br>+91 9581909826</p></div>
+        </div>
+      </div>
+      <div class="col-lg-8">
+        <div class="map">
+          <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3800.860559663534!2d78.09414461484094!3d18.67218898732421!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bccc95e6b4e0c1b%3A0x5c7e4b0b4e4e4e4e!2sShivaji%20Chowk%2C%20Namdevwada%2C%20Nizamabad%2C%20Telangana%20503002%2C%20India!5e0!3m2!1sen!2sin!4v1698241234567" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="custom-footer">
+  <div class="container py-5">
+    <div class="row gy-4 text-center text-md-start align-items-start">
+      <div class="col-lg-3 col-md-3">
+        <img src="{% static 'management/img/logo.jpg' %}" alt="Logo" class="footer-logo mb-3">
+        <p class="small text-white">
+          Your one-stop platform for passport services, PAN card, Aadhaar, EPFO, RTA services, business registrations,
+          travel bookings, and essential government services. Access seamless, integrated solutions from anywhere.
+        </p>
+        <div class="social-icons mt-3">
+          <a href="https://instagram.com/saikrupaonlineservice" class="me-3"><i class="bi bi-instagram"></i></a>
+          <a href="https://youtube.com/@saikrupaservicenzb?si=nYjbRRvP3AKOSlwl" class="me-3"><i class="bi bi-youtube"></i></a>
+          <a href="https://wa.me/96063736616"><i class="bi bi-whatsapp"></i></a>
+        </div>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Useful Links</h5>
+        <a href="{% url 'home' %}" class="text-white" style="text-decoration: none;">Home</a><br>
+        <a href="{% url 'contact' %}" class="text-white" style="text-decoration: none;">Contact us</a>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Contact Us</h5>
+        <address class="small text-white mb-2">
+          H.No 6-12-55,<br>
+          opp Jain Mandir, Shivaji Chowk,<br>
+          Nizamabad District - 503002,<br>
+          Telangana, India
+        </address>
+      </div>
+
+      <div class="col-lg-3 col-md-3">
+        <h5 class="footer-heading">Phone</h5>
+        <p class="small text-white mb-0">
+          <b>+91 9701629320</b><br>
+          <b>+91 9032916616</b><br>
+          <b>+91 9581909826</b>
+        </p>
+      </div>
+    </div>
+
+    <hr class="footer-divider my-4">
+
+    <div class="row">
+      <div class="col text-center">
+        <small class="text-white">&copy; 2025 Sitari Solutions. All rights reserved.</small><br>
+        <small class="text-white">Designed by <span class="designer-name"><a href="https://www.prathibhasolutions.com/" style="color: lightgreen;">Prathibha Solutions</a></span></small>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

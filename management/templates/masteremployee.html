@@ -3,8 +3,17 @@
 <!-- Geofencing: Block/Logout if out of access area -->
 <script>
 async function geofenceCheckAndEnforce() {
+    function toDenied(message, source) {
+        const params = new URLSearchParams({
+            source: source || 'location',
+            message: message || 'Access denied.',
+            path: window.location.pathname
+        });
+        window.location.href = '{% url "access_denied" %}?' + params.toString();
+    }
+
     if (!navigator.geolocation) {
-        alert('Geolocation is required for access, but not supported by your browser.');
+        toDenied('Geolocation is required for access, but it is not supported by this browser.', 'location');
         return;
     }
     navigator.geolocation.getCurrentPosition(async function(pos) {
@@ -27,16 +36,18 @@ async function geofenceCheckAndEnforce() {
                     headers: { 'X-CSRFToken': getCSRFToken() },
                     body: new URLSearchParams({ 'logout_reason': data.reason })
                 });
-                alert(data.reason || 'You are out of the access area.');
-                window.location.href = '/';
+                toDenied(data.reason || 'You are out of the allowed access area.', 'location');
             }
         } catch (e) {
-            // Geofence check failed: just continue, do not alert
-            // (no-op)
+            toDenied('Unable to verify your location right now. Please try again from an allowed location.', 'location');
         }
     }, function(err) {
-        alert('Location access denied. You cannot proceed.');
-        window.location.href = '/';
+        const locationErrorMessage = (err && err.code === 1)
+            ? 'Location permission is denied. Enable location permission to continue.'
+            : (err && err.code === 2)
+                ? 'Location is currently unavailable. Try again from an allowed area.'
+                : 'Location request timed out. Please try again.';
+        toDenied(locationErrorMessage, 'location');
     });
 }
 // Only run for logged-in employee pages (not login page)
@@ -45,7 +56,6 @@ if (!window.location.pathname.includes('login')) {
 }
 </script>
 {% load static %}
-{% load upload_tags %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -53,6 +63,9 @@ if (!window.location.pathname.includes('login')) {
     <meta charset="UTF-8">
     <title>Employee Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="{% url 'pwa_manifest' %}">
+    <meta name="theme-color" content="#0a4a8a">
+    <link rel="apple-touch-icon" href="{% static 'management/img/logo.jpg' %}">
     
     <!-- Bootstrap 4.6.2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -65,6 +78,8 @@ if (!window.location.pathname.includes('login')) {
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&family=Poppins:wght@100..900&family=Raleway:wght@100..900&family=Open+Sans:wght@300..700&display=swap" rel="stylesheet">
+
+    <script src="{% static 'pwa/register-sw.js' %}" defer></script>
     
     <meta name="csrf-token" content="{{ csrf_token }}">
     
@@ -166,6 +181,8 @@ if (!window.location.pathname.includes('login')) {
         .navbar-bell .badge { position: absolute; top: -8px; right: -15px; font-size: 0.8rem; font-weight: 600; padding: 4px 7px; border-radius: 50%; box-shadow: 0 0 10px rgba(220, 53, 69, 0.8); }
         .navbar-upload-icon { font-size: 1.9rem; color: white; transition: color 0.3s ease; }
         .navbar-upload-icon:hover { color: #ffd700; }
+        .absentees-icon { color: #dc3545; }
+        .absentees-icon:hover { color: #ff8a80; }
         
         /* Increased Logo Size */
         .sidebar-logo { 
@@ -365,20 +382,22 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="nav flex-column">
             {% url 'employee_dashboard' as profile_url %}
             <a class="nav-link mb-2 {% if request.path == profile_url %}active{% endif %}" href="{{ profile_url }}">Profile</a>
+            {% if has_token_naming_access %}
+            {% url 'employee_token_naming' as employee_token_naming_url %}
+            <a class="nav-link mb-2 {% if request.path == employee_token_naming_url %}active{% endif %}" href="{{ employee_token_naming_url }}">Token Generation</a>
+            {% endif %}
             {% url 'attendance' as attendance_url %}
             <a class="nav-link mb-2 {% if request.path == attendance_url %}active{% endif %}" href="{{ attendance_url }}">Attendance</a>
             {% url 'worksheet' as worksheet_url %}
             <a class="nav-link mb-2 {% if request.path == worksheet_url %}active{% endif %}" href="{{ worksheet_url }}">Daily Worksheet</a>
+            {% url 'todays_absentees' as todays_absentees_url %}
+            <a class="nav-link mb-2 {% if request.path == todays_absentees_url %}active{% endif %}" href="{{ todays_absentees_url }}">Today's Absentees</a>
             {% url 'applications' as applications_url %}
             <a class="nav-link mb-2 {% if request.path == applications_url %}active{% endif %}" href="{{ applications_url }}">WorkSheet Applications</a>
 
 
 
             <a class="nav-link mb-2" href="https://app.interakt.ai/login" target="_blank" rel="noopener">Interakt</a>
-
-                <a class="nav-link mb-2" href="https://www.whatsapp.sitarisolutions.in/" target="_blank" rel="noopener">
-                    <i class="fa fa-whatsapp" aria-hidden="true"></i> Sitari Whatsapp
-                </a>
 </style>
 <style>
 @keyframes blink {
@@ -394,8 +413,20 @@ document.addEventListener('DOMContentLoaded', function() {
             <a class="nav-link mb-2 {% if request.path == invoice_url %}active{% endif %}" href="{{ invoice_url }}">Generate Invoice</a>
             {% url 'assigned_links' as links_url %}
             <a class="nav-link mb-2 {% if request.path == links_url %}active{% endif %}" href="{{ links_url }}">Links</a>
+            {% url 'employee_sitari_chat' as employee_sitari_chat_url %}
+            <a class="nav-link mb-2 {% if request.path == employee_sitari_chat_url %}active{% endif %}" href="{{ employee_sitari_chat_url }}">Sitari Chat</a>
+            {% url 'employee_uploads' as uploads_url %}
+            <a class="nav-link mb-2 {% if request.path == uploads_url %}active{% endif %}" href="{{ uploads_url }}">Uploads</a>
             {% url 'change_password_request' as change_pass_url %}
             <a class="nav-link mb-2 {% if request.path == change_pass_url %}active{% endif %}" href="{{ change_pass_url }}">Change Password</a>
+
+            {# Department Head Top Up Link #}
+
+            {% if is_department_head %}
+                {% url 'department_topup' as topup_url %}
+                <a class="nav-link mb-2 {% if request.path == topup_url %}active{% endif %}" href="{{ topup_url }}">Top Up</a>
+            {% endif %}
+
             <a href="#" class="nav-link text-danger mt-3" data-toggle="modal" data-target="#logoutModal">Logout</a>
         </div>
     </nav>
@@ -408,18 +439,61 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-align-left"></i>
                     <span>Dashboard</span>
                 </button>
+                <!-- Daily stats widget (centre) -->
+                <div class="d-flex align-items-center" style="gap:1rem; flex-shrink:0;">
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Target</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">
+                            {% if navbar_daily_target is not None %}₹{{ navbar_daily_target|floatformat:0 }}{% else %}<span style="color:rgba(255,255,255,0.4);">—</span>{% endif %}
+                        </div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Collected</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">₹{{ navbar_daily_collected|floatformat:0 }}</div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Balance</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">
+                            {% if navbar_daily_balance is not None %}₹{{ navbar_daily_balance|floatformat:0 }}{% else %}—{% endif %}
+                        </div>
+                    </div>
+                    {% if navbar_department_balance is not None %}
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem;">|</div>
+                    <div style="text-align:center; line-height:1.1;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Dept. Balance</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#fff;">₹{{ navbar_department_balance|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
+                </div>
                 <div class="d-flex flex-nowrap align-items-center ml-auto" style="gap: 1.5rem;">
+                    <button class="btn btn-sm btn-light mr-2" type="button" id="openEmployeeTokenSearchBtn" style="flex-shrink:0;">
+                        <i class="fas fa-search mr-1"></i> Token Search
+                    </button>
+                    <!-- Commission widget (rightmost before timer) -->
+                    <div style="text-align:center; line-height:1.1; flex-shrink:0;">
+                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:0.05em;">Comm. Earned</div>
+                        <div style="font-size:0.9rem; font-weight:700; color:#ff4d4d;">₹{{ navbar_daily_commission|floatformat:2 }}</div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3); font-size:1rem; flex-shrink:0;">|</div>
                     <!-- Session Timer Widget (unchanged, but no mobile stacking) -->
                     <div id="session-timer-container" class="mr-2" style="flex-shrink:0;">
                         <button id="session-timer" data-toggle="tooltip" title="Session Timer" class="btn btn-warning" style="font-weight:bold; min-width:70px; transition:background 0.3s;">15:00</button>
                         <button id="refresh-session-btn" class="btn btn-sm btn-warning ml-2" style="font-weight:600; display:none;" data-toggle="tooltip" title="Refresh Session">Refresh Session</button>
                     </div>
+                    <a href="{% url 'todays_absentees' %}" class="mr-2" data-toggle="tooltip" title="Absentees" style="flex-shrink:0;">
+                        <i class="fas fa-user-times navbar-upload-icon absentees-icon"></i>
+                    </a>
                     <a id="taskReminderBtn" href="{% url 'assigned_tasks' %}" class="mr-2 position-relative" title="Task Reminder" style="flex-shrink:0;">
                         <i class="fas fa-list-check navbar-upload-icon" data-toggle="tooltip" title="Task Reminder"></i>
                         <span id="taskCountBadge" class="badge badge-danger" style="position:absolute; top:-8px; right:-10px; display:none;">0</span>
                     </a>
-                    <a href="#" class="mr-2" data-toggle="modal" data-target="#uploadFileModal" title="Upload Files" style="flex-shrink:0;">
-                        <i class="fas fa-upload navbar-upload-icon" data-toggle="tooltip" title="Upload Files"></i>
+                    <a href="{% url 'ttd_main' %}" class="mr-2" title="TTD Services" style="flex-shrink:0; display:inline-flex; align-items:center; background:rgba(0,0,0,0.35); border-radius:6px; padding:2px 5px;">
+                        <img src="{% static 'img/ttd_logo.png' %}" alt="TTD" style="height:28px; width:auto; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.75'" onmouseout="this.style.opacity='1'">
+                    </a>
+                    <a href="{% url 'employee_uploads' %}" class="mr-2" data-toggle="tooltip" title="Uploads" style="flex-shrink:0;">
+                        <i class="fas fa-upload navbar-upload-icon"></i>
                     </a>
                     <div class="navbar-bell" style="flex-shrink:0;">
                         <a href="{% url 'notification_list' %}" class="text-white" data-toggle="tooltip" title="Notifications">
@@ -447,7 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <h4 id="employee-next-day-alert-title" style="margin:0; font-weight:700;">Tomorrow Attendance Confirmation</h4>
         </div>
         <div class="employee-alert-card-body">
-            <p style="font-size:1.05rem; margin-bottom:8px;">Will you come tomorrow, on {{ employee_next_day_alert_target_date|date:"d M Y" }}?</p>
+            <p style="font-size:1.05rem; margin-bottom:8px;">Will you come on {{ employee_next_day_alert_target_date|date:"l" }}, {{ employee_next_day_alert_target_date|date:"d M Y" }}?</p>
             <div class="employee-alert-badge">This alert is active from {{ employee_next_day_alert_start_label }} to {{ employee_next_day_alert_end_label }}.</div>
             <p class="employee-alert-meta">Until you select an answer, all employee features stay disabled. If you do not answer by {{ employee_next_day_alert_end_label }}, the system will automatically mark <strong>No</strong>.</p>
             <div class="employee-alert-actions">
@@ -493,40 +567,123 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<!-- File Upload Modal -->
-<div class="modal fade" id="uploadFileModal" tabindex="-1" role="dialog" aria-labelledby="uploadFileModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="modal-header">
-          <h5 class="modal-title" id="uploadFileModalLabel">Upload a Document</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close" data-toggle="tooltip" title="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          {% get_upload_form as upload_form %}
-          {% for field in upload_form %}
-            <div class="form-group">
-              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-              {{ field }}
-              {% for error in field.errors %}
-                <div class="alert alert-danger p-1 mt-1">{{ error }}</div>
-              {% endfor %}
+<div class="modal fade" id="employeeTokenSearchInputModal" tabindex="-1" role="dialog" aria-labelledby="employeeTokenSearchInputLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="employeeTokenSearchInputLabel">Token Search</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
-          {% endfor %}
+            <form id="employeeTokenSearchForm">
+                <div class="modal-body">
+                    <div class="form-group mb-2">
+                        <label for="employeeTokenSearchInput">Enter Token No</label>
+                        <input type="text" class="form-control" id="employeeTokenSearchInput" placeholder="e.g. 260401001" maxlength="20" required>
+                    </div>
+                    <small id="employeeTokenSearchError" class="text-danger d-none"></small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+            </form>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal" data-toggle="tooltip" title="Close">Close</button>
-          <button type="submit" class="btn btn-primary" data-toggle="tooltip" title="Upload File">Upload File</button>
-        </div>
-      </form>
     </div>
-  </div>
+</div>
+
+<div class="modal fade" id="employeeTokenSearchResultModal" tabindex="-1" role="dialog" aria-labelledby="employeeTokenSearchResultLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document" style="max-width: 980px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="employeeTokenSearchResultLabel">Token Details</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+                <table class="table table-sm table-bordered mb-0">
+                    <tbody>
+                        <tr><th style="width: 40%;">Token No</th><td id="employeeResultTokenNo">-</td></tr>
+                        <tr><th>Date &amp; Time</th><td id="employeeResultCreatedAt">-</td></tr>
+                        <tr><th>Customer Name</th><td><input type="text" id="employeeResultCustomerName" class="form-control form-control-sm" maxlength="255"></td></tr>
+                        <tr><th>Cell No</th><td><input type="text" id="employeeResultCellNo" class="form-control form-control-sm" maxlength="15"></td></tr>
+                        <tr><th>Department</th><td id="employeeResultDepartment">-</td></tr>
+                        <tr><th>Service Type</th><td id="employeeResultServiceType">-</td></tr>
+                        <tr><th>Operator Name</th><td id="employeeResultOperatorName">-</td></tr>
+                        <tr><th>Saved To Worksheet</th><td id="employeeResultWorksheet">-</td></tr>
+                    </tbody>
+                </table>
+                <div class="mt-3">
+                    <div class="font-weight-bold mb-2">Worksheet Details</div>
+                    <div id="employeeWorksheetDynamicFields" class="border rounded p-2" style="background:#fafbfc;"></div>
+                    <div class="d-flex flex-wrap align-items-center mt-2" style="gap:8px;">
+                        <a id="employeeWorksheetQrBtn" href="#" class="btn btn-sm btn-outline-info disabled" target="_blank" rel="noopener">QR</a>
+                        <input type="file" id="employeeWorksheetImageInput" accept="image/*,.pdf,application/pdf" class="form-control form-control-sm" style="max-width:220px;">
+                        <input type="text" id="employeeWorksheetUploadDescription" class="form-control form-control-sm" placeholder="Description (required for PDF)" style="max-width:250px;">
+                        <span class="small text-muted">Renewal Date</span>
+                        <input type="date" id="employeeWorksheetUploadRenewalDate" class="form-control form-control-sm" style="max-width:170px;" title="Renewal Date">
+                        <button type="button" id="employeeWorksheetImageUploadBtn" class="btn btn-sm btn-outline-primary" disabled>Upload File</button>
+                        <a id="employeeWorksheetImageViewBtn" href="#" class="btn btn-sm btn-outline-secondary d-none" target="_blank" rel="noopener">View Image</a>
+                    </div>
+                </div>
+                <small id="employeeTokenResultError" class="text-danger d-none mt-2 d-block"></small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="employeeTokenSaveBtn">Save</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newChatAssignedModal" tabindex="-1" role="dialog" aria-labelledby="newChatAssignedModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-success">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="newChatAssignedModalLabel">New Chat Assigned</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">A new token chat has been assigned to you.</p>
+                <ul id="newChatAssignedList" class="mb-0 pl-3"></ul>
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'employee_sitari_chat' %}" class="btn btn-success">Open Sitari Chat</a>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newChatMessageModal" tabindex="-1" role="dialog" aria-labelledby="newChatMessageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-info">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="newChatMessageModalLabel">New Chat Message</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">You have new incoming message(s) in assigned chats.</p>
+                <ul id="newChatMessageList" class="mb-0 pl-3"></ul>
+            </div>
+            <div class="modal-footer">
+                <a href="{% url 'employee_sitari_chat' %}" class="btn btn-info">Open Sitari Chat</a>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Brute-Force Reminder -->
+<audio id="chatNotifyAudio" preload="auto">
+    <source src="{% static 'management/sound/alert.mp3' %}" type="audio/mpeg">
+</audio>
 <audio id="reminderAudio" loop>
     <source src="{% static 'management/sound/alert.mp3' %}" type="audio/mpeg">
 </audio>
@@ -740,6 +897,598 @@ setInterval(function () {
 }, 1000);
 
 console.log('Idle timeout script initialized - will redirect to:', loginUrl);
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var openBtn = document.getElementById('openEmployeeTokenSearchBtn');
+    var inputModal = $('#employeeTokenSearchInputModal');
+    var resultModal = $('#employeeTokenSearchResultModal');
+    var form = document.getElementById('employeeTokenSearchForm');
+    var input = document.getElementById('employeeTokenSearchInput');
+    var errorEl = document.getElementById('employeeTokenSearchError');
+    var saveBtn = document.getElementById('employeeTokenSaveBtn');
+    var resultErrorEl = document.getElementById('employeeTokenResultError');
+    var worksheetContainer = document.getElementById('employeeWorksheetDynamicFields');
+    var worksheetQrBtn = document.getElementById('employeeWorksheetQrBtn');
+    var worksheetImageInput = document.getElementById('employeeWorksheetImageInput');
+    var worksheetUploadDescriptionInput = document.getElementById('employeeWorksheetUploadDescription');
+    var worksheetUploadRenewalDateInput = document.getElementById('employeeWorksheetUploadRenewalDate');
+    var worksheetImageUploadBtn = document.getElementById('employeeWorksheetImageUploadBtn');
+    var worksheetImageViewBtn = document.getElementById('employeeWorksheetImageViewBtn');
+    var employeeQrUrlTemplate = '{% url "employee_upi_qr_single" 0 %}';
+    var currentEmployeeTokenData = null;
+    var employeeWorksheetFieldDefs = {
+        'mee seva': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'transaction_num', label: 'Transaction Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'online hub': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'transaction_num', label: 'Transaction Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'aadhaar': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'enrollment_no', label: 'Enrollment Number' },
+            { name: 'certificate_number', label: 'Certificate Number' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'bhu bharathi': [
+            { name: 'login_mobile_no', label: 'Login Mobile No' },
+            { name: 'application_no', label: 'Application No' },
+            { name: 'status', label: 'Status' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'forms': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'stocks_used', label: 'Stocks Used', type: 'number', step: '1' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'xerox': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ],
+        'notary and bonds': [
+            { name: 'service', label: 'Service', type: 'service_select' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'bonds_sno', label: 'Bonds Sl. No' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ]
+    };
+
+    function normalizeDepartmentName(name) {
+        return String(name || '').trim().toLowerCase();
+    }
+
+    function getWorksheetDefs(departmentName) {
+        var key = normalizeDepartmentName(departmentName);
+        return employeeWorksheetFieldDefs[key] || [
+            { name: 'service', label: 'Service' },
+            { name: 'particulars', label: 'Particulars' },
+            { name: 'payment', label: 'Payment', type: 'number', step: '0.01' },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01' }
+        ];
+    }
+
+    function loadDepartmentServices(departmentId) {
+        if (!departmentId) {
+            return Promise.resolve([]);
+        }
+        return fetch('{% url "get_department_services" %}?department_id=' + encodeURIComponent(departmentId))
+            .then(function (response) {
+                if (!response.ok) {
+                    return [];
+                }
+                return response.json();
+            })
+            .then(function (payload) {
+                return payload.services || [];
+            })
+            .catch(function () {
+                return [];
+            });
+    }
+
+    function renderWorksheetFields(data) {
+        if (!worksheetContainer) {
+            return;
+        }
+
+        var worksheetData = (data && data.worksheet) ? data.worksheet : null;
+        if (!worksheetData || !worksheetData.exists) {
+            worksheetContainer.innerHTML = '<div class="text-muted small">No worksheet entry is linked to this token yet.</div>';
+            return;
+        }
+
+        var values = worksheetData.values || {};
+        var defs = getWorksheetDefs(data.department);
+        var departmentId = data.department_id || '';
+        loadDepartmentServices(departmentId).then(function (services) {
+            var html = '<div class="form-row">';
+            defs.forEach(function (field) {
+                var inputType = field.type || 'text';
+                var inputStep = field.step ? (' step="' + field.step + '"') : '';
+                var safeValue = String(values[field.name] || '').replace(/"/g, '&quot;');
+                html += '<div class="form-group col-md-6 mb-2">';
+                html += '<label class="mb-1 small font-weight-bold" for="employeeWorksheetField_' + field.name + '">' + field.label + '</label>';
+                if (inputType === 'service_select') {
+                    html += '<select class="form-control form-control-sm" id="employeeWorksheetField_' + field.name + '" data-field-name="' + field.name + '">';
+                    html += '<option value="">-- Select Service --</option>';
+                    services.forEach(function (item) {
+                        var selected = String(safeValue) === String(item.name) ? ' selected' : '';
+                        html += '<option value="' + String(item.name).replace(/"/g, '&quot;') + '"' + selected + '>' + item.name + '</option>';
+                    });
+                    html += '</select>';
+                } else {
+                    html += '<input type="' + inputType + '" class="form-control form-control-sm" id="employeeWorksheetField_' + field.name + '" data-field-name="' + field.name + '" value="' + safeValue + '"' + inputStep + '>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            worksheetContainer.innerHTML = html;
+            bindWorksheetFieldEvents();
+            refreshWorksheetQrButtonStyle();
+        });
+    }
+
+    function getWorksheetAmountValue() {
+        var amountInput = document.getElementById('employeeWorksheetField_amount');
+        if (!amountInput) {
+            return 0;
+        }
+        var num = parseFloat((amountInput.value || '').trim());
+        return isNaN(num) ? 0 : num;
+    }
+
+    function refreshWorksheetQrButtonStyle() {
+        if (!worksheetQrBtn || worksheetQrBtn.classList.contains('disabled')) {
+            return;
+        }
+        var amountValue = getWorksheetAmountValue();
+        if (amountValue > 0) {
+            worksheetQrBtn.classList.remove('btn-outline-info');
+            worksheetQrBtn.classList.add('btn-danger');
+            worksheetQrBtn.style.boxShadow = '0 0 10px rgba(220, 53, 69, 0.65)';
+        } else {
+            worksheetQrBtn.classList.remove('btn-danger');
+            worksheetQrBtn.classList.add('btn-outline-info');
+            worksheetQrBtn.style.boxShadow = '';
+        }
+    }
+
+    function bindWorksheetFieldEvents() {
+        var amountInput = document.getElementById('employeeWorksheetField_amount');
+        if (!amountInput) {
+            return;
+        }
+        amountInput.addEventListener('input', refreshWorksheetQrButtonStyle);
+        amountInput.addEventListener('change', refreshWorksheetQrButtonStyle);
+    }
+
+    function updateWorksheetActions(data) {
+        var worksheetData = data && data.worksheet ? data.worksheet : null;
+        var hasEntry = !!(worksheetData && worksheetData.exists && worksheetData.entry_id);
+
+        if (worksheetQrBtn) {
+            if (hasEntry) {
+                worksheetQrBtn.href = employeeQrUrlTemplate.replace('/0/', '/' + worksheetData.entry_id + '/');
+                worksheetQrBtn.classList.remove('disabled');
+                worksheetQrBtn.classList.add('btn-outline-info');
+                worksheetQrBtn.classList.remove('btn-danger');
+                worksheetQrBtn.style.boxShadow = '';
+            } else {
+                worksheetQrBtn.href = '#';
+                worksheetQrBtn.classList.add('disabled');
+                worksheetQrBtn.classList.remove('btn-danger');
+                worksheetQrBtn.classList.add('btn-outline-info');
+                worksheetQrBtn.style.boxShadow = '';
+            }
+        }
+
+        if (worksheetImageUploadBtn) {
+            worksheetImageUploadBtn.disabled = !hasEntry;
+        }
+
+        if (worksheetImageViewBtn) {
+            var imageUrl = (worksheetData && worksheetData.particulars_image_url) ? worksheetData.particulars_image_url : '';
+            if (imageUrl) {
+                worksheetImageViewBtn.href = imageUrl;
+                worksheetImageViewBtn.classList.remove('d-none');
+            } else {
+                worksheetImageViewBtn.href = '#';
+                worksheetImageViewBtn.classList.add('d-none');
+            }
+        }
+
+        if (worksheetImageInput) {
+            worksheetImageInput.value = '';
+        }
+    }
+
+    function collectWorksheetPayload(data) {
+        if (!worksheetContainer || !data || !data.worksheet || !data.worksheet.exists) {
+            return {};
+        }
+        var defs = getWorksheetDefs(data.department);
+        var payload = {};
+        defs.forEach(function (field) {
+            var el = document.getElementById('employeeWorksheetField_' + field.name);
+            if (el) {
+                payload[field.name] = el.value;
+            }
+        });
+        return payload;
+    }
+
+    if (!openBtn || !form || !input || !errorEl) {
+        return;
+    }
+
+    function showError(message) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('d-none');
+    }
+
+    function clearError() {
+        errorEl.textContent = '';
+        errorEl.classList.add('d-none');
+    }
+
+    function showResultError(message, isSuccess) {
+        if (!resultErrorEl) {
+            return;
+        }
+        resultErrorEl.textContent = message;
+        resultErrorEl.classList.remove('d-none');
+        resultErrorEl.classList.toggle('text-danger', !isSuccess);
+        resultErrorEl.classList.toggle('text-success', !!isSuccess);
+    }
+
+    function clearResultError() {
+        if (!resultErrorEl) {
+            return;
+        }
+        resultErrorEl.textContent = '';
+        resultErrorEl.classList.add('d-none');
+        resultErrorEl.classList.remove('text-success');
+        resultErrorEl.classList.add('text-danger');
+    }
+
+    function setResult(data) {
+        currentEmployeeTokenData = data;
+        document.getElementById('employeeResultTokenNo').textContent = data.token_no || '-';
+        document.getElementById('employeeResultCreatedAt').textContent = data.created_at || '-';
+        document.getElementById('employeeResultCustomerName').value = data.customer_name === '-' ? '' : (data.customer_name || '');
+        document.getElementById('employeeResultCellNo').value = data.cell_no === '-' ? '' : (data.cell_no || '');
+        document.getElementById('employeeResultDepartment').textContent = data.department || '-';
+        document.getElementById('employeeResultServiceType').textContent = data.service_type || '-';
+        document.getElementById('employeeResultOperatorName').textContent = data.operator_name || '-';
+        document.getElementById('employeeResultWorksheet').textContent = data.worksheet_saved ? 'Yes' : 'No';
+        renderWorksheetFields(data);
+        updateWorksheetActions(data);
+        clearResultError();
+    }
+
+    openBtn.addEventListener('click', function () {
+        clearError();
+        input.value = '';
+        inputModal.modal('show');
+        window.setTimeout(function () { input.focus(); }, 250);
+    });
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearError();
+
+        var tokenNo = (input.value || '').trim();
+        if (!tokenNo) {
+            showError('Please enter a token number.');
+            return;
+        }
+
+        fetch('{% url "employee_token_search" %}?token_no=' + encodeURIComponent(tokenNo))
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    return { ok: response.ok, payload: payload };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    showError(result.payload.error || 'Unable to find token.');
+                    return;
+                }
+                setResult(result.payload);
+                inputModal.modal('hide');
+                resultModal.modal('show');
+            })
+            .catch(function () {
+                showError('Unable to search token right now. Please try again.');
+            });
+    });
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            if (!currentEmployeeTokenData || !currentEmployeeTokenData.token_no) {
+                showResultError('Please search for a token first.');
+                return;
+            }
+
+            clearResultError();
+
+            var payload = {
+                token_no: currentEmployeeTokenData.token_no,
+                customer_name: document.getElementById('employeeResultCustomerName').value,
+                cell_no: document.getElementById('employeeResultCellNo').value,
+                worksheet_fields: collectWorksheetPayload(currentEmployeeTokenData)
+            };
+
+            fetch('{% url "employee_token_update" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, payload: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to update token.');
+                        return;
+                    }
+                    setResult(result.payload.token || {});
+                    showResultError('Token updated successfully.', true);
+                })
+                .catch(function () {
+                    showResultError('Unable to update token right now. Please try again.');
+                });
+        });
+    }
+
+    if (worksheetQrBtn) {
+        worksheetQrBtn.addEventListener('click', function (event) {
+            var worksheetData = currentEmployeeTokenData && currentEmployeeTokenData.worksheet ? currentEmployeeTokenData.worksheet : null;
+            if (!worksheetData || !worksheetData.exists || !worksheetData.entry_id) {
+                event.preventDefault();
+                showResultError('No worksheet entry linked to this token.');
+                return;
+            }
+
+            event.preventDefault();
+            clearResultError();
+
+            var payload = {
+                token_no: currentEmployeeTokenData.token_no,
+                customer_name: document.getElementById('employeeResultCustomerName').value,
+                cell_no: document.getElementById('employeeResultCellNo').value,
+                worksheet_fields: collectWorksheetPayload(currentEmployeeTokenData)
+            };
+
+            fetch('{% url "employee_token_update" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(payload)
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        return { ok: response.ok, payload: data };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to update token before QR.');
+                        return;
+                    }
+
+                    if (result.payload.token) {
+                        setResult(result.payload.token);
+                    }
+
+                    var latestToken = (result.payload.token || currentEmployeeTokenData || {});
+                    var latestWorksheet = latestToken.worksheet || {};
+                    if (!latestWorksheet.entry_id) {
+                        showResultError('Worksheet entry not found for QR generation.');
+                        return;
+                    }
+
+                    var qrUrl = employeeQrUrlTemplate.replace('/0/', '/' + latestWorksheet.entry_id + '/');
+                    window.open(qrUrl, '_blank', 'noopener');
+                })
+                .catch(function () {
+                    showResultError('Unable to generate QR right now. Please try again.');
+                });
+        });
+    }
+
+    if (worksheetImageUploadBtn) {
+        worksheetImageUploadBtn.addEventListener('click', function () {
+            var worksheetData = currentEmployeeTokenData && currentEmployeeTokenData.worksheet ? currentEmployeeTokenData.worksheet : null;
+            if (!worksheetData || !worksheetData.exists || !worksheetData.entry_id) {
+                showResultError('No worksheet entry linked to this token.');
+                return;
+            }
+            if (!worksheetImageInput || !worksheetImageInput.files || !worksheetImageInput.files.length) {
+                showResultError('Please choose a file first.');
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('worksheet_entry_id', worksheetData.entry_id);
+            formData.append('particulars_image', worksheetImageInput.files[0]);
+            formData.append('description', worksheetUploadDescriptionInput ? worksheetUploadDescriptionInput.value : '');
+            formData.append('renewal_date', worksheetUploadRenewalDateInput ? worksheetUploadRenewalDateInput.value : '');
+
+            fetch('{% url "employee_token_search_upload_image" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: formData
+            })
+                .then(function (response) {
+                    return response.json().then(function (payload) {
+                        return { ok: response.ok, payload: payload };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok) {
+                        showResultError(result.payload.error || 'Unable to upload file.');
+                        return;
+                    }
+                    if (result.payload.token) {
+                        setResult(result.payload.token);
+                    }
+                    showResultError(result.payload.message || 'File uploaded successfully.', true);
+                })
+                .catch(function () {
+                    showResultError('Unable to upload file right now. Please try again.');
+                });
+        });
+    }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modal = $('#newChatAssignedModal');
+    var listEl = document.getElementById('newChatAssignedList');
+    var employeeId = '{{ employee.employee_id|default:"" }}';
+    if (!employeeId || !listEl || !modal.length) {
+        return;
+    }
+
+    var storageKey = 'employeeChatAssignmentLastSeen_' + employeeId;
+    var lastSeen = localStorage.getItem(storageKey) || '';
+    var isPolling = false;
+
+    function renderAssignments(assignments) {
+        listEl.innerHTML = '';
+        assignments.forEach(function (item) {
+            var li = document.createElement('li');
+            li.textContent = 'Token ' + (item.token_no || '-') + ' | ' + (item.customer_name || '-') + ' | ' + (item.created_at || '-');
+            listEl.appendChild(li);
+        });
+        modal.modal('show');
+    }
+
+    function pollAssignments() {
+        if (isPolling) {
+            return;
+        }
+        isPolling = true;
+
+        var url = '{% url "employee_chat_assignment_check" %}';
+        if (lastSeen) {
+            url += '?since=' + encodeURIComponent(lastSeen);
+        }
+
+        fetch(url)
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    return { ok: response.ok, payload: payload };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    return;
+                }
+
+                var payload = result.payload || {};
+                var assignments = payload.new_assignments || [];
+                if (assignments.length > 0) {
+                    renderAssignments(assignments);
+                }
+
+                if (payload.latest_assigned_at) {
+                    lastSeen = payload.latest_assigned_at;
+                    localStorage.setItem(storageKey, lastSeen);
+                }
+            })
+            .catch(function () {
+                // Silent retry via timer.
+            })
+            .finally(function () {
+                isPolling = false;
+            });
+    }
+
+    pollAssignments();
+    setInterval(pollAssignments, 15000);
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var employeeId = '{{ employee.employee_id|default:"" }}';
+    if (!employeeId) {
+        return;
+    }
+
+    var storageKey = 'employeeChatMessageLastSeen_' + employeeId;
+    var lastSeen = localStorage.getItem(storageKey) || '';
+    var isPolling = false;
+
+    function pollMessages() {
+        if (isPolling) {
+            return;
+        }
+        isPolling = true;
+
+        var url = '{% url "employee_chat_message_check" %}';
+        if (lastSeen) {
+            url += '?since=' + encodeURIComponent(lastSeen);
+        }
+
+        fetch(url)
+            .then(function (response) {
+                return response.json().then(function (payload) {
+                    return { ok: response.ok, payload: payload };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok) {
+                    return;
+                }
+
+                var payload = result.payload || {};
+                if (payload.latest_message_at) {
+                    lastSeen = payload.latest_message_at;
+                    localStorage.setItem(storageKey, lastSeen);
+                }
+            })
+            .catch(function () {
+                // Silent retry via timer.
+            })
+            .finally(function () {
+                isPolling = false;
+            });
+    }
+
+    pollMessages();
+    setInterval(pollMessages, 12000);
+});
 </script>
 
 <script>

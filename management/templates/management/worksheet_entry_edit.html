@@ -1,0 +1,18 @@
+{% extends "masteremployee.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Edit Worksheet Entry</h4>
+            <a href="{% url 'worksheet' %}" class="btn btn-secondary btn-sm">Back to Worksheet</a>
+        </div>
+        <div class="card-body">
+            <p class="mb-3 text-muted">
+                Updating entry #{{ entry.id }} for {{ employee.name }}.
+            </p>
+            {% include "partials/worksheet_edit_form.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

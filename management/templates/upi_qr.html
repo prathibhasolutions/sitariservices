@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI QR</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --card: #ffffff;
+            --text: #1a2333;
+            --muted: #5f6b7a;
+            --line: #d9e0ea;
+            --brand: #006a5b;
+            --brand-strong: #004f44;
+            --ok: #16784d;
+            --error: #a63a2f;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 10% 10%, #eaf8f4 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, #e7eef8 0%, transparent 35%),
+                var(--bg);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .wrap {
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        .top-row {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .back-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--text);
+            border-radius: 10px;
+            padding: 10px 14px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 12px 30px rgba(10, 30, 60, 0.08);
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+        }
+
+        .sub {
+            margin: 0 0 18px;
+            color: var(--muted);
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 16px;
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 11px 12px;
+            font-size: 16px;
+            background: #fff;
+            color: var(--text);
+        }
+
+        input:focus {
+            outline: 2px solid #cce8e2;
+            border-color: var(--brand);
+        }
+
+        .meta {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 14px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .btn-generate {
+            background: var(--brand);
+            color: #fff;
+        }
+
+        .btn-generate:hover {
+            background: var(--brand-strong);
+        }
+
+        .qr-box {
+            border: 1px dashed #9ab9b2;
+            border-radius: 14px;
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f7fbfa;
+            padding: 10px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        .qr-box img {
+            width: 280px;
+            height: 280px;
+            object-fit: contain;
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #d8e6e2;
+            padding: 8px;
+        }
+
+        .done-area {
+            margin-top: 12px;
+            display: none;
+        }
+
+        .btn-done {
+            background: var(--ok);
+            color: #fff;
+        }
+
+        .btn-done:hover {
+            filter: brightness(0.95);
+        }
+
+        .msg {
+            min-height: 20px;
+            margin-top: 8px;
+            font-size: 13px;
+        }
+
+        .msg-error {
+            color: var(--error);
+        }
+
+        .msg-ok {
+            color: var(--ok);
+        }
+
+        @media (max-width: 840px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="top-row">
+            {% if is_single_entry %}<a class="back-btn" href="{% url 'worksheet' %}">Back to Worksheet</a>{% else %}<a class="back-btn" href="{% url 'employee_dashboard' %}">Back to Dashboard</a>{% endif %}
+        </div>
+
+        <div class="card">
+            <h1>{% if is_single_entry %}Entry QR{% else %}Payment QR{% endif %}</h1>
+            <p class="sub">Scan to complete payment for today's worksheet entries.</p>
+
+            <div class="layout">
+                <div>
+                    <div class="form-grid">
+                        <div>
+                            <label>Total Amount</label>
+                            <input type="text" value="₹{{ total_amount|floatformat:2 }}" readonly style="background: #f0f0f0; cursor: not-allowed;">
+                        </div>
+
+                        <div>
+                            <label>Remarks</label>
+                            <input type="text" value="{{ remarks }}" readonly style="background: #f0f0f0; cursor: not-allowed;">
+                        </div>
+
+                        <div id="message" class="msg" aria-live="polite"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div id="qrBox" class="qr-box">
+                        {% if total_amount and total_amount > 0 %}
+                            <img src="{{ qr_image_src }}" alt="Payment QR" loading="eager">
+                        {% else %}
+                            No worksheet entries for today. Add entries to generate QR.
+                        {% endif %}
+                    </div>
+
+                    <div id="doneArea" class="done-area" {% if total_amount and total_amount > 0 %}style="display:block;"{% endif %}>
+                        <button id="markDoneBtn" class="btn btn-done" type="button">Mark as Done</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const markDoneBtn = document.getElementById('markDoneBtn');
+
+            if (markDoneBtn) {
+                markDoneBtn.addEventListener('click', function () {
+                    window.location.reload();
+                });
+            }
+
+            const message = document.getElementById('message');
+            if (message) {
+                const hasAmount = Number('{{ total_amount|default:0 }}') > 0;
+                if (hasAmount) {
+                    message.textContent = 'QR ready for payment.';
+                    message.className = 'msg msg-ok';
+                } else {
+                    message.textContent = 'No worksheet entries for today. Add entries to generate QR.';
+                    message.className = 'msg msg-error';
+                }
+            }
+        })();
+    </script>
+</body>
+</html>

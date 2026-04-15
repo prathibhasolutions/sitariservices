@@ -1,0 +1,26 @@
+{% extends 'admin_dashboard.html' %}
+{% block content %}
+    <!-- Departments Section (Placeholder) -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <h5 class="font-weight-bold">Departments</h5>
+        </div>
+        {% for dept in departments %}
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body d-flex align-items-center">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center mr-3" style="width:48px;height:48px;background:#e3f2fd;">
+                        <i class="fas fa-building" style="color:#1565c0;font-size:20px;"></i>
+                    </div>
+                    <div>
+                        <div class="h5 mb-0 font-weight-bold">{{ dept.name }}</div>
+                        <div class="text-muted small">Head: {{ dept.department_head.get_full_name|default:'-' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12"><div class="alert alert-info">No departments found.</div></div>
+        {% endfor %}
+    </div>
+{% endblock %}
